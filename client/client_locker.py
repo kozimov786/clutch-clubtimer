@@ -8,7 +8,7 @@ import threading
 import requests
 import websocket
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
+from PyQt6.QtCore import Qt, QTimer, QEvent, pyqtSignal, QObject
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QPushButton, QFrame,
     QHBoxLayout, QScrollArea, QGridLayout, QLineEdit, QGraphicsDropShadowEffect,
@@ -94,56 +94,60 @@ else:
         print("[Hook Simulator] Windows keyboard hook disabled")
 
 
-class LockScreenWindow(QMainWindow):
+class LockScreenWindow(QWidget):
+    """STATION LOCKED — Fullscreen qulf oynasi.
+
+    Windows'da ishonchli fullscreen yechim:
+      - FramelessWindowHint + WindowStaysOnTopHint + Window
+      - showFullScreen() emas, manual setGeometry(screen_geo) + show()
+        bu taskbarsiz butun ekranni ishonchli qoplaydi.
+    """
+
     def __init__(self, pc_name="PC-01"):
         super().__init__()
         self.pc_name = pc_name
-        self._force_fullscreen_enabled = False  # init ichida chaqirishga yo'l bermaslik uchun
+        self._force_fullscreen_enabled = False
+        self._showing = False  # rekursiyadan himoya
+
+        # ----------------------------------------------------------------
+        # WINDOW FLAGS — __init__ ichida, widget yaratilishidan darhol
+        # Tool flag ishlatilmaydi — Windows'da showFullScreen() bilan
+        # mos kelmaydi va oyna kichik qoladi.
+        # ----------------------------------------------------------------
+        flags = (
+            Qt.WindowType.FramelessWindowHint |   # Sarlavha paneli yo'q
+            Qt.WindowType.WindowStaysOnTopHint |  # Har doim eng tepada
+            Qt.WindowType.Window                  # Oddiy top-level oyna
+        )
+        if IS_WINDOWS:
+            # Taskbar'da Alt+Tab ro'yxatidan yashirish
+            flags |= Qt.WindowType.WindowDoesNotAcceptFocus
+        self.setWindowFlags(flags)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
+
         self.init_ui()
 
     def init_ui(self):
-        # -------------------------------------------------------------------
-        # WINDOW FLAGS:
-        #  - FramelessWindowHint        : sarlavha paneli bo'lmasin
-        #  - WindowStaysOnTopHint       : har doim eng tepada tursin
-        #  - Window                     : asosiy oyna turi
-        #  - WindowDoesNotAcceptFocus   : Windows taskbar'dan yashirish uchun
-        # -------------------------------------------------------------------
-        flags = (
-            Qt.WindowType.FramelessWindowHint |
-            Qt.WindowType.WindowStaysOnTopHint |
-            Qt.WindowType.Window
-        )
-        if IS_WINDOWS:
-            flags |= Qt.WindowType.WindowDoesNotAcceptFocus
-        self.setWindowFlags(flags)
-
-        # Ekran o'lchamiga moslashtirish
+        # Ekran o'lchamiga dastlabki moslashtirish
         screen_geo = QApplication.primaryScreen().geometry()
         self.setGeometry(screen_geo)
 
         # ----------------------------------------------------------------
-        # FULLSCREEN OVERLAY CONTAINER — butun ekranni qoplaydigan widget
+        # FULLSCREEN BACKGROUND — butun ekranni qoplaydigan to'q fon
         # ----------------------------------------------------------------
-        self.main_container = QWidget()
-        self.main_container.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Expanding
-        )
-        # Butun ekran to'q fon — hech qanday setFixedSize yo'q
-        self.main_container.setStyleSheet(
-            "background-color: #060911;"
-        )
-        self.setCentralWidget(self.main_container)
+        self.setStyleSheet("background-color: #060911;")
 
         # ----------------------------------------------------------------
-        # CENTER CARD LAYOUT
+        # ROOT LAYOUT — margin 0, spacing 0, fon 100% ekranni egallaydi
         # ----------------------------------------------------------------
-        layout = QVBoxLayout(self.main_container)
+        layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # Faqat kartaning o'ziga fixed preferred width — fon emas!
+        # ----------------------------------------------------------------
+        # LOCK CARD — faqat kartaning o'ziga fixed width, fon emas
+        # ----------------------------------------------------------------
         self.lock_card = QFrame()
         self.lock_card.setFixedWidth(500)
         self.lock_card.setStyleSheet("""
@@ -187,7 +191,6 @@ class LockScreenWindow(QMainWindow):
         logo_glow.setColor(QColor(0, 240, 255, 180))
         logo_glow.setOffset(0, 0)
         logo_lbl.setGraphicsEffect(logo_glow)
-
         card_layout.addWidget(logo_lbl)
 
         # Status text
@@ -213,36 +216,47 @@ class LockScreenWindow(QMainWindow):
         card_layout.addWidget(desc)
 
         layout.addWidget(self.lock_card)
-
-        # Endi force fullscreen yoqiladi
         self._force_fullscreen_enabled = True
 
     # ----------------------------------------------------------------
-    # RESIZE EVENT — container har doim oynaning to'liq maydonini egallaydi
+    # FORCE FULLSCREEN — showFullScreen() EMAS, setGeometry + show()
+    # Windows'da bu usul taskbar va desktop'ni 100% yopadi.
     # ----------------------------------------------------------------
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        if hasattr(self, 'main_container'):
-            self.main_container.setGeometry(self.rect())
+    def _apply_fullscreen(self):
+        """Ekranni to'liq qoplaydigan asosiy metod."""
+        if self._showing:
+            return
+        self._showing = True
+        try:
+            screen_geo = QApplication.primaryScreen().geometry()
+            # WindowState reset — avvalgi holat ta'sirini yo'q qilish
+            self.setWindowState(Qt.WindowState.WindowNoState)
+            self.setGeometry(screen_geo)
+            self.show()
+            self.raise_()
+            self.activateWindow()
+        finally:
+            self._showing = False
 
     def show_locker(self):
-        """WebSocket signali yoki lock_pc() dan chaqirilganda.
-        Oyna har doim fullscreen va eng ustda ko'rinishi kafolatlangan."""
-        screen_geo = QApplication.primaryScreen().geometry()
-        self.setGeometry(screen_geo)
-        self.setWindowState(Qt.WindowState.WindowFullScreen)
-        self.showFullScreen()
-        self.raise_()
-        self.activateWindow()
+        """Qulf oynasini majburan to'liq ekranda ko'rsatadi.
+        WebSocket / lock_pc() tomonidan chaqiriladi."""
+        self._apply_fullscreen()
 
+    # ----------------------------------------------------------------
+    # MINIMIZE BLOKIROVKA — singleShot orqali xavfsiz
+    # ----------------------------------------------------------------
     def changeEvent(self, event):
-        """Oyna holati o'zgarganda (minimize, v.b.) — majburan qayta fullscreen.
-        Bu Alt+Tab yoki Win tugmasi bosildaganda oyna kichrayib qolishiga yo'l bermaydi."""
+        """Minimize yoki boshqa holat o'zgarishida ekranni qayta qoplaydi."""
         super().changeEvent(event)
-        if self._force_fullscreen_enabled and self.isVisible():
-            state = self.windowState()
-            if state != Qt.WindowState.WindowFullScreen:
-                QTimer.singleShot(50, self.show_locker)
+        if (
+            self._force_fullscreen_enabled
+            and not self._showing
+            and self.isVisible()
+            and event.type() == QEvent.Type.WindowStateChange
+        ):
+            if self.windowState() & Qt.WindowState.WindowMinimized:
+                QTimer.singleShot(100, self._apply_fullscreen)
 
     def closeEvent(self, event):
         """Qulf oynasini yopishga yo'l bermaymiz."""
@@ -820,27 +834,23 @@ class GameLauncherWindow(QWidget):
         self.current_category = None
         self.search_query = ""
         self.pixmap_labels = {}
-        self._force_fullscreen_enabled = False  # init ichida chaqirishga yo'l bermaslik uchun
+        self._force_fullscreen_enabled = False
+        self._showing = False
 
         self.image_downloader = ImageCache()
         self.image_downloader.image_downloaded_signal.connect(self.on_image_downloaded)
 
-        self.init_ui()
-
-    def init_ui(self):
-        # -------------------------------------------------------------------
-        # WINDOW FLAGS:
-        #  - FramelessWindowHint   : sarlavha paneli bo'lmasin
-        #  - WindowStaysOnTopHint  : har doim eng tepada tursin
-        #  - Window               : asosiy oyna turi
-        # -------------------------------------------------------------------
-        self.setWindowFlags(
+        flags = (
             Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.WindowStaysOnTopHint |
             Qt.WindowType.Window
         )
+        self.setWindowFlags(flags)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
 
-        # Ekran o'lchamiga moslashtirish
+        self.init_ui()
+
+    def init_ui(self):
         screen_geo = QApplication.primaryScreen().geometry()
         self.setGeometry(screen_geo)
 
@@ -884,7 +894,6 @@ class GameLauncherWindow(QWidget):
         main_layout.setContentsMargins(36, 28, 36, 28)
         main_layout.setSpacing(20)
 
-        # Header Bar
         header = QHBoxLayout()
 
         title_box = QVBoxLayout()
@@ -902,20 +911,17 @@ class GameLauncherWindow(QWidget):
 
         header.addStretch()
 
-        # Search Bar
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("🔍 O'yin nomini qidirish...")
         self.search_input.setFixedWidth(290)
         self.search_input.textChanged.connect(self.on_search_changed)
         header.addWidget(self.search_input)
 
-        # Timer Badge
         self.timer_label = QLabel("00:00:00")
         self.timer_label.setFont(QFont("Consolas", 16, QFont.Weight.Bold))
         self.timer_label.setStyleSheet("color: #10b981; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 8px 16px;")
         header.addWidget(self.timer_label)
 
-        # Bar Button
         bar_btn = QPushButton("🍸 BAR MENU")
         bar_btn.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         bar_btn.setStyleSheet("""
@@ -940,7 +946,6 @@ class GameLauncherWindow(QWidget):
 
         main_layout.addLayout(header)
 
-        # Category Filters Bar
         cat_bar = QHBoxLayout()
         cat_bar.setSpacing(12)
 
@@ -965,13 +970,11 @@ class GameLauncherWindow(QWidget):
         cat_bar.addStretch()
         main_layout.addLayout(cat_bar)
 
-        # Status / Launch feedback banner
         self.status_msg = QLabel("O'yin tanlang va 'Ishga tushirish' tugmasini bosing")
         self.status_msg.setFont(QFont("Segoe UI", 10))
         self.status_msg.setStyleSheet("color: #94a3b8; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 8px; padding: 8px 14px;")
         main_layout.addWidget(self.status_msg)
 
-        # Game Cards Scroll Grid
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
 
@@ -984,30 +987,37 @@ class GameLauncherWindow(QWidget):
 
         main_layout.addWidget(self.scroll_area, stretch=1)
 
-        # Force fullscreen yoqildi
         self._force_fullscreen_enabled = True
 
+    def _apply_fullscreen(self):
+        if self._showing:
+            return
+        self._showing = True
+        try:
+            screen_geo = QApplication.primaryScreen().geometry()
+            self.setWindowState(Qt.WindowState.WindowNoState)
+            self.setGeometry(screen_geo)
+            self.show()
+            self.raise_()
+            self.activateWindow()
+        finally:
+            self._showing = False
+
     def show_launcher(self):
-        """WebSocket signali yoki unlock_pc() dan chaqirilganda.
-        Oyna har doim fullscreen va eng ustda ko'rinishi kafolatlangan."""
-        screen_geo = QApplication.primaryScreen().geometry()
-        self.setGeometry(screen_geo)
-        self.setWindowState(Qt.WindowState.WindowFullScreen)
-        self.showFullScreen()
-        self.raise_()
-        self.activateWindow()
+        self._apply_fullscreen()
 
     def changeEvent(self, event):
-        """Oyna holati o'zgarganda (minimize, v.b.) — majburan qayta fullscreen.
-        Bu Alt+Tab yoki Win tugmasi bosildaganda oyna kichrayib qolishiga yo'l bermaydi."""
         super().changeEvent(event)
-        if self._force_fullscreen_enabled and self.isVisible():
-            state = self.windowState()
-            if state != Qt.WindowState.WindowFullScreen:
-                QTimer.singleShot(50, self.show_launcher)
+        if (
+            self._force_fullscreen_enabled
+            and not self._showing
+            and self.isVisible()
+            and event.type() == QEvent.Type.WindowStateChange
+        ):
+            if self.windowState() & Qt.WindowState.WindowMinimized:
+                QTimer.singleShot(100, self._apply_fullscreen)
 
     def closeEvent(self, event):
-        """Launcher oynasini yopishga yo'l bermaymiz — faqat yashirishga ruxsat."""
         event.ignore()
 
     def get_cat_btn_style(self, is_active):

@@ -140,6 +140,9 @@ class LockScreenWindow(QWidget):
         # ----------------------------------------------------------------
         # ROOT LAYOUT — margin 0, spacing 0, fon 100% ekranni egallaydi
         # ----------------------------------------------------------------
+        # Expanding sizePolicy — layout butun oyna maydonini egallaydi
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -219,8 +222,10 @@ class LockScreenWindow(QWidget):
         self._force_fullscreen_enabled = True
 
     # ----------------------------------------------------------------
-    # FORCE FULLSCREEN — showFullScreen() EMAS, setGeometry + show()
-    # Windows'da bu usul taskbar va desktop'ni 100% yopadi.
+    # FORCE FULLSCREEN — hide/show siklida ham ishlaydigan yechim.
+    # showFullScreen() + setGeometry() kombinatsiyasi Windows'da
+    # taskbar va desktop'ni 100% yopadi.
+    # _showing guard — showEvent rekursiyasidan himoya qiladi.
     # ----------------------------------------------------------------
     def _apply_fullscreen(self):
         """Ekranni to'liq qoplaydigan asosiy metod."""
@@ -229,10 +234,9 @@ class LockScreenWindow(QWidget):
         self._showing = True
         try:
             screen_geo = QApplication.primaryScreen().geometry()
-            # WindowState reset — avvalgi holat ta'sirini yo'q qilish
-            self.setWindowState(Qt.WindowState.WindowNoState)
             self.setGeometry(screen_geo)
-            self.show()
+            self.setWindowState(Qt.WindowState.WindowFullScreen)
+            self.showFullScreen()
             self.raise_()
             self.activateWindow()
         finally:
@@ -240,8 +244,25 @@ class LockScreenWindow(QWidget):
 
     def show_locker(self):
         """Qulf oynasini majburan to'liq ekranda ko'rsatadi.
-        WebSocket / lock_pc() tomonidan chaqiriladi."""
+        lock_pc() / WebSocket tomonidan chaqiriladi."""
         self._apply_fullscreen()
+
+    def showEvent(self, event):
+        """Oyna har safar ko'rsatilganda (show/hide sikl) fullscreen
+        holatni avtomatik tiklaydi. _showing guard rekursiyadan himoya qiladi."""
+        super().showEvent(event)
+        if self._showing:
+            return
+        self._showing = True
+        try:
+            screen_geo = QApplication.primaryScreen().geometry()
+            self.setGeometry(screen_geo)
+            self.setWindowState(Qt.WindowState.WindowFullScreen)
+            self.showFullScreen()
+            self.raise_()
+            self.activateWindow()
+        finally:
+            self._showing = False
 
     # ----------------------------------------------------------------
     # MINIMIZE BLOKIROVKA — singleShot orqali xavfsiz
@@ -845,8 +866,12 @@ class GameLauncherWindow(QWidget):
             Qt.WindowType.WindowStaysOnTopHint |
             Qt.WindowType.Window
         )
+        if IS_WINDOWS:
+            flags |= Qt.WindowType.WindowDoesNotAcceptFocus
         self.setWindowFlags(flags)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
+        # Expanding sizePolicy — oyna dinamik ravishda monitor rezolyutsiyasiga moslashadi
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         self.init_ui()
 
@@ -989,24 +1014,54 @@ class GameLauncherWindow(QWidget):
 
         self._force_fullscreen_enabled = True
 
+    # ----------------------------------------------------------------
+    # FORCE FULLSCREEN — hide/show siklida ham ishlaydigan yechim.
+    # showFullScreen() + setGeometry() kombinatsiyasi Windows'da
+    # taskbar va desktop'ni 100% yopadi.
+    # _showing guard — showEvent rekursiyasidan himoya qiladi.
+    # ----------------------------------------------------------------
     def _apply_fullscreen(self):
+        """Ekranni to'liq qoplaydigan asosiy metod."""
         if self._showing:
             return
         self._showing = True
         try:
             screen_geo = QApplication.primaryScreen().geometry()
-            self.setWindowState(Qt.WindowState.WindowNoState)
             self.setGeometry(screen_geo)
-            self.show()
+            self.setWindowState(Qt.WindowState.WindowFullScreen)
+            self.showFullScreen()
             self.raise_()
             self.activateWindow()
         finally:
             self._showing = False
 
     def show_launcher(self):
+        """Launcher oynasini majburan to'liq ekranda ko'rsatadi.
+        unlock_pc() / WebSocket tomonidan chaqiriladi."""
         self._apply_fullscreen()
 
+    def showEvent(self, event):
+        """Oyna har safar ko'rsatilganda (show/hide sikl) fullscreen
+        holatni avtomatik tiklaydi. _showing guard rekursiyadan himoya qiladi."""
+        super().showEvent(event)
+        if self._showing:
+            return
+        self._showing = True
+        try:
+            screen_geo = QApplication.primaryScreen().geometry()
+            self.setGeometry(screen_geo)
+            self.setWindowState(Qt.WindowState.WindowFullScreen)
+            self.showFullScreen()
+            self.raise_()
+            self.activateWindow()
+        finally:
+            self._showing = False
+
+    # ----------------------------------------------------------------
+    # MINIMIZE BLOKIROVKA — singleShot orqali xavfsiz
+    # ----------------------------------------------------------------
     def changeEvent(self, event):
+        """Minimize yoki boshqa holat o'zgarishida ekranni qayta qoplaydi."""
         super().changeEvent(event)
         if (
             self._force_fullscreen_enabled

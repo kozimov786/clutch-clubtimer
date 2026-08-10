@@ -1,0 +1,132 @@
+from django.db import models
+from django.utils import timezone
+import math
+
+class Tariff(models.Model):
+    name = models.CharField(max_length=100)
+    price_per_hour = models.DecimalField(max_digits=12, decimal_places=2, default=12000.00)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def get_effective_price_per_hour(self, dt=None):
+        if dt is None:
+            dt = timezone.localtime()
+        # 10:00:00 to 17:59:59 (10:00 to 18:00) gets 50% discount
+        if 10 <= dt.hour < 18:
+            return float(self.price_per_hour) * 0.5
+        return float(self.price_per_hour)
+
+    def __str__(self):
+        return f"{self.name} - {self.price_per_hour:,.0f} UZS/h"
+
+class Computer(models.Model):
+    STATUS_CHOICES = [
+        ('LOCKED', 'Locked'),
+        ('ACTIVE', 'Active'),
+        ('WARNING', 'Warning'),
+        ('OFFLINE', 'Offline'),
+    ]
+
+    name = models.CharField(max_length=50, unique=True)
+    zone = models.CharField(max_length=50, default='Standard Zone')
+    hardware_spec = models.CharField(max_length=100, default='RTX 4070 | i7-13700K | 32GB')
+    ip_address = models.GenericIPAddressField(default='127.0.0.1')
+    mac_address = models.CharField(max_length=17, blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='LOCKED')
+    is_open_time = models.BooleanField(default=False, help_text="True if open-ended session without fixed timer")
+    time_remaining = models.IntegerField(default=0, help_text="Remaining or elapsed seconds")
+    current_tariff = models.ForeignKey(Tariff, on_delete=models.SET_NULL, null=True, blank=True)
+    session_start_time = models.DateTimeField(null=True, blank=True)
+    session_end_time = models.DateTimeField(null=True, blank=True)
+    last_heartbeat = models.DateTimeField(auto_now=True)
+
+    def calculate_time_remaining(self):
+        if self.status == 'ACTIVE':
+            now = timezone.now()
+            if self.is_open_time and self.session_start_time:
+                diff = (now - self.session_start_time).total_seconds()
+                self.time_remaining = int(diff)
+                self.save(update_fields=['time_remaining'])
+                return self.time_remaining
+            elif self.session_end_time:
+                diff = (self.session_end_time - now).total_seconds()
+                if diff <= 0:
+                    self.status = 'LOCKED'
+                    self.time_remaining = 0
+                    self.is_open_time = False
+                    self.session_start_time = None
+                    self.session_end_time = None
+                    self.save(update_fields=['status', 'time_remaining', 'is_open_time', 'session_start_time', 'session_end_time'])
+                    return 0
+                elif diff <= 300: # 5 minutes left -> WARNING
+                    self.time_remaining = int(diff)
+                    if self.status != 'WARNING':
+                        self.status = 'WARNING'
+                        self.save(update_fields=['status', 'time_remaining'])
+                    return self.time_remaining
+                else:
+                    self.time_remaining = int(diff)
+                    self.save(update_fields=['time_remaining'])
+                    return self.time_remaining
+        return self.time_remaining
+
+    def __str__(self):
+        return f"{self.name} ({self.status}) - {self.time_remaining}s {'elapsed' if self.is_open_time else 'remaining'}"
+
+class Session(models.Model):
+    computer = models.ForeignKey(Computer, on_delete=models.CASCADE, related_name='sessions')
+    tariff = models.ForeignKey(Tariff, on_delete=models.SET_NULL, null=True, blank=True)
+    is_open_time = models.BooleanField(default=False)
+    start_time = models.DateTimeField(default=timezone.now)
+    end_time = models.DateTimeField(null=True, blank=True)
+    duration_minutes = models.IntegerField(default=0)
+    total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"Session for {self.computer.name} - {self.duration_minutes} mins"
+
+class Category(models.Model):
+    name = models.CharField(max_length=100)
+    icon = models.CharField(max_length=50, default='🍿')
+
+    def __str__(self):
+        return self.name
+
+class Product(models.Model):
+    name = models.CharField(max_length=100)
+    price = models.DecimalField(max_digits=12, decimal_places=2)
+    stock = models.IntegerField(default=0)
+    image = models.CharField(max_length=255, default='https://images.unsplash.com/photo-1541592106381-b31e9677c0e5?w=200&q=80')
+    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
+    is_available = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} - {self.price:,.0f} UZS (Stock: {self.stock})"
+
+class Order(models.Model):
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('APPROVED', 'Approved'),
+        ('DELIVERED', 'Delivered'),
+        ('CANCELLED', 'Cancelled'),
+    ]
+
+    computer = models.ForeignKey(Computer, on_delete=models.CASCADE, related_name='bar_orders')
+    total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Order #{self.id} ({self.computer.name}) - {self.status} - {self.total_price:,.0f} UZS"
+
+class OrderItem(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='order_items')
+    quantity = models.IntegerField(default=1)
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2)
+
+    def __str__(self):
+        return f"{self.quantity}x {self.product.name} @ Order #{self.order.id}"
+

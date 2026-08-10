@@ -1,0 +1,169 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@500;600;700;800;900&family=Rajdhani:wght@500;600;700&display=swap');
+
+:root {
+  --bg-main: #060911;
+  --bg-card: rgba(15, 23, 42, 0.75);
+  --bg-card-hover: rgba(30, 41, 59, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --accent-cyan: #00f0ff;
+  --accent-purple: #a855f7;
+  --accent-emerald: #10b981;
+  --accent-rose: #f43f5e;
+  --accent-amber: #f59e0b;
+}
+
+body {
+  background-color: var(--bg-main);
+  background-image: 
+    radial-gradient(circle at 10% 20%, rgba(0, 240, 255, 0.06) 0%, transparent 45%),
+    radial-gradient(circle at 90% 80%, rgba(168, 85, 247, 0.06) 0%, transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.03) 0%, transparent 60%);
+  color: #f1f5f9;
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.font-orbitron {
+  font-family: 'Orbitron', monospace;
+}
+
+.font-rajdhani {
+  font-family: 'Rajdhani', sans-serif;
+}
+
+/* Glassmorphism utility */
+.glass-panel {
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+}
+
+.glass-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--glass-border);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+  background: var(--bg-card-hover);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.6), 0 0 20px rgba(0, 240, 255, 0.15);
+}
+
+/* Zone Badge Styling */
+.badge-vip {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(217, 70, 239, 0.2) 100%);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
+}
+
+.badge-standard {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.2) 0%, rgba(56, 189, 248, 0.2) 100%);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+}
+
+.badge-bootcamp {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(251, 191, 36, 0.2) 100%);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+}
+
+/* Card Themes */
+.card-status-locked {
+  border-top: 3px solid var(--accent-rose);
+}
+
+.card-status-active {
+  border-top: 3px solid var(--accent-emerald);
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.15);
+}
+
+.card-status-warning {
+  border-top: 3px solid var(--accent-amber);
+  animation: pulse-warning 1.8s infinite ease-in-out;
+}
+
+@keyframes pulse-warning {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(245, 158, 11, 0.6);
+  }
+}
+
+/* Custom Glow Buttons */
+.glow-btn-cyan {
+  background: linear-gradient(135deg, #00f0ff 0%, #0284c7 100%);
+  color: #030712;
+  font-weight: 700;
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+  transition: all 0.2s ease;
+}
+
+.glow-btn-cyan:hover {
+  box-shadow: 0 0 25px rgba(0, 240, 255, 0.8);
+  transform: translateY(-1px);
+}
+
+.glow-btn-emerald {
+  background: linear-gradient(135deg, #10b981 0%, #047857 100%);
+  color: #030712;
+  font-weight: 700;
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+  transition: all 0.2s ease;
+}
+
+.glow-btn-emerald:hover {
+  box-shadow: 0 0 25px rgba(16, 185, 129, 0.8);
+  transform: translateY(-1px);
+}
+
+.glow-btn-rose {
+  background: linear-gradient(135deg, #f43f5e 0%, #be123c 100%);
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 0 15px rgba(244, 63, 94, 0.4);
+  transition: all 0.2s ease;
+}
+
+.glow-btn-rose:hover {
+  box-shadow: 0 0 25px rgba(244, 63, 94, 0.8);
+  transform: translateY(-1px);
+}
+
+.modal-backdrop {
+  background: rgba(3, 7, 18, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Tab active styling */
+.nav-tab-active {
+  background: rgba(0, 240, 255, 0.15);
+  color: #00f0ff;
+  border-color: rgba(0, 240, 255, 0.4);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #060911;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}

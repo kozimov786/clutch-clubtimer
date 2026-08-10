@@ -11,7 +11,8 @@ import websocket
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QLabel, QPushButton, QFrame,
-    QHBoxLayout, QScrollArea, QGridLayout, QLineEdit
+    QHBoxLayout, QScrollArea, QGridLayout, QLineEdit, QGraphicsDropShadowEffect,
+    QSizePolicy
 )
 from PyQt6.QtGui import QFont, QColor, QPixmap
 
@@ -107,10 +108,10 @@ class LockScreenWindow(QWidget):
         )
         self.showFullScreen()
         
-        # Dark Cyberpunk Glassmorphism Background
+        # Deep Dark Cyberpunk Background
         self.setStyleSheet("""
             QWidget {
-                background-color: #090d16;
+                background-color: #060911;
                 color: #e2e8f0;
                 font-family: 'Segoe UI', 'Inter', sans-serif;
             }
@@ -120,41 +121,67 @@ class LockScreenWindow(QWidget):
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         card = QFrame()
-        card.setFixedSize(550, 420)
+        card.setFixedSize(620, 500)
         card.setStyleSheet("""
             QFrame {
-                background: rgba(18, 25, 41, 0.9);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 24px;
+                background: rgba(12, 18, 32, 0.94);
+                border: 2px solid rgba(0, 240, 255, 0.35);
+                border-radius: 28px;
             }
         """)
 
+        card_shadow = QGraphicsDropShadowEffect(card)
+        card_shadow.setBlurRadius(40)
+        card_shadow.setColor(QColor(0, 240, 255, 110))
+        card_shadow.setOffset(0, 0)
+        card.setGraphicsEffect(card_shadow)
+
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(40, 40, 40, 40)
+        card_layout.setContentsMargins(40, 36, 40, 36)
+        card_layout.setSpacing(14)
         card_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # Lock Icon / Logo
-        icon_label = QLabel("🔒")
-        icon_label.setFont(QFont("Segoe UI Emoji", 48))
-        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        card_layout.addWidget(icon_label)
+        # Official Clutch Zone Logo
+        logo_lbl = QLabel()
+        logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "clutch_logo_full.png")
+        if not os.path.exists(logo_path):
+            logo_path = os.path.join(os.getcwd(), "client", "assets", "clutch_logo_full.png")
+
+        if os.path.exists(logo_path):
+            pixmap = QPixmap(logo_path)
+            scaled_pixmap = pixmap.scaled(320, 170, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            logo_lbl.setPixmap(scaled_pixmap)
+        else:
+            logo_lbl.setText("CLUTCH ZONE")
+            logo_lbl.setFont(QFont("Impact", 36, QFont.Weight.Bold))
+            logo_lbl.setStyleSheet("color: #00f0ff; letter-spacing: 4px;")
+
+        logo_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        logo_glow = QGraphicsDropShadowEffect(logo_lbl)
+        logo_glow.setBlurRadius(30)
+        logo_glow.setColor(QColor(0, 240, 255, 180))
+        logo_glow.setOffset(0, 0)
+        logo_lbl.setGraphicsEffect(logo_glow)
+
+        card_layout.addWidget(logo_lbl)
+
+        # Status text
+        status_lbl = QLabel("STATION LOCKED")
+        status_lbl.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
+        status_lbl.setStyleSheet("color: #ef4444; letter-spacing: 3px;")
+        status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        card_layout.addWidget(status_lbl)
 
         # Title PC Name
         title = QLabel(self.pc_name)
-        title.setFont(QFont("Consolas", 32, QFont.Weight.Bold))
+        title.setFont(QFont("Consolas", 34, QFont.Weight.Bold))
         title.setStyleSheet("color: #00f0ff; letter-spacing: 2px;")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         card_layout.addWidget(title)
 
-        # Status text
-        status_lbl = QLabel("STATION LOCKED")
-        status_lbl.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
-        status_lbl.setStyleSheet("color: #ef4444; letter-spacing: 1px;")
-        status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        card_layout.addWidget(status_lbl)
-
         # Instructions
-        desc = QLabel("Please contact administrator at the front desk to start a session.")
+        desc = QLabel("Seansni boshlash uchun administratorga murojaat qiling.")
         desc.setFont(QFont("Segoe UI", 12))
         desc.setStyleSheet("color: #94a3b8;")
         desc.setWordWrap(True)
@@ -190,7 +217,7 @@ class TimerOverlayWidget(QWidget):
         self.container = QFrame()
         self.container.setStyleSheet("""
             QFrame {
-                background: rgba(10, 14, 23, 0.88);
+                background: rgba(10, 14, 23, 0.92);
                 border: 1px solid rgba(0, 240, 255, 0.4);
                 border-radius: 16px;
             }
@@ -221,13 +248,15 @@ class TimerOverlayWidget(QWidget):
         self.bar_btn.setFixedSize(85, 45)
         self.bar_btn.setStyleSheet("""
             QPushButton {
-                background: linear-gradient(135deg, rgba(168, 85, 247, 0.3) 0%, rgba(217, 70, 239, 0.3) 100%);
-                color: #c084fc;
-                border: 1px solid rgba(168, 85, 247, 0.6);
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #a855f7, stop:0.5 #d946ef, stop:1 #ec4899);
+                color: #ffffff;
+                border: 1px solid rgba(255, 255, 255, 0.4);
                 border-radius: 12px;
+                font-weight: bold;
             }
             QPushButton:hover {
-                background: rgba(168, 85, 247, 0.6);
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #c084fc, stop:1 #f472b6);
+                border: 1px solid #00f0ff;
                 color: #ffffff;
             }
         """)
@@ -247,7 +276,26 @@ class TimerOverlayWidget(QWidget):
         self.timer_label.setText(f"{h:02d}:{m:02d}:{s:02d}")
 
 
+class BackdropOverlayWidget(QWidget):
+    def __init__(self, on_click=None):
+        super().__init__()
+        self.on_click = on_click
+        self.setWindowFlags(
+            Qt.WindowType.WindowStaysOnTopHint |
+            Qt.WindowType.FramelessWindowHint |
+            Qt.WindowType.Tool
+        )
+        self.setStyleSheet("background-color: rgba(5, 8, 15, 0.85);")
+
+    def mousePressEvent(self, event):
+        if self.on_click:
+            self.on_click()
+        super().mousePressEvent(event)
+
+
 class BarMenuWindow(QWidget):
+    closed_signal = pyqtSignal()
+
     def __init__(self, pc_name="PC-01", server_url="http://localhost:8000"):
         super().__init__()
         self.pc_name = pc_name
@@ -257,6 +305,10 @@ class BarMenuWindow(QWidget):
         self.categories = []
         self.current_category_id = None
         self.init_ui()
+
+    def hideEvent(self, event):
+        self.closed_signal.emit()
+        super().hideEvent(event)
 
     def init_ui(self):
         self.setWindowFlags(
@@ -297,11 +349,18 @@ class BarMenuWindow(QWidget):
         container = QFrame()
         container.setStyleSheet("""
             QFrame {
-                background: rgba(15, 23, 42, 0.95);
-                border: 1px solid rgba(0, 240, 255, 0.3);
-                border-radius: 20px;
+                background: rgba(15, 23, 42, 0.98);
+                border: 2px solid rgba(0, 240, 255, 0.4);
+                border-radius: 22px;
             }
         """)
+
+        container_shadow = QGraphicsDropShadowEffect(container)
+        container_shadow.setBlurRadius(30)
+        container_shadow.setColor(QColor(0, 240, 255, 120))
+        container_shadow.setOffset(0, 0)
+        container.setGraphicsEffect(container_shadow)
+
         container_layout = QVBoxLayout(container)
         container_layout.setContentsMargins(20, 16, 20, 20)
 
@@ -664,8 +723,21 @@ class ImageCache(QObject):
             return None
         if path_or_url in cls.cache:
             return cls.cache[path_or_url]
-        if os.path.exists(path_or_url):
-            pix = QPixmap(path_or_url)
+
+        resolved_path = path_or_url
+        if not os.path.exists(resolved_path):
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            alt_path = os.path.join(script_dir, path_or_url)
+            if os.path.exists(alt_path):
+                resolved_path = alt_path
+            else:
+                rel_name = os.path.basename(path_or_url)
+                alt_asset = os.path.join(script_dir, "assets", "games", rel_name)
+                if os.path.exists(alt_asset):
+                    resolved_path = alt_asset
+
+        if os.path.exists(resolved_path):
+            pix = QPixmap(resolved_path)
             if not pix.isNull():
                 scaled = pix.scaled(width, height, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
                 cls.cache[path_or_url] = scaled
@@ -700,7 +772,7 @@ class GameLauncherWindow(QWidget):
 
         self.setStyleSheet("""
             QWidget {
-                background-color: #090d16;
+                background-color: #0a0e17;
                 color: #e2e8f0;
                 font-family: 'Segoe UI', 'Inter', sans-serif;
             }
@@ -735,15 +807,15 @@ class GameLauncherWindow(QWidget):
         """)
 
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(30, 24, 30, 24)
-        main_layout.setSpacing(16)
+        main_layout.setContentsMargins(36, 28, 36, 28)
+        main_layout.setSpacing(20)
 
         # Header Bar
         header = QHBoxLayout()
 
         title_box = QVBoxLayout()
         title_lbl = QLabel("🎮 CLUTCH ZONE")
-        title_lbl.setFont(QFont("Segoe UI", 22, QFont.Weight.Bold))
+        title_lbl.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
         title_lbl.setStyleSheet("color: #00f0ff; letter-spacing: 2px;")
 
         sub_title = QLabel(f"GAME CATALOG LAUNCHER • {self.pc_name}")
@@ -759,7 +831,7 @@ class GameLauncherWindow(QWidget):
         # Search Bar
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("🔍 O'yin nomini qidirish...")
-        self.search_input.setFixedWidth(280)
+        self.search_input.setFixedWidth(290)
         self.search_input.textChanged.connect(self.on_search_changed)
         header.addWidget(self.search_input)
 
@@ -774,14 +846,17 @@ class GameLauncherWindow(QWidget):
         bar_btn.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         bar_btn.setStyleSheet("""
             QPushButton {
-                background: linear-gradient(135deg, rgba(168, 85, 247, 0.4) 0%, rgba(217, 70, 239, 0.4) 100%);
-                color: #f5d0fe;
-                border: 1px solid rgba(217, 70, 239, 0.6);
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #a855f7, stop:0.5 #d946ef, stop:1 #ec4899);
+                color: #ffffff;
+                border: 1px solid rgba(255, 255, 255, 0.4);
                 border-radius: 12px;
                 padding: 10px 20px;
+                font-weight: bold;
+                letter-spacing: 1px;
             }
             QPushButton:hover {
-                background: rgba(217, 70, 239, 0.8);
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #c084fc, stop:1 #f472b6);
+                border: 1px solid #00f0ff;
                 color: #ffffff;
             }
         """)
@@ -819,7 +894,7 @@ class GameLauncherWindow(QWidget):
         # Status / Launch feedback banner
         self.status_msg = QLabel("O'yin tanlang va 'Ishga tushirish' tugmasini bosing")
         self.status_msg.setFont(QFont("Segoe UI", 10))
-        self.status_msg.setStyleSheet("color: #64748b; background: rgba(15, 23, 42, 0.6); border-radius: 8px; padding: 6px 12px;")
+        self.status_msg.setStyleSheet("color: #94a3b8; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 8px; padding: 8px 14px;")
         main_layout.addWidget(self.status_msg)
 
         # Game Cards Scroll Grid
@@ -828,8 +903,9 @@ class GameLauncherWindow(QWidget):
 
         self.grid_widget = QWidget()
         self.grid_layout = QGridLayout(self.grid_widget)
-        self.grid_layout.setSpacing(20)
-        self.grid_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        self.grid_layout.setSpacing(24)
+        self.grid_layout.setContentsMargins(0, 0, 0, 0)
+        self.grid_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.scroll_area.setWidget(self.grid_widget)
 
         main_layout.addWidget(self.scroll_area, stretch=1)
@@ -914,45 +990,64 @@ class GameLauncherWindow(QWidget):
             filtered.append(g)
 
         col_count = 4
+        for c in range(col_count):
+            self.grid_layout.setColumnStretch(c, 1)
+
         for idx, game in enumerate(filtered):
             card = QFrame()
-            card.setFixedSize(260, 250)
+            card.setFixedHeight(290)
             card.setStyleSheet("""
                 QFrame {
-                    background: rgba(18, 25, 41, 0.9);
-                    border: 1px solid rgba(0, 240, 255, 0.15);
+                    background: rgba(14, 21, 36, 0.92);
+                    border: 1.5px solid rgba(0, 240, 255, 0.25);
                     border-radius: 18px;
                 }
                 QFrame:hover {
-                    border: 1px solid rgba(0, 240, 255, 0.6);
-                    background: rgba(22, 33, 56, 0.95);
+                    border: 1.5px solid #00f0ff;
+                    background: rgba(20, 32, 56, 0.96);
                 }
             """)
+
+            shadow = QGraphicsDropShadowEffect(card)
+            shadow.setBlurRadius(20)
+            shadow.setColor(QColor(0, 240, 255, 75))
+            shadow.setOffset(0, 0)
+            card.setGraphicsEffect(shadow)
+
             c_layout = QVBoxLayout(card)
             c_layout.setContentsMargins(12, 12, 12, 12)
-            c_layout.setSpacing(8)
+            c_layout.setSpacing(10)
 
             cover_lbl = QLabel()
-            cover_lbl.setFixedHeight(120)
+            cover_lbl.setFixedHeight(158) # 16:9 ratio
             cover_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             cover_lbl.setStyleSheet("""
-                background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+                background: linear-gradient(135deg, #0d1527 0%, #1e293b 100%);
                 border-radius: 12px;
             """)
 
             cover_url = game.get('cover_path', '')
-            pix = ImageCache.get_cached(cover_url, 236, 120)
+            pix = ImageCache.get_cached(cover_url, 300, 158)
             if pix:
                 cover_lbl.setPixmap(pix)
             else:
-                cover_lbl.setText(f"🎮\n{game.get('name')}")
-                cover_lbl.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
-                cover_lbl.setStyleSheet("color: #00f0ff; background: rgba(0, 240, 255, 0.1); border-radius: 12px;")
+                fallback_logo = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "clutch_logo_full.png")
+                if not os.path.exists(fallback_logo):
+                    fallback_logo = os.path.join(os.getcwd(), "client", "assets", "clutch_logo_full.png")
+
+                if os.path.exists(fallback_logo):
+                    fpix = QPixmap(fallback_logo).scaled(240, 130, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                    cover_lbl.setPixmap(fpix)
+                else:
+                    cover_lbl.setText(f"🎮\n{game.get('name')}")
+                    cover_lbl.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+                    cover_lbl.setStyleSheet("color: #00f0ff; background: rgba(0, 240, 255, 0.1); border-radius: 12px;")
+
                 if cover_url and (cover_url.startswith("http://") or cover_url.startswith("https://")):
                     if cover_url not in self.pixmap_labels:
                         self.pixmap_labels[cover_url] = []
                     self.pixmap_labels[cover_url].append(cover_lbl)
-                    self.image_downloader.fetch_image(cover_url, 236, 120)
+                    self.image_downloader.fetch_image(cover_url, 300, 158)
 
             c_layout.addWidget(cover_lbl)
 
@@ -965,7 +1060,7 @@ class GameLauncherWindow(QWidget):
 
             cat_pill = QLabel(game.get('category', 'FPS'))
             cat_pill.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
-            cat_pill.setStyleSheet("color: #38bdf8; background: rgba(56, 189, 248, 0.15); border-radius: 6px; padding: 2px 6px;")
+            cat_pill.setStyleSheet("color: #38bdf8; background: rgba(56, 189, 248, 0.15); border-radius: 6px; padding: 3px 8px;")
             info_row.addWidget(cat_pill)
 
             c_layout.addLayout(info_row)
@@ -974,15 +1069,18 @@ class GameLauncherWindow(QWidget):
             play_btn.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
             play_btn.setStyleSheet("""
                 QPushButton {
-                    background: linear-gradient(135deg, #00f0ff 0%, #0284c7 100%);
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #00f0ff, stop:1 #10b981);
                     color: #030712;
                     border: none;
                     border-radius: 10px;
-                    padding: 8px;
+                    padding: 9px;
+                    font-weight: bold;
+                    letter-spacing: 1px;
                 }
                 QPushButton:hover {
-                    background: #00f0ff;
-                    color: #000000;
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #10b981, stop:1 #00f0ff);
+                    color: #ffffff;
+                    border: 1px solid #00f0ff;
                 }
             """)
             g_obj = game
@@ -1011,6 +1109,9 @@ class ClientLockerApp:
 
         self.lock_window = LockScreenWindow(self.pc_name)
         self.bar_menu_window = BarMenuWindow(self.pc_name, self.server_url)
+        self.backdrop_overlay = BackdropOverlayWidget(on_click=self.bar_menu_window.hide)
+        self.bar_menu_window.closed_signal.connect(self.backdrop_overlay.hide)
+
         self.overlay_window = TimerOverlayWidget(self.pc_name, on_bar_click=self.toggle_bar_menu)
         self.launcher_window = GameLauncherWindow(
             pc_name=self.pc_name,
@@ -1030,6 +1131,7 @@ class ClientLockerApp:
 
         # Start lock screen initially
         install_keyboard_hook()
+        self.backdrop_overlay.hide()
         self.lock_window.show()
         self.overlay_window.hide()
         self.bar_menu_window.hide()
@@ -1042,9 +1144,13 @@ class ClientLockerApp:
     def toggle_bar_menu(self):
         if self.bar_menu_window.isVisible():
             self.bar_menu_window.hide()
+            self.backdrop_overlay.hide()
         else:
+            self.backdrop_overlay.showFullScreen()
             self.bar_menu_window.load_data()
             self.bar_menu_window.show()
+            self.bar_menu_window.raise_()
+            self.bar_menu_window.activateWindow()
 
     def handle_bar_order_update(self, data):
         self.bar_menu_window.update_order_status(data)
@@ -1125,6 +1231,7 @@ class ClientLockerApp:
         self.time_remaining = 0
         self.overlay_window.hide()
         self.bar_menu_window.hide()
+        self.backdrop_overlay.hide()
         self.launcher_window.hide()
         self.lock_window.show()
         install_keyboard_hook()

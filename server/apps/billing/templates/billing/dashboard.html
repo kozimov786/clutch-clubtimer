@@ -68,30 +68,30 @@
   </header>
 
   <!-- Navigation Tabs Bar -->
-  <nav class="bg-slate-950/60 border-b border-slate-800/80 px-6 py-2">
-    <div class="max-w-7xl mx-auto flex items-center gap-2">
-      <button onclick="switchTab('grid')" data-tab="grid" class="main-nav-btn px-4 py-2 rounded-xl text-xs font-bold border border-transparent transition-all flex items-center gap-2 nav-tab-active">
+  <nav class="bg-slate-950/60 border-b border-slate-800/80 px-6 py-2 overflow-x-auto">
+    <div class="max-w-7xl mx-auto flex items-center gap-2 whitespace-nowrap min-w-max">
+      <button onclick="switchTab('grid')" data-tab="grid" class="main-nav-btn px-4 py-2 rounded-xl text-xs font-bold border border-transparent transition-all flex items-center gap-2 nav-tab-active shrink-0">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
         STATIONS GRID (40 PCs)
       </button>
-      <button onclick="switchTab('tariffs')" data-tab="tariffs" class="main-nav-btn px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white border border-transparent transition-all flex items-center gap-2">
+      <button onclick="switchTab('tariffs')" data-tab="tariffs" class="main-nav-btn px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white border border-transparent transition-all flex items-center gap-2 shrink-0">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         TARIFLAR VA NARXLAR
       </button>
-      <button onclick="switchTab('sessions')" data-tab="sessions" class="main-nav-btn px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white border border-transparent transition-all flex items-center gap-2">
+      <button onclick="switchTab('sessions')" data-tab="sessions" class="main-nav-btn px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white border border-transparent transition-all flex items-center gap-2 shrink-0">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
         SEANSLAR TARIXI
       </button>
-      <button onclick="switchTab('bar')" data-tab="bar" class="main-nav-btn px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white border border-transparent transition-all flex items-center gap-2 relative">
+      <button onclick="switchTab('bar')" data-tab="bar" class="main-nav-btn px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white border border-transparent transition-all flex items-center gap-2 relative shrink-0">
         <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 01-2-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
         BAR & BUYURTMALAR
         <span id="nav-bar-pending-badge" class="hidden px-2 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-mono font-black">0</span>
       </button>
-      <button onclick="switchTab('analytics')" data-tab="analytics" class="main-nav-btn px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white border border-transparent transition-all flex items-center gap-2">
+      <button onclick="switchTab('analytics')" data-tab="analytics" class="main-nav-btn px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white border border-transparent transition-all flex items-center gap-2 shrink-0">
         <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
         OMBOR & HISOBOT
       </button>
-      <button onclick="switchTab('finance')" data-tab="finance" class="main-nav-btn px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white border border-transparent transition-all flex items-center gap-2">
+      <button onclick="switchTab('finance')" data-tab="finance" class="main-nav-btn px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white border border-transparent transition-all flex items-center gap-2 shrink-0">
         <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         KASSA & CASHFLOW
       </button>
@@ -106,45 +106,45 @@
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
       
       <!-- Total Stations -->
-      <div class="glass-panel p-4 rounded-2xl flex items-center justify-between border-l-4 border-l-cyan-500">
-        <div>
-          <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Jami Kompyuterlar</p>
-          <h3 id="stat-total-pcs" class="text-3xl font-black font-orbitron text-white mt-0.5">40</h3>
+      <div class="glass-panel p-4 rounded-2xl flex items-center justify-between border-l-4 border-l-cyan-500 min-w-0">
+        <div class="min-w-0">
+          <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">Jami Kompyuterlar</p>
+          <h3 id="stat-total-pcs" class="text-3xl font-black font-orbitron text-white mt-0.5 truncate">40</h3>
         </div>
-        <div class="w-11 h-11 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center font-orbitron font-bold">
+        <div class="w-11 h-11 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center font-orbitron font-bold shrink-0">
           40
         </div>
       </div>
 
       <!-- Active Gamers -->
-      <div class="glass-panel p-4 rounded-2xl flex items-center justify-between border-l-4 border-l-emerald-500">
-        <div>
-          <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Band Komplar</p>
-          <h3 id="stat-active-pcs" class="text-3xl font-black font-orbitron text-emerald-400 mt-0.5">0</h3>
+      <div class="glass-panel p-4 rounded-2xl flex items-center justify-between border-l-4 border-l-emerald-500 min-w-0">
+        <div class="min-w-0">
+          <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">Band Komplar</p>
+          <h3 id="stat-active-pcs" class="text-3xl font-black font-orbitron text-emerald-400 mt-0.5 truncate">0</h3>
         </div>
-        <div class="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
+        <div class="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         </div>
       </div>
 
       <!-- Locked Stations -->
-      <div class="glass-panel p-4 rounded-2xl flex items-center justify-between border-l-4 border-l-rose-500">
-        <div>
-          <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Bo'sh (Bloklangan)</p>
-          <h3 id="stat-locked-pcs" class="text-3xl font-black font-orbitron text-rose-400 mt-0.5">40</h3>
+      <div class="glass-panel p-4 rounded-2xl flex items-center justify-between border-l-4 border-l-rose-500 min-w-0">
+        <div class="min-w-0">
+          <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">Bo'sh (Bloklangan)</p>
+          <h3 id="stat-locked-pcs" class="text-3xl font-black font-orbitron text-rose-400 mt-0.5 truncate">40</h3>
         </div>
-        <div class="w-11 h-11 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center">
+        <div class="w-11 h-11 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center shrink-0">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
         </div>
       </div>
 
       <!-- Total Revenue -->
-      <div class="glass-panel p-4 rounded-2xl flex items-center justify-between border-l-4 border-l-purple-500">
-        <div>
-          <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Jami Kassa Tushumi</p>
-          <h3 id="stat-revenue" class="text-xl font-black font-orbitron text-purple-400 mt-0.5">0 UZS</h3>
+      <div class="glass-panel p-4 rounded-2xl flex items-center justify-between border-l-4 border-l-purple-500 min-w-0">
+        <div class="min-w-0">
+          <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">Jami Kassa Tushumi</p>
+          <h3 id="stat-revenue" class="text-xl font-black font-orbitron text-purple-400 mt-0.5 truncate">0 UZS</h3>
         </div>
-        <div class="w-11 h-11 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center">
+        <div class="w-11 h-11 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         </div>
       </div>
@@ -389,9 +389,9 @@
             </div>
           </div>
           <div class="overflow-x-auto">
-            <table class="w-full text-left text-sm">
+            <table class="w-full text-left text-sm min-w-[700px]">
               <thead>
-                <tr class="border-b border-slate-800 text-xs text-slate-400 uppercase font-mono">
+                <tr class="border-b border-slate-800 text-xs text-slate-400 uppercase font-mono whitespace-nowrap">
                   <th class="py-3 px-3">Mahsulot</th>
                   <th class="py-3 px-3">Kategoriya</th>
                   <th class="py-3 px-3">Tannarx (Olish)</th>
@@ -493,25 +493,25 @@
 
       <!-- Bar Sales & Profit Margin Row -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
-        <div class="glass-panel p-4 rounded-2xl border-l-4 border-l-cyan-400">
-          <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Bar Yalpi Tushumi</span>
-          <h3 id="finance-bar-revenue" class="text-xl font-black font-orbitron text-cyan-300 mt-1">0 UZS</h3>
-          <p class="text-[11px] text-slate-400 mt-0.5 font-mono">Bardan tushgan barcha tushum</p>
+        <div class="glass-panel p-4 rounded-2xl border-l-4 border-l-cyan-400 min-w-0">
+          <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block truncate">Bar Yalpi Tushumi</span>
+          <h3 id="finance-bar-revenue" class="text-xl font-black font-orbitron text-cyan-300 mt-1 truncate">0 UZS</h3>
+          <p class="text-[11px] text-slate-400 mt-0.5 font-mono truncate">Bardan tushgan barcha tushum</p>
         </div>
 
-        <div class="glass-panel p-4 rounded-2xl border-l-4 border-l-amber-400">
-          <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Bar Tovar Tannarxi (COGS)</span>
-          <h3 id="finance-bar-cogs" class="text-xl font-black font-orbitron text-amber-400 mt-1">0 UZS</h3>
-          <p class="text-[11px] text-slate-400 mt-0.5 font-mono">Sotilgan tovarlarning olish narxi</p>
+        <div class="glass-panel p-4 rounded-2xl border-l-4 border-l-amber-400 min-w-0">
+          <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block truncate">Bar Tovar Tannarxi (COGS)</span>
+          <h3 id="finance-bar-cogs" class="text-xl font-black font-orbitron text-amber-400 mt-1 truncate">0 UZS</h3>
+          <p class="text-[11px] text-slate-400 mt-0.5 font-mono truncate">Sotilgan tovarlarning olish narxi</p>
         </div>
 
-        <div class="glass-panel p-4 rounded-2xl border-l-4 border-l-emerald-400">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Bar Sof Foydasi (Margin)</span>
-            <span id="finance-bar-margin-pct" class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">0% Margin</span>
+        <div class="glass-panel p-4 rounded-2xl border-l-4 border-l-emerald-400 min-w-0">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider truncate">Bar Sof Foydasi (Margin)</span>
+            <span id="finance-bar-margin-pct" class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold shrink-0">0% Margin</span>
           </div>
-          <h3 id="finance-bar-margin" class="text-xl font-black font-orbitron text-emerald-400 mt-1">0 UZS</h3>
-          <p class="text-[11px] text-slate-400 mt-0.5 font-mono">Yalpi Tushum — Tovar Tannarxi</p>
+          <h3 id="finance-bar-margin" class="text-xl font-black font-orbitron text-emerald-400 mt-1 truncate">0 UZS</h3>
+          <p class="text-[11px] text-slate-400 mt-0.5 font-mono truncate">Yalpi Tushum — Tovar Tannarxi</p>
         </div>
       </div>
 
@@ -598,9 +598,9 @@
             </h3>
 
             <div class="overflow-x-auto">
-              <table class="w-full text-left text-sm">
+              <table class="w-full text-left text-sm min-w-[650px]">
                 <thead>
-                  <tr class="border-b border-slate-800 text-xs text-slate-400 uppercase font-mono">
+                  <tr class="border-b border-slate-800 text-xs text-slate-400 uppercase font-mono whitespace-nowrap">
                     <th class="py-3 px-3">Sana</th>
                     <th class="py-3 px-3">Kategoriya</th>
                     <th class="py-3 px-3">Kimga</th>
@@ -1084,9 +1084,9 @@
       </div>
 
       <div class="mt-4 overflow-x-auto max-h-[400px]">
-        <table class="w-full text-left text-xs">
+        <table class="w-full text-left text-xs min-w-[600px]">
           <thead>
-            <tr class="border-b border-slate-800 text-slate-400 uppercase font-mono">
+            <tr class="border-b border-slate-800 text-slate-400 uppercase font-mono whitespace-nowrap">
               <th class="py-2.5 px-3">Sana & Vaqt</th>
               <th class="py-2.5 px-3">Mahsulot</th>
               <th class="py-2.5 px-3">Miqdori</th>

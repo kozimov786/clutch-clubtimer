@@ -1134,19 +1134,22 @@ function renderInventoryTable(products) {
     const totalAssetVal = costPrice * p.stock;
 
     tr.innerHTML = `
-      <td class="py-3 px-3">
+      <td class="py-3 px-3 whitespace-nowrap">
         <div class="flex items-center gap-2.5">
-          <img src="${p.image}" class="w-8 h-8 rounded-lg object-cover border border-slate-700">
-          <span class="font-bold text-white text-sm">${p.name}</span>
+          <img src="${p.image}" class="w-8 h-8 rounded-lg object-cover border border-slate-700 shrink-0">
+          <span class="font-bold text-white text-sm truncate max-w-[160px] sm:max-w-xs inline-block" title="${p.name}">${p.name}</span>
         </div>
       </td>
-      <td class="py-3 px-3 text-xs text-slate-400 font-semibold">${p.category_name || 'Barchasi'}</td>
-      <td class="py-3 px-3 font-mono text-amber-400 font-bold">${formatMoney(costPrice)}</td>
-      <td class="py-3 px-3 font-mono text-emerald-400 font-bold">${formatMoney(sellingPrice)}</td>
-      <td class="py-3 px-3">${stockBadge}</td>
-      <td class="py-3 px-3 font-mono text-slate-300 font-semibold">${formatMoney(totalAssetVal)}</td>
-      <td class="py-3 px-3 text-right flex items-center justify-end gap-1.5">
-        <button onclick="openSpisaniyeModal(${p.id})" class="py-1 px-2.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition-all flex items-center gap-1" title="Spisaniye (Ichki rasxod)">
+      <td class="py-3 px-3 text-xs text-slate-400 font-semibold whitespace-nowrap">${p.category_name || 'Barchasi'}</td>
+      <td class="py-3 px-3 font-mono text-amber-400 font-bold whitespace-nowrap">${formatMoney(costPrice)}</td>
+      <td class="py-3 px-3 font-mono text-emerald-400 font-bold whitespace-nowrap">${formatMoney(sellingPrice)}</td>
+      <td class="py-3 px-3 whitespace-nowrap">${stockBadge}</td>
+      <td class="py-3 px-3 font-mono text-slate-300 font-semibold whitespace-nowrap">${formatMoney(totalAssetVal)}</td>
+      <td class="py-3 px-3 text-right flex items-center justify-end gap-1.5 whitespace-nowrap">
+        <button onclick="openRestockModal(${p.id})" class="py-1 px-2.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold transition-all flex items-center gap-1 shrink-0" title="Omborga Kirim Qilish">
+          📦 Kirim
+        </button>
+        <button onclick="openSpisaniyeModal(${p.id})" class="py-1 px-2.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition-all flex items-center gap-1 shrink-0" title="Spisaniye (Ichki rasxod)">
           🗑️ Spisaniye
         </button>
       </td>
@@ -1594,20 +1597,20 @@ function renderFinanceDashboard(data) {
   }
 
   tbody.innerHTML = expenses.map(e => `
-    <tr class="border-b border-slate-800 hover:bg-slate-900/50 transition-colors text-xs">
-      <td class="py-3 px-3 text-slate-400 font-mono">${new Date(e.created_at).toLocaleString('uz-UZ')}</td>
-      <td class="py-3 px-3">
+    <tr class="border-b border-slate-800 hover:bg-slate-900/50 transition-colors text-xs whitespace-nowrap">
+      <td class="py-3 px-3 text-slate-400 font-mono whitespace-nowrap">${new Date(e.created_at).toLocaleString('uz-UZ')}</td>
+      <td class="py-3 px-3 whitespace-nowrap">
         <span class="px-2 py-0.5 rounded-full bg-slate-800 text-cyan-300 font-bold border border-slate-700">${e.category}</span>
       </td>
-      <td class="py-3 px-3 font-semibold text-slate-200">${e.recipient_name || '—'}</td>
-      <td class="py-3 px-3">
+      <td class="py-3 px-3 font-semibold text-slate-200 truncate max-w-[140px]" title="${e.recipient_name || ''}">${e.recipient_name || '—'}</td>
+      <td class="py-3 px-3 whitespace-nowrap">
         ${e.payment_method === 'CASH' ? 
           '<span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold">💵 Naqd</span>' : 
           '<span class="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-bold">💳 Plastik</span>'}
       </td>
-      <td class="py-3 px-3 font-bold text-rose-400 font-orbitron">-${formatMoney(e.amount)}</td>
+      <td class="py-3 px-3 font-bold text-rose-400 font-orbitron whitespace-nowrap">-${formatMoney(e.amount)}</td>
       <td class="py-3 px-3 text-slate-300 max-w-xs truncate" title="${e.description || ''}">${e.description || '—'}</td>
-      <td class="py-3 px-3 text-right">
+      <td class="py-3 px-3 text-right whitespace-nowrap">
         <button onclick="handleDeleteExpense(${e.id})" class="p-1 rounded bg-rose-500/20 hover:bg-rose-500/40 text-rose-400 transition-colors" title="Chiqimni o'chirish">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
         </button>
@@ -1834,14 +1837,14 @@ async function fetchStockHistory() {
       }
 
       tbody.innerHTML = supplies.map(s => `
-        <tr class="border-b border-slate-800 hover:bg-slate-900/50 transition-colors">
-          <td class="py-2.5 px-3 text-slate-400 font-mono">${new Date(s.created_at).toLocaleString('uz-UZ')}</td>
-          <td class="py-2.5 px-3 font-bold text-white">${s.product_name}</td>
-          <td class="py-2.5 px-3 font-mono text-cyan-400 font-bold">+${s.quantity} ta</td>
-          <td class="py-2.5 px-3 font-mono text-amber-400">${formatMoney(s.cost_price)}</td>
-          <td class="py-2.5 px-3 font-mono text-emerald-400">${formatMoney(s.selling_price)}</td>
-          <td class="py-2.5 px-3 font-mono text-rose-400 font-bold">${formatMoney(s.total_cost)}</td>
-          <td class="py-2.5 px-3">
+        <tr class="border-b border-slate-800 hover:bg-slate-900/50 transition-colors whitespace-nowrap text-xs">
+          <td class="py-2.5 px-3 text-slate-400 font-mono whitespace-nowrap">${new Date(s.created_at).toLocaleString('uz-UZ')}</td>
+          <td class="py-2.5 px-3 font-bold text-white max-w-[150px] truncate" title="${s.product_name}">${s.product_name}</td>
+          <td class="py-2.5 px-3 font-mono text-cyan-400 font-bold whitespace-nowrap">+${s.quantity} ta</td>
+          <td class="py-2.5 px-3 font-mono text-amber-400 whitespace-nowrap">${formatMoney(s.cost_price)}</td>
+          <td class="py-2.5 px-3 font-mono text-emerald-400 whitespace-nowrap">${formatMoney(s.selling_price)}</td>
+          <td class="py-2.5 px-3 font-mono text-rose-400 font-bold whitespace-nowrap">${formatMoney(s.total_cost)}</td>
+          <td class="py-2.5 px-3 whitespace-nowrap">
             ${s.payment_method === 'CASH' ?
               '<span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold">💵 Naqd</span>' :
               '<span class="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-bold">💳 Plastik</span>'}

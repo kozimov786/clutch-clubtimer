@@ -10,7 +10,7 @@ import websocket
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QLabel, QPushButton, QFrame,
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QPushButton, QFrame,
     QHBoxLayout, QScrollArea, QGridLayout, QLineEdit, QGraphicsDropShadowEffect,
     QSizePolicy
 )
@@ -94,7 +94,7 @@ else:
         print("[Hook Simulator] Windows keyboard hook disabled")
 
 
-class LockScreenWindow(QWidget):
+class LockScreenWindow(QMainWindow):
     def __init__(self, pc_name="PC-01"):
         super().__init__()
         self.pc_name = pc_name
@@ -121,22 +121,32 @@ class LockScreenWindow(QWidget):
         # Ekran o'lchamiga moslashtirish
         screen_geo = QApplication.primaryScreen().geometry()
         self.setGeometry(screen_geo)
-        
-        # Deep Dark Cyberpunk Background
-        self.setStyleSheet("""
-            QWidget {
-                background-color: #060911;
-                color: #e2e8f0;
-                font-family: 'Segoe UI', 'Inter', sans-serif;
-            }
-        """)
 
-        layout = QVBoxLayout(self)
+        # ----------------------------------------------------------------
+        # FULLSCREEN OVERLAY CONTAINER — butun ekranni qoplaydigan widget
+        # ----------------------------------------------------------------
+        self.main_container = QWidget()
+        self.main_container.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding
+        )
+        # Butun ekran to'q fon — hech qanday setFixedSize yo'q
+        self.main_container.setStyleSheet(
+            "background-color: #060911;"
+        )
+        self.setCentralWidget(self.main_container)
+
+        # ----------------------------------------------------------------
+        # CENTER CARD LAYOUT
+        # ----------------------------------------------------------------
+        layout = QVBoxLayout(self.main_container)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        card = QFrame()
-        card.setFixedSize(620, 500)
-        card.setStyleSheet("""
+        # Faqat kartaning o'ziga fixed preferred width — fon emas!
+        self.lock_card = QFrame()
+        self.lock_card.setFixedWidth(500)
+        self.lock_card.setStyleSheet("""
             QFrame {
                 background: rgba(12, 18, 32, 0.94);
                 border: 2px solid rgba(0, 240, 255, 0.35);
@@ -144,13 +154,13 @@ class LockScreenWindow(QWidget):
             }
         """)
 
-        card_shadow = QGraphicsDropShadowEffect(card)
+        card_shadow = QGraphicsDropShadowEffect(self.lock_card)
         card_shadow.setBlurRadius(40)
         card_shadow.setColor(QColor(0, 240, 255, 110))
         card_shadow.setOffset(0, 0)
-        card.setGraphicsEffect(card_shadow)
+        self.lock_card.setGraphicsEffect(card_shadow)
 
-        card_layout = QVBoxLayout(card)
+        card_layout = QVBoxLayout(self.lock_card)
         card_layout.setContentsMargins(40, 36, 40, 36)
         card_layout.setSpacing(14)
         card_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -202,10 +212,18 @@ class LockScreenWindow(QWidget):
         desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
         card_layout.addWidget(desc)
 
-        layout.addWidget(card)
+        layout.addWidget(self.lock_card)
 
         # Endi force fullscreen yoqiladi
         self._force_fullscreen_enabled = True
+
+    # ----------------------------------------------------------------
+    # RESIZE EVENT — container har doim oynaning to'liq maydonini egallaydi
+    # ----------------------------------------------------------------
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, 'main_container'):
+            self.main_container.setGeometry(self.rect())
 
     def show_locker(self):
         """WebSocket signali yoki lock_pc() dan chaqirilganda.
@@ -1420,6 +1438,14 @@ class ClientLockerApp:
 
 
 def main():
+    # ----------------------------------------------------------------
+    # HIGH-DPI & SCALING FIX — QApplication yaratilishidan OLDIN
+    # ----------------------------------------------------------------
+    os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
+    QApplication.setHighDpiScaleFactorRoundingPolicy(
+        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+    )
+
     app = QApplication(sys.argv)
     locker = ClientLockerApp("config.json")
     sys.exit(app.exec())

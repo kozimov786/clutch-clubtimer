@@ -10,10 +10,11 @@ from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .models import Computer, Tariff, Session, Category, Product, Order, OrderItem, Expense
+from .models import Computer, Tariff, Session, Category, Product, Order, OrderItem, Expense, Game
 from .serializers import (
     ComputerSerializer, TariffSerializer, SessionSerializer,
-    CategorySerializer, ProductSerializer, OrderSerializer, OrderItemSerializer, ExpenseSerializer
+    CategorySerializer, ProductSerializer, OrderSerializer, OrderItemSerializer, ExpenseSerializer,
+    GameSerializer
 )
 from .consumers import notify_pc_status_change, notify_bar_order_change
 
@@ -41,6 +42,10 @@ class DashboardView(View):
 class TariffViewSet(viewsets.ModelViewSet):
     queryset = Tariff.objects.all().order_by('id')
     serializer_class = TariffSerializer
+
+class GameViewSet(viewsets.ModelViewSet):
+    queryset = Game.objects.filter(is_active=True).order_by('name')
+    serializer_class = GameSerializer
 
 class SessionViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Session.objects.all().order_by('-start_time')
@@ -157,24 +162,100 @@ class ComputerViewSet(viewsets.ModelViewSet):
         })
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=['get'])
+    def finish_summary(self, request, pk=None):
+        pc = self.get_object()
+        now = timezone.now()
+        active_session = Session.objects.filter(computer=pc, is_active=True).first()
+
+        duration_minutes = 0
+        time_price = 0.0
+        tariff_name = "Standard"
+
+        if active_session:
+            tariff = pc.current_tariff or active_session.tariff or Tariff.objects.first()
+            if tariff:
+                tariff_name = tariff.name
+            if pc.is_open_time and pc.session_start_time:
+                elapsed_seconds = max(0, (now - pc.session_start_time).total_seconds())
+                duration_minutes = int(round(elapsed_seconds / 60.0))
+                price_per_min = (tariff.get_effective_price_per_hour() / 60.0) if tariff else 200.0
+                time_price = round(price_per_min * duration_minutes)
+            else:
+                duration_minutes = active_session.duration_minutes
+                time_price = float(active_session.total_price)
+        elif pc.current_tariff:
+            tariff_name = pc.current_tariff.name
+
+        bar_items = []
+        bar_total_price = 0.0
+
+        if active_session and active_session.start_time:
+            orders = Order.objects.filter(computer=pc, created_at__gte=active_session.start_time).exclude(status='CANCELLED')
+            items_map = {}
+            for order in orders:
+                for item in order.items.all():
+                    p_id = item.product.id
+                    if p_id not in items_map:
+                        items_map[p_id] = {
+                            'id': p_id,
+                            'product_name': item.product.name,
+                            'quantity': 0,
+                            'unit_price': float(item.unit_price),
+                            'total_price': 0.0
+                        }
+                    items_map[p_id]['quantity'] += item.quantity
+                    item_cost = float(item.unit_price * item.quantity)
+                    items_map[p_id]['total_price'] += item_cost
+                    bar_total_price += item_cost
+            bar_items = list(items_map.values())
+
+        grand_total = time_price + bar_total_price
+        payment_method = active_session.payment_method if active_session else 'CASH'
+
+        return Response({
+            'computer_id': pc.id,
+            'computer_name': pc.name,
+            'zone': pc.zone,
+            'is_open_time': pc.is_open_time,
+            'session_start_time': pc.session_start_time.isoformat() if pc.session_start_time else None,
+            'duration_minutes': duration_minutes,
+            'tariff_name': tariff_name,
+            'time_price': time_price,
+            'bar_items': bar_items,
+            'bar_total_price': bar_total_price,
+            'grand_total': grand_total,
+            'payment_method': payment_method
+        }, status=status.HTTP_200_OK)
+
     @action(detail=True, methods=['post'])
     def stop_session(self, request, pk=None):
         pc = self.get_object()
         now = timezone.now()
+        payment_method = request.data.get('payment_method', 'CASH')
 
         active_session = Session.objects.filter(computer=pc, is_active=True).first()
         if active_session:
             if pc.is_open_time and pc.session_start_time:
-                elapsed_seconds = (now - pc.session_start_time).total_seconds()
+                elapsed_seconds = max(0, (now - pc.session_start_time).total_seconds())
                 duration_minutes = int(round(elapsed_seconds / 60.0))
                 tariff = pc.current_tariff or active_session.tariff or Tariff.objects.first()
-                price_per_min = tariff.get_effective_price_per_hour() / 60.0 if tariff else 200.0
-                total_price = price_per_min * duration_minutes
+                price_per_min = (tariff.get_effective_price_per_hour() / 60.0) if tariff else 200.0
+                total_price = round(price_per_min * duration_minutes)
                 active_session.duration_minutes = duration_minutes
                 active_session.total_price = total_price
+            
+            active_session.payment_method = payment_method
             active_session.end_time = now
             active_session.is_active = False
             active_session.save()
+
+            session_orders = Order.objects.filter(computer=pc, created_at__gte=active_session.start_time).exclude(status='CANCELLED')
+            for order in session_orders:
+                order.payment_method = payment_method
+                if order.status == 'PENDING':
+                    order.status = 'DELIVERED'
+                order.save()
 
         pc.status = 'LOCKED'
         pc.is_open_time = False
@@ -269,6 +350,50 @@ class ProductViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(product)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    @action(detail=False, methods=['post'])
+    def internal_expense(self, request):
+        product_id = request.data.get('product_id')
+        quantity = int(request.data.get('quantity', 1))
+        employee_name = request.data.get('employee_name', 'Barman / Admin')
+        reason = request.data.get('reason', 'Ichki rasxod / Spisaniye')
+
+        if not product_id:
+            return Response({'error': 'Mahsulot tanlanmagan!'}, status=status.HTTP_400_BAD_REQUEST)
+
+        product = Product.objects.filter(id=product_id).first()
+        if not product:
+            return Response({'error': 'Mahsulot topilmadi!'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if product.stock < quantity:
+            return Response({'error': f'{product.name} omborda yetarli emas! (Mavjud: {product.stock})'}, status=status.HTTP_400_BAD_REQUEST)
+
+        product.stock -= quantity
+        product.save()
+
+        total_cost = float(product.price * quantity)
+
+        expense = Expense.objects.create(
+            amount=total_cost,
+            payment_method='CASH',
+            category='Bar Rasxodi (Spisaniye)',
+            recipient_name=employee_name,
+            description=f"Spisaniye: {quantity}x {product.name} ({total_cost:,.0f} UZS). Izoh: {reason}"
+        )
+
+        notify_bar_order_change({
+            'action': 'INTERNAL_EXPENSE',
+            'product_id': product.id,
+            'new_stock': product.stock
+        })
+
+        return Response({
+            'success': True,
+            'product_name': product.name,
+            'remaining_stock': product.stock,
+            'expense_id': expense.id,
+            'amount': total_cost
+        }, status=status.HTTP_200_OK)
+
 class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.all().order_by('-created_at')
     serializer_class = OrderSerializer
@@ -277,18 +402,22 @@ class OrderViewSet(viewsets.ModelViewSet):
         pc_name = request.data.get('pc_name')
         computer_id = request.data.get('computer')
         items_data = request.data.get('items', [])
+        is_direct_sale = request.data.get('is_direct_sale', False) or request.data.get('direct_sale', False)
+        payment_method = request.data.get('payment_method', 'CASH')
+        order_status = request.data.get('status', 'PENDING')
 
         if not items_data:
             return Response({'error': 'Buyurtmada tovarlar yo\'q!'}, status=status.HTTP_400_BAD_REQUEST)
 
         computer = None
-        if pc_name:
-            computer = Computer.objects.filter(name=pc_name).first()
-        elif computer_id:
-            computer = Computer.objects.filter(id=computer_id).first()
+        if not is_direct_sale:
+            if pc_name:
+                computer = Computer.objects.filter(name=pc_name).first()
+            elif computer_id:
+                computer = Computer.objects.filter(id=computer_id).first()
 
-        if not computer:
-            return Response({'error': 'Kompyuter topilmadi!'}, status=status.HTTP_400_BAD_REQUEST)
+            if not computer:
+                return Response({'error': 'Kompyuter topilmadi!'}, status=status.HTTP_400_BAD_REQUEST)
 
         total_price = 0
         order_items_to_create = []
@@ -310,13 +439,14 @@ class OrderViewSet(viewsets.ModelViewSet):
                 'unit_price': product.price
             })
 
-        payment_method = request.data.get('payment_method', 'CASH')
+        if is_direct_sale:
+            order_status = 'DELIVERED'
 
         order = Order.objects.create(
             computer=computer,
             total_price=total_price,
             payment_method=payment_method,
-            status='PENDING'
+            status=order_status
         )
 
         for oi in order_items_to_create:
@@ -326,6 +456,11 @@ class OrderViewSet(viewsets.ModelViewSet):
                 quantity=oi['quantity'],
                 unit_price=oi['unit_price']
             )
+
+        if order_status in ('APPROVED', 'DELIVERED'):
+            for oi in order_items_to_create:
+                oi['product'].stock = max(0, oi['product'].stock - oi['quantity'])
+                oi['product'].save()
 
         serializer = self.get_serializer(order)
         notify_bar_order_change({

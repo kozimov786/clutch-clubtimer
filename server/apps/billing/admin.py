@@ -1,5 +1,12 @@
 from django.contrib import admin
-from .models import Computer, Session, Tariff, Category, Product, Order, OrderItem, Expense
+from .models import Computer, Session, Tariff, Category, Product, Order, OrderItem, Expense, Game
+
+@admin.register(Game)
+class GameAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name', 'category', 'executable_path', 'is_active', 'created_at')
+    list_filter = ('category', 'is_active')
+    search_fields = ('name', 'executable_path')
+
 
 @admin.register(Tariff)
 class TariffAdmin(admin.ModelAdmin):

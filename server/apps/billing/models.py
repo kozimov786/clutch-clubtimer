@@ -118,7 +118,7 @@ class Order(models.Model):
         ('CANCELLED', 'Cancelled'),
     ]
 
-    computer = models.ForeignKey(Computer, on_delete=models.CASCADE, related_name='bar_orders')
+    computer = models.ForeignKey(Computer, on_delete=models.CASCADE, related_name='bar_orders', null=True, blank=True)
     total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     payment_method = models.CharField(max_length=10, choices=PAYMENT_METHOD_CHOICES, default='CASH')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
@@ -126,7 +126,8 @@ class Order(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Order #{self.id} ({self.computer.name}) [{self.payment_method}] - {self.status} - {self.total_price:,.0f} UZS"
+        pc_str = self.computer.name if self.computer else 'Direct POS'
+        return f"Order #{self.id} ({pc_str}) [{self.payment_method}] - {self.status} - {self.total_price:,.0f} UZS"
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
@@ -147,5 +148,23 @@ class Expense(models.Model):
 
     def __str__(self):
         return f"Expense #{self.id}: {self.amount:,.0f} UZS ({self.get_payment_method_display()}) - {self.category}"
+
+GAME_CATEGORY_CHOICES = [
+    ('FPS', 'FPS / Shooter'),
+    ('Action', 'Action / Adventure'),
+    ('Sports', 'Sports / Racing'),
+    ('Strategy', 'Strategy / MOBA'),
+]
+
+class Game(models.Model):
+    name = models.CharField(max_length=150)
+    cover_path = models.CharField(max_length=500, help_text="Cover banner image URL or local file path")
+    executable_path = models.CharField(max_length=500, help_text="Executable file path or launch command")
+    category = models.CharField(max_length=50, choices=GAME_CATEGORY_CHOICES, default='FPS')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} [{self.category}]"
 
 

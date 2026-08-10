@@ -285,15 +285,62 @@
           </div>
         </div>
 
-        <!-- Quick POS Stock & Restock Controls (1 column) -->
-        <div class="glass-panel p-5 rounded-2xl space-y-4 border border-slate-800">
-          <h3 class="text-base font-bold font-orbitron text-white flex items-center gap-2">
-            <span>⚡ TEZKOR BAR POS & OMBOR</span>
-          </h3>
-          <p class="text-xs text-slate-400">Ombor zaxirasi va tezkor to'ldirish tugmalari</p>
-          
-          <div id="bar-pos-products-list" class="space-y-3 max-h-[600px] overflow-y-auto pr-1">
-            <!-- Dynamically populated -->
+        <!-- Quick POS Stock, Cart & Direct Sale Controls (1 column) -->
+        <div class="glass-panel p-5 rounded-2xl space-y-4 border border-slate-800 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 class="text-base font-bold font-orbitron text-white flex items-center gap-2">
+                <span>⚡ TEZKOR BAR POS TERMINAL</span>
+              </h3>
+              <button onclick="openSpisaniyeModal()" class="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40 text-xs font-bold transition-all flex items-center gap-1">
+                🗑️ Spisaniye
+              </button>
+            </div>
+
+            <!-- POS Cart Section -->
+            <div class="mt-3 p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-3">
+              <div class="flex items-center justify-between text-xs border-b border-slate-800/80 pb-2">
+                <span class="font-bold text-slate-300 uppercase tracking-wider">🛒 Savat (Cart)</span>
+                <span id="pos-cart-total" class="font-bold font-orbitron text-emerald-400 text-sm">0 UZS</span>
+              </div>
+              <div id="pos-cart-items" class="max-h-36 overflow-y-auto space-y-1.5 text-xs pr-1">
+                <div class="text-slate-500 italic text-center py-3">Savat bo'sh. Mahsulot qo'shing.</div>
+              </div>
+
+              <!-- Cart Actions -->
+              <div class="pt-2 space-y-2">
+                <!-- Direct Cash / Card Sale Buttons -->
+                <div class="grid grid-cols-2 gap-2">
+                  <button onclick="checkoutDirectPOS('CASH')" class="py-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/50 text-emerald-400 text-xs font-black flex items-center justify-center gap-1 transition-all">
+                    💵 Naqd Sotuv
+                  </button>
+                  <button onclick="checkoutDirectPOS('CARD')" class="py-2.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/50 text-sky-400 text-xs font-black flex items-center justify-center gap-1 transition-all">
+                    💳 Plastik Sotuv
+                  </button>
+                </div>
+
+                <!-- Add to PC Session Controls -->
+                <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
+                  <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Kompyuter Seansiga Biriktirish</label>
+                  <div class="flex items-center gap-2">
+                    <select id="pos-pc-select" class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-cyan-300 font-bold focus:outline-none">
+                      <!-- Active PCs populated dynamically -->
+                    </select>
+                    <button onclick="checkoutAddToPCSession()" class="py-1.5 px-3 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold transition-all">
+                      + Biriktirish
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Product Stock List -->
+          <div class="mt-3">
+            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Ombor Zaxirasi & Boshqaruv</h4>
+            <div id="bar-pos-products-list" class="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+              <!-- Dynamically populated -->
+            </div>
           </div>
         </div>
 
@@ -723,6 +770,174 @@
         <button onclick="closeAddTimeModal()" class="flex-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-semibold transition-all">Bekor qilish</button>
         <button onclick="confirmAddTime(null)" class="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-sm font-bold shadow-lg shadow-emerald-500/30 transition-all">Vaqt Qo'shish</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Session Finish & Invoice Summary Modal (Yekuniy Chek) -->
+  <div id="finish-session-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="glass-panel w-full max-w-lg rounded-2xl p-6 relative border border-slate-700 shadow-2xl overflow-hidden">
+      <!-- Header -->
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 font-bold">
+            🧾
+          </div>
+          <div>
+            <h3 class="text-lg font-black font-orbitron text-white">YEKUNIY CHEK</h3>
+            <p class="text-xs text-slate-400">Seansni yakunlash va hisob-kitob qilish</p>
+          </div>
+        </div>
+        <button onclick="closeFinishSessionModal()" class="text-slate-400 hover:text-white p-1">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Loading State -->
+      <div id="finish-modal-loading" class="py-12 text-center">
+        <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-cyan-500 border-t-transparent mb-3"></div>
+        <p class="text-xs text-slate-400 font-semibold">Chek ma'lumotlari hisoblanmoqda...</p>
+      </div>
+
+      <!-- Body Content -->
+      <div id="finish-modal-body" class="hidden mt-4 space-y-4">
+        
+        <!-- PC Badge & Duration -->
+        <div class="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800/80 flex items-center justify-between">
+          <div>
+            <div class="text-[10px] text-slate-400 uppercase font-semibold">Kompyuter / Zona:</div>
+            <div class="flex items-center gap-2 mt-0.5">
+              <span id="finish-pc-title" class="text-base font-black font-orbitron text-cyan-400">PC-01</span>
+              <span id="finish-pc-zone" class="text-[11px] px-2 py-0.5 rounded-md bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-semibold">Standard</span>
+            </div>
+          </div>
+          <div class="text-right">
+            <div class="text-[10px] text-slate-400 uppercase font-semibold">Davomiyligi:</div>
+            <div id="finish-duration-display" class="text-sm font-bold font-orbitron text-slate-200 mt-0.5">0 Min</div>
+          </div>
+        </div>
+
+        <!-- Time Calculation Section -->
+        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1">
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-slate-300 font-semibold flex items-center gap-1.5">
+              ⏱️ Vaqt uchun hisoblangan summa:
+            </span>
+            <span id="finish-time-price" class="text-sm font-bold font-orbitron text-cyan-400">0 UZS</span>
+          </div>
+          <div class="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-800/50">
+            <span>Tarif: <strong id="finish-tariff-name" class="text-slate-300">Standard</strong></span>
+            <span id="finish-session-type" class="text-purple-300 font-medium">Standard Seans</span>
+          </div>
+        </div>
+
+        <!-- Bar Orders Items List -->
+        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between pb-1.5 border-b border-slate-800/80">
+            <span class="text-xs text-slate-300 font-semibold flex items-center gap-1.5">
+              🍿 Bar Buyurtmalari Ro'yxati:
+            </span>
+            <span id="finish-bar-price" class="text-xs font-bold font-orbitron text-amber-400">0 UZS</span>
+          </div>
+          <div id="finish-bar-items-container" class="max-h-32 overflow-y-auto pr-1 space-y-1.5 text-xs">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Grand Total Summary Banner -->
+        <div class="p-4 rounded-xl bg-gradient-to-r from-cyan-950/80 via-slate-900 to-emerald-950/80 border border-cyan-500/40 shadow-lg flex items-center justify-between">
+          <div>
+            <div class="text-xs text-cyan-300 uppercase font-black tracking-wider">JAMI TO'LOV SUMMASI</div>
+            <div class="text-[10px] text-slate-400">(Vaqt + Bar barcha xaridlari)</div>
+          </div>
+          <div id="finish-grand-total" class="text-2xl font-black font-orbitron text-emerald-400">
+            0 UZS
+          </div>
+        </div>
+
+        <!-- Payment Method Selection -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">To'lov Turini Tanlang</label>
+          <div class="grid grid-cols-2 gap-3">
+            <button type="button" onclick="setFinishPaymentMethod('CASH')" id="finish-pm-btn-cash" class="py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 bg-emerald-500/20 text-emerald-400 border-emerald-500/50 shadow-md">
+              💵 NAQD (CASH)
+            </button>
+            <button type="button" onclick="setFinishPaymentMethod('CARD')" id="finish-pm-btn-card" class="py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 bg-slate-900 text-slate-400 border-slate-800">
+              💳 PLASTIK (CARD)
+            </button>
+          </div>
+          <input type="hidden" id="finish-payment-method" value="CASH">
+        </div>
+
+      </div>
+
+      <!-- Footer Buttons -->
+      <div id="finish-modal-footer" class="hidden mt-6 flex items-center gap-3">
+        <button onclick="closeFinishSessionModal()" class="flex-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-all">Bekor Qilish</button>
+        <button onclick="confirmFinishSession()" id="finish-submit-btn" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-black text-xs font-black tracking-wide shadow-lg shadow-emerald-500/30 transition-all uppercase">
+          To'lovni Qabul Qilish va Yopish
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Write-off / Internal Expense Modal (Spisaniye / Ichki Rasxod) -->
+  <div id="spisaniye-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="glass-panel w-full max-w-md rounded-2xl p-6 relative border border-slate-700 shadow-2xl">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold">
+            🗑️
+          </div>
+          <div>
+            <h3 class="text-base font-black font-orbitron text-white">ICHKI RASXOD (SPISANIYE)</h3>
+            <p class="text-[11px] text-slate-400">Bardan ombordan chiqarish va rasxod qilish</p>
+          </div>
+        </div>
+        <button onclick="closeSpisaniyeModal()" class="text-slate-400 hover:text-white p-1">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <form onsubmit="handleSpisaniyeSubmit(event)" class="mt-4 space-y-4">
+        <!-- Selected Product -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Mahsulot</label>
+          <select id="spisaniye-product-select" required class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500 font-semibold">
+            <!-- Populated dynamically -->
+          </select>
+        </div>
+
+        <!-- Quantity -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Soni (Dona)</label>
+          <input type="number" id="spisaniye-quantity" value="1" min="1" max="500" required class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-amber-400 focus:outline-none focus:border-amber-500 font-orbitron font-bold">
+        </div>
+
+        <!-- Employee Name -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Xodim Ismi / Mas'ul</label>
+          <input type="text" id="spisaniye-employee" value="Shohruh (Administrator)" required class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500 font-medium">
+        </div>
+
+        <!-- Description / Reason -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Izoh / Sababi</label>
+          <textarea id="spisaniye-reason" rows="2" placeholder="Masalan: Tungi navbatchilikda ichildi yoki yaroqsiz bo'lgani uchun chiqarildi" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-medium"></textarea>
+        </div>
+
+        <!-- Warning Note -->
+        <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px]">
+          ℹ️ Mahsulot ombor zaxirasidan kamayadi, tushumga pul qo'shilmaydi va Chiqim (Expense) jurnaliga yoziladi.
+        </div>
+
+        <div class="pt-2 flex items-center gap-3">
+          <button type="button" onclick="closeSpisaniyeModal()" class="flex-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-all">Bekor Qilish</button>
+          <button type="submit" id="spisaniye-submit-btn" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-black text-xs font-black tracking-wide shadow-lg shadow-amber-500/30 transition-all uppercase">
+            Spisaniye Qilish
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 

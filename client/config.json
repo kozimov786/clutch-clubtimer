@@ -2,6 +2,37 @@
   "server_url": "http://localhost:8000",
   "websocket_url": "ws://localhost:8000/ws/pc-status/",
   "pc_name": "PC-01",
-  "playnite_path": "C:\\Program Files\\Playnite\\Playnite.FullscreenApp.exe",
-  "heartbeat_interval_seconds": 5
+  "heartbeat_interval_seconds": 5,
+  "fallback_games": [
+    {
+      "name": "Counter-Strike 2",
+      "category": "FPS",
+      "cover_path": "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=500&q=80",
+      "executable_path": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Counter-Strike Global Offensive\\game\\bin\\win64\\cs2.exe"
+    },
+    {
+      "name": "Valorant",
+      "category": "FPS",
+      "cover_path": "https://images.unsplash.com/photo-1511512578047-dfb367046420?w=500&q=80",
+      "executable_path": "C:\\Riot Games\\VALORANT\\live\\VALORANT.exe"
+    },
+    {
+      "name": "Grand Theft Auto V",
+      "category": "Action",
+      "cover_path": "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=500&q=80",
+      "executable_path": "C:\\Program Files\\Epic Games\\GTA5\\GTA5.exe"
+    },
+    {
+      "name": "EA SPORTS FC 24",
+      "category": "Sports",
+      "cover_path": "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=500&q=80",
+      "executable_path": "C:\\Program Files\\EA Games\\EA SPORTS FC 24\\FC24.exe"
+    },
+    {
+      "name": "Dota 2",
+      "category": "Strategy",
+      "cover_path": "https://images.unsplash.com/photo-1563089145-599997674d42?w=500&q=80",
+      "executable_path": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\dota 2 beta\\game\\bin\\win64\\dota2.exe"
+    }
+  ]
 }

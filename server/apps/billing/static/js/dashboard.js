@@ -212,6 +212,7 @@ async function fetchComputers() {
     computers = await res.json();
     renderPCGrid();
     updateStatsHeader();
+    renderPOSPCDropdown();
   } catch (err) {
     console.error("Computers fetch error:", err);
   }
@@ -712,23 +713,146 @@ async function confirmAddTime(mins) {
   }
 }
 
+let currentFinishPcId = null;
+
 async function stopSession(pcId) {
-  if (!confirm(`Haqiqatan ham PC-${pcId} seansini yakunlamoqchimisiz?`)) return;
+  openFinishSessionModal(pcId);
+}
+
+async function openFinishSessionModal(pcId) {
+  currentFinishPcId = pcId;
+  const modal = document.getElementById('finish-session-modal');
+  const loading = document.getElementById('finish-modal-loading');
+  const body = document.getElementById('finish-modal-body');
+  const footer = document.getElementById('finish-modal-footer');
+  const submitBtn = document.getElementById('finish-submit-btn');
+
+  if (!modal) return;
+
+  modal.classList.remove('hidden');
+  loading.classList.remove('hidden');
+  body.classList.add('hidden');
+  footer.classList.add('hidden');
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.innerText = "TO'LOVNI QABUL QILISH VA YOPISH";
+  }
 
   try {
-    const res = await fetch(`/api/computers/${pcId}/stop_session/`, {
+    const res = await fetch(`/api/computers/${pcId}/finish_summary/`);
+    if (!res.ok) {
+      alert("Seans chek ma'lumotlarini olishda xatolik!");
+      closeFinishSessionModal();
+      return;
+    }
+    const data = await res.json();
+
+    document.getElementById('finish-pc-title').innerText = data.computer_name;
+    document.getElementById('finish-pc-zone').innerText = data.zone || 'Standard';
+    
+    let durText = `${data.duration_minutes} Daqiqa`;
+    if (data.duration_minutes >= 60) {
+      const h = Math.floor(data.duration_minutes / 60);
+      const m = data.duration_minutes % 60;
+      durText = `${h} Soat ${m} Daqiqa`;
+    }
+    document.getElementById('finish-duration-display').innerText = durText;
+    document.getElementById('finish-time-price').innerText = `${Math.round(data.time_price).toLocaleString()} UZS`;
+    document.getElementById('finish-tariff-name').innerText = data.tariff_name;
+    document.getElementById('finish-session-type').innerText = data.is_open_time ? "♾️ VIP Open Time" : "Standard Timer";
+
+    const container = document.getElementById('finish-bar-items-container');
+    container.innerHTML = '';
+    if (data.bar_items && data.bar_items.length > 0) {
+      data.bar_items.forEach(item => {
+        const itemEl = document.createElement('div');
+        itemEl.className = "flex items-center justify-between p-2 rounded-lg bg-slate-950/70 border border-slate-800/80";
+        itemEl.innerHTML = `
+          <span class="font-medium text-slate-200">${item.product_name} <span class="text-amber-400 font-bold ml-1">x${item.quantity}</span></span>
+          <span class="font-mono text-slate-300 font-semibold">${Math.round(item.total_price).toLocaleString()} UZS</span>
+        `;
+        container.appendChild(itemEl);
+      });
+    } else {
+      container.innerHTML = `<div class="text-slate-500 italic text-center py-2">Ushbu seansda bar buyurtmalari yo'q (0 UZS)</div>`;
+    }
+
+    document.getElementById('finish-bar-price').innerText = `${Math.round(data.bar_total_price).toLocaleString()} UZS`;
+    document.getElementById('finish-grand-total').innerText = `${Math.round(data.grand_total).toLocaleString()} UZS`;
+
+    setFinishPaymentMethod(data.payment_method || 'CASH');
+
+    loading.classList.add('hidden');
+    body.classList.remove('hidden');
+    footer.classList.remove('hidden');
+  } catch (err) {
+    console.error("Error fetching finish summary:", err);
+    alert("Chek ma'lumotlarini yuklashda xatolik yuz berdi!");
+    closeFinishSessionModal();
+  }
+}
+
+function setFinishPaymentMethod(method) {
+  const input = document.getElementById('finish-payment-method');
+  const btnCash = document.getElementById('finish-pm-btn-cash');
+  const btnCard = document.getElementById('finish-pm-btn-card');
+  if (input) input.value = method;
+
+  if (method === 'CASH') {
+    if (btnCash) btnCash.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 bg-emerald-500/20 text-emerald-400 border-emerald-500/50 shadow-md";
+    if (btnCard) btnCard.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 bg-slate-900 text-slate-400 border-slate-800";
+  } else {
+    if (btnCash) btnCash.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 bg-slate-900 text-slate-400 border-slate-800";
+    if (btnCard) btnCard.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 bg-sky-500/20 text-sky-400 border-sky-500/50 shadow-md";
+  }
+}
+
+function closeFinishSessionModal() {
+  const modal = document.getElementById('finish-session-modal');
+  if (modal) modal.classList.add('hidden');
+  currentFinishPcId = null;
+}
+
+async function confirmFinishSession() {
+  if (!currentFinishPcId) return;
+
+  const paymentMethod = document.getElementById('finish-payment-method')?.value || 'CASH';
+  const submitBtn = document.getElementById('finish-submit-btn');
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerText = "YOPILMOQDA...";
+  }
+
+  try {
+    const res = await fetch(`/api/computers/${currentFinishPcId}/stop_session/`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ payment_method: paymentMethod })
     });
+
     if (res.ok) {
       playSound('lock');
+      closeFinishSessionModal();
       fetchComputers();
       fetchSessions();
+      fetchBarOrders();
+      fetchAnalytics();
+      fetchFinanceData();
     } else {
-      alert("Seansni to'xtatishda xatolik!");
+      alert("Seansni tugatishda va to'lovni qabul qilishda xatolik!");
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerText = "TO'LOVNI QABUL QILISH VA YOPISH";
+      }
     }
   } catch (err) {
-    console.error("Error stopping session:", err);
+    console.error("Error confirming finish session:", err);
+    alert("To'lovni yopishda xatolik yuz berdi!");
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerText = "TO'LOVNI QABUL QILISH VA YOPISH";
+    }
   }
 }
 
@@ -1051,6 +1175,274 @@ function renderTopSellers(topSellers) {
   `).join('');
 }
 
+// POS Cart state & Direct Sales Logic
+let posCart = {};
+
+function addToPOSCart(productId) {
+  const prod = cachedProducts.find(p => p.id === productId);
+  if (!prod) return;
+
+  if (prod.stock <= 0) {
+    alert(`${prod.name} omborda qolmagan!`);
+    return;
+  }
+
+  const currentQty = posCart[productId] ? posCart[productId].quantity : 0;
+  if (currentQty + 1 > prod.stock) {
+    alert(`${prod.name} omborda yetarli emas! (Mavjud: ${prod.stock})`);
+    return;
+  }
+
+  if (!posCart[productId]) {
+    posCart[productId] = {
+      product: prod,
+      quantity: 1
+    };
+  } else {
+    posCart[productId].quantity++;
+  }
+
+  playSound('add');
+  renderPOSCart();
+}
+
+function updatePOSCartQty(productId, delta) {
+  if (!posCart[productId]) return;
+  const newQty = posCart[productId].quantity + delta;
+  const prod = posCart[productId].product;
+
+  if (newQty <= 0) {
+    delete posCart[productId];
+  } else {
+    if (newQty > prod.stock) {
+      alert(`${prod.name} omborda yetarli emas! (Mavjud: ${prod.stock})`);
+      return;
+    }
+    posCart[productId].quantity = newQty;
+  }
+  renderPOSCart();
+}
+
+function removeFromPOSCart(productId) {
+  delete posCart[productId];
+  renderPOSCart();
+}
+
+function clearPOSCart() {
+  posCart = {};
+  renderPOSCart();
+}
+
+function renderPOSCart() {
+  const container = document.getElementById('pos-cart-items');
+  const totalDisplay = document.getElementById('pos-cart-total');
+
+  if (!container) return;
+
+  const cartEntries = Object.values(posCart);
+  if (cartEntries.length === 0) {
+    container.innerHTML = `<div class="text-slate-500 italic text-center py-3">Savat bo'sh. Mahsulot qo'shing.</div>`;
+    if (totalDisplay) totalDisplay.innerText = '0 UZS';
+    return;
+  }
+
+  let grandTotal = 0;
+  container.innerHTML = cartEntries.map(item => {
+    const itemTotal = item.product.price * item.quantity;
+    grandTotal += itemTotal;
+    return `
+      <div class="flex items-center justify-between p-2 rounded-lg bg-slate-900 border border-slate-800">
+        <div class="truncate font-semibold text-slate-200 text-xs w-28">${item.product.name}</div>
+        <div class="flex items-center gap-1.5">
+          <button onclick="updatePOSCartQty(${item.product.id}, -1)" class="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold flex items-center justify-center">-</button>
+          <span class="font-mono font-bold text-amber-400 text-xs w-4 text-center">${item.quantity}</span>
+          <button onclick="updatePOSCartQty(${item.product.id}, 1)" class="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold flex items-center justify-center">+</button>
+        </div>
+        <div class="font-mono text-xs text-slate-300 font-semibold">${formatMoney(itemTotal)}</div>
+        <button onclick="removeFromPOSCart(${item.product.id})" class="text-slate-500 hover:text-rose-400 ml-1">✕</button>
+      </div>
+    `;
+  }).join('');
+
+  if (totalDisplay) totalDisplay.innerText = formatMoney(grandTotal);
+}
+
+function renderPOSPCDropdown() {
+  const select = document.getElementById('pos-pc-select');
+  if (!select) return;
+
+  const activePCs = computers.filter(pc => pc.status === 'ACTIVE' || pc.status === 'WARNING');
+  if (activePCs.length === 0) {
+    select.innerHTML = `<option value="">Aktiv PC lar yo'q</option>`;
+    return;
+  }
+
+  select.innerHTML = activePCs.map(pc => `
+    <option value="${pc.id}">${pc.name} (${pc.zone})</option>
+  `).join('');
+}
+
+async function checkoutDirectPOS(paymentMethod) {
+  const cartEntries = Object.values(posCart);
+  if (cartEntries.length === 0) {
+    alert("Savat bo'sh! Sotuv uchun mahsulot tanlang.");
+    return;
+  }
+
+  const items = cartEntries.map(item => ({
+    product_id: item.product.id,
+    quantity: item.quantity
+  }));
+
+  try {
+    const res = await fetch('/api/orders/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        is_direct_sale: true,
+        payment_method: paymentMethod,
+        items: items
+      })
+    });
+
+    if (res.ok) {
+      playSound('add');
+      clearPOSCart();
+      fetchBarOrders();
+      fetchAnalytics();
+      fetchFinanceData();
+      productsCacheHTML();
+      alert(`To'g'ridan-to'g'ri sotuv muvaffaqiyatli bajarildi (${paymentMethod === 'CASH' ? 'Naqd' : 'Plastik'})!`);
+    } else {
+      const errData = await res.json();
+      alert(errData.error || "Sotuvni amalga oshirishda xatolik!");
+    }
+  } catch (err) {
+    console.error("Direct POS sale error:", err);
+    alert("Sotuvda xatolik yuz berdi!");
+  }
+}
+
+async function checkoutAddToPCSession() {
+  const cartEntries = Object.values(posCart);
+  if (cartEntries.length === 0) {
+    alert("Savat bo'sh! Mahsulot tanlang.");
+    return;
+  }
+
+  const select = document.getElementById('pos-pc-select');
+  const pcId = select ? select.value : null;
+
+  if (!pcId) {
+    alert("Iltimos, mahsulot biriktirish uchun aktiv kompyuterni tanlang!");
+    return;
+  }
+
+  const items = cartEntries.map(item => ({
+    product_id: item.product.id,
+    quantity: item.quantity
+  }));
+
+  try {
+    const res = await fetch('/api/orders/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        computer: pcId,
+        status: 'DELIVERED',
+        payment_method: 'CASH',
+        items: items
+      })
+    });
+
+    if (res.ok) {
+      playSound('add');
+      clearPOSCart();
+      fetchBarOrders();
+      fetchComputers();
+      fetchAnalytics();
+      fetchFinanceData();
+      productsCacheHTML();
+      alert(`Mahsulotlar tanlangan PC seansiga biriktirildi!`);
+    } else {
+      const errData = await res.json();
+      alert(errData.error || "Seansga biriktirishda xatolik!");
+    }
+  } catch (err) {
+    console.error("Add to PC session error:", err);
+    alert("Seansga biriktirishda xatolik!");
+  }
+}
+
+// Write-off / Internal Expense (Spisaniye) Modal Logic
+function openSpisaniyeModal(productId = null) {
+  const modal = document.getElementById('spisaniye-modal');
+  const select = document.getElementById('spisaniye-product-select');
+
+  if (!modal || !select) return;
+
+  select.innerHTML = cachedProducts.map(p => `
+    <option value="${p.id}" ${productId && p.id === productId ? 'selected' : ''}>${p.name} (Qoldiq: ${p.stock} ta - ${formatMoney(p.price)})</option>
+  `).join('');
+
+  modal.classList.remove('hidden');
+}
+
+function closeSpisaniyeModal() {
+  const modal = document.getElementById('spisaniye-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function handleSpisaniyeSubmit(e) {
+  e.preventDefault();
+
+  const productId = document.getElementById('spisaniye-product-select')?.value;
+  const quantity = document.getElementById('spisaniye-quantity')?.value || 1;
+  const employeeName = document.getElementById('spisaniye-employee')?.value || 'Shohruh (Barman)';
+  const reason = document.getElementById('spisaniye-reason')?.value || 'Ichki rasxod / Spisaniye';
+  const submitBtn = document.getElementById('spisaniye-submit-btn');
+
+  if (!productId) return;
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerText = "BAJARILMOQDA...";
+  }
+
+  try {
+    const res = await fetch('/api/products/internal_expense/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        product_id: productId,
+        quantity: parseInt(quantity),
+        employee_name: employeeName,
+        reason: reason
+      })
+    });
+
+    if (res.ok) {
+      playSound('alert');
+      closeSpisaniyeModal();
+      productsCacheHTML();
+      fetchAnalytics();
+      fetchFinanceData();
+      alert("Spisaniye muvaffaqiyatli bajarildi va Chiqim jurnaliga yozildi!");
+    } else {
+      const errData = await res.json();
+      alert(errData.error || "Spisaniye xatoligi!");
+    }
+  } catch (err) {
+    console.error("Spisaniye error:", err);
+    alert("Spisaniyeda xatolik yuz berdi!");
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerText = "SPISANIYE QILISH";
+    }
+  }
+}
+
 function renderBarPOSProducts() {
   const container = document.getElementById('bar-pos-products-list');
   if (!container) return;
@@ -1067,20 +1459,26 @@ async function productsCacheHTML() {
     const res = await fetch('/api/products/');
     cachedProducts = await res.json();
     container.innerHTML = cachedProducts.map(p => `
-      <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 text-xs">
-        <div class="flex items-center gap-2.5">
-          <img src="${p.image}" class="w-8 h-8 rounded-lg object-cover">
+      <div class="flex items-center justify-between p-2 rounded-xl bg-slate-950/60 border border-slate-800 text-xs">
+        <div class="flex items-center gap-2">
+          <img src="${p.image}" class="w-7 h-7 rounded-lg object-cover">
           <div>
-            <div class="font-bold text-white">${p.name}</div>
+            <div class="font-bold text-white leading-tight">${p.name}</div>
             <div class="text-[10px] text-slate-400 font-mono">${formatMoney(p.price)}</div>
           </div>
         </div>
-        <div class="flex items-center gap-2">
-          <span class="px-2 py-0.5 rounded font-mono text-[10px] ${p.stock < 5 ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-slate-900 text-slate-300'}">
+        <div class="flex items-center gap-1">
+          <span class="px-1.5 py-0.5 rounded font-mono text-[10px] ${p.stock < 5 ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-slate-900 text-slate-300'}">
             ${p.stock} ta
           </span>
-          <button onclick="restockProduct(${p.id}, 10)" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 font-bold text-[10px]">
+          <button onclick="addToPOSCart(${p.id})" class="px-2 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 font-bold text-[10px]" title="Savatga qo'shish">
+            + Sabat
+          </button>
+          <button onclick="restockProduct(${p.id}, 10)" class="px-1.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 font-bold text-[10px]" title="10 ta to'ldirish">
             +10
+          </button>
+          <button onclick="openSpisaniyeModal(${p.id})" class="px-1.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 font-bold text-[10px]" title="Spisaniye (Ichki rasxod)">
+            🗑️
           </button>
         </div>
       </div>

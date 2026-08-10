@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.utils import timezone
-from .models import Computer, Tariff, Session, Category, Product, Order, OrderItem, Expense
+from .models import Computer, Tariff, Session, Category, Product, Order, OrderItem, Expense, Game
 
 class TariffSerializer(serializers.ModelSerializer):
     effective_price_per_hour = serializers.SerializerMethodField()
@@ -77,5 +77,13 @@ class ExpenseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Expense
         fields = '__all__'
+
+class GameSerializer(serializers.ModelSerializer):
+    category_display = serializers.CharField(source='get_category_display', read_only=True)
+
+    class Meta:
+        model = Game
+        fields = '__all__'
+
 
 

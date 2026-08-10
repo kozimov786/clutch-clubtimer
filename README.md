@@ -40,7 +40,7 @@ cd client
 ```
 
 - **Locked Mode**: Fullscreen borderless overlay window, system keys blocked (`Alt+Tab`, `Win Key`, `Alt+F4`).
-- **Unlocked Mode**: When a session is started on the Web Dashboard for `PC-01`, the locker screen automatically unlocks, Playnite launches, and a floating HUD timer overlay appears in the top-right corner.
+- **Unlocked Mode**: When a session is started on the Web Dashboard for `PC-01`, the locker screen automatically unlocks, the full-screen Clutch Zone Game Launcher panel opens, and a floating HUD timer overlay appears in the top-right corner.
 - **Session Expiry**: When time runs out or session is stopped from the dashboard, active game process trees are terminated (`taskkill`) and the lock screen is re-engaged.
 
 ---

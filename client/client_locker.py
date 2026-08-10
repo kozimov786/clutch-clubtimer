@@ -11,9 +11,9 @@ import websocket
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QLabel, QPushButton, QFrame,
-    QHBoxLayout, QScrollArea, QGridLayout
+    QHBoxLayout, QScrollArea, QGridLayout, QLineEdit
 )
-from PyQt6.QtGui import QFont, QColor
+from PyQt6.QtGui import QFont, QColor, QPixmap
 
 # Signals for UI thread communication
 class SyncSignals(QObject):
@@ -92,9 +92,6 @@ else:
     def uninstall_keyboard_hook():
         print("[Hook Simulator] Windows keyboard hook disabled")
 
-# Signals for UI thread communication
-class SyncSignals(QObject):
-    status_updated = pyqtSignal(dict)
 
 class LockScreenWindow(QWidget):
     def __init__(self, pc_name="PC-01"):
@@ -165,6 +162,7 @@ class LockScreenWindow(QWidget):
         card_layout.addWidget(desc)
 
         layout.addWidget(card)
+
 
 class TimerOverlayWidget(QWidget):
     def __init__(self, pc_name="PC-01", on_bar_click=None):
@@ -247,6 +245,7 @@ class TimerOverlayWidget(QWidget):
         m = (seconds % 3600) // 60
         s = seconds % 60
         self.timer_label.setText(f"{h:02d}:{m:02d}:{s:02d}")
+
 
 class BarMenuWindow(QWidget):
     def __init__(self, pc_name="PC-01", server_url="http://localhost:8000"):
@@ -636,6 +635,371 @@ class BarMenuWindow(QWidget):
             self.status_banner.show()
 
 
+class ImageCache(QObject):
+    cache = {}
+    image_downloaded_signal = pyqtSignal(str, QPixmap)
+
+    def fetch_image(self, url, width, height):
+        if not url or url in self.cache:
+            return
+
+        def fetch():
+            try:
+                r = requests.get(url, timeout=5)
+                if r.status_code == 200:
+                    pix = QPixmap()
+                    pix.loadFromData(r.content)
+                    if not pix.isNull():
+                        scaled = pix.scaled(width, height, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+                        ImageCache.cache[url] = scaled
+                        self.image_downloaded_signal.emit(url, scaled)
+            except Exception as e:
+                print(f"[ImageCache] Remote fetch error for {url}: {e}")
+
+        threading.Thread(target=fetch, daemon=True).start()
+
+    @classmethod
+    def get_cached(cls, path_or_url, width, height):
+        if not path_or_url:
+            return None
+        if path_or_url in cls.cache:
+            return cls.cache[path_or_url]
+        if os.path.exists(path_or_url):
+            pix = QPixmap(path_or_url)
+            if not pix.isNull():
+                scaled = pix.scaled(width, height, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+                cls.cache[path_or_url] = scaled
+                return scaled
+        return None
+
+
+class GameLauncherWindow(QWidget):
+    game_launched_signal = pyqtSignal(dict)
+
+    def __init__(self, pc_name="PC-01", server_url="http://localhost:8000", fallback_games=None, on_bar_click=None):
+        super().__init__()
+        self.pc_name = pc_name
+        self.server_url = server_url
+        self.fallback_games = fallback_games or []
+        self.on_bar_click = on_bar_click
+        self.games = []
+        self.current_category = None
+        self.search_query = ""
+        self.pixmap_labels = {}
+
+        self.image_downloader = ImageCache()
+        self.image_downloader.image_downloaded_signal.connect(self.on_image_downloaded)
+
+        self.init_ui()
+
+    def init_ui(self):
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint
+        )
+        self.showFullScreen()
+
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #090d16;
+                color: #e2e8f0;
+                font-family: 'Segoe UI', 'Inter', sans-serif;
+            }
+            QScrollArea {
+                border: none;
+                background: transparent;
+            }
+            QScrollBar:vertical {
+                border: none;
+                background: #0f172a;
+                width: 8px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical {
+                background: #334155;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #00f0ff;
+            }
+            QLineEdit {
+                background: rgba(15, 23, 42, 0.9);
+                color: #f8fafc;
+                border: 1px solid rgba(0, 240, 255, 0.3);
+                border-radius: 12px;
+                padding: 8px 16px;
+                font-size: 14px;
+            }
+            QLineEdit:focus {
+                border: 1px solid #00f0ff;
+            }
+        """)
+
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(30, 24, 30, 24)
+        main_layout.setSpacing(16)
+
+        # Header Bar
+        header = QHBoxLayout()
+
+        title_box = QVBoxLayout()
+        title_lbl = QLabel("🎮 CLUTCH ZONE")
+        title_lbl.setFont(QFont("Segoe UI", 22, QFont.Weight.Bold))
+        title_lbl.setStyleSheet("color: #00f0ff; letter-spacing: 2px;")
+
+        sub_title = QLabel(f"GAME CATALOG LAUNCHER • {self.pc_name}")
+        sub_title.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        sub_title.setStyleSheet("color: #94a3b8; letter-spacing: 1px;")
+
+        title_box.addWidget(title_lbl)
+        title_box.addWidget(sub_title)
+        header.addLayout(title_box)
+
+        header.addStretch()
+
+        # Search Bar
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("🔍 O'yin nomini qidirish...")
+        self.search_input.setFixedWidth(280)
+        self.search_input.textChanged.connect(self.on_search_changed)
+        header.addWidget(self.search_input)
+
+        # Timer Badge
+        self.timer_label = QLabel("00:00:00")
+        self.timer_label.setFont(QFont("Consolas", 16, QFont.Weight.Bold))
+        self.timer_label.setStyleSheet("color: #10b981; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 8px 16px;")
+        header.addWidget(self.timer_label)
+
+        # Bar Button
+        bar_btn = QPushButton("🍸 BAR MENU")
+        bar_btn.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        bar_btn.setStyleSheet("""
+            QPushButton {
+                background: linear-gradient(135deg, rgba(168, 85, 247, 0.4) 0%, rgba(217, 70, 239, 0.4) 100%);
+                color: #f5d0fe;
+                border: 1px solid rgba(217, 70, 239, 0.6);
+                border-radius: 12px;
+                padding: 10px 20px;
+            }
+            QPushButton:hover {
+                background: rgba(217, 70, 239, 0.8);
+                color: #ffffff;
+            }
+        """)
+        if self.on_bar_click:
+            bar_btn.clicked.connect(self.on_bar_click)
+        header.addWidget(bar_btn)
+
+        main_layout.addLayout(header)
+
+        # Category Filters Bar
+        cat_bar = QHBoxLayout()
+        cat_bar.setSpacing(12)
+
+        categories = [
+            ("ALL", "🌐 Barchasi"),
+            ("FPS", "🎯 FPS / Shooter"),
+            ("Action", "⚔️ Action / RPG"),
+            ("Sports", "⚽ Sports / Racing"),
+            ("Strategy", "🧠 Strategy / MOBA")
+        ]
+
+        self.cat_buttons = {}
+        for cat_code, cat_label in categories:
+            btn = QPushButton(cat_label)
+            btn.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+            btn.setStyleSheet(self.get_cat_btn_style(cat_code == "ALL"))
+            code = cat_code
+            btn.clicked.connect(lambda checked, c=code: self.set_category_filter(c))
+            cat_bar.addWidget(btn)
+            self.cat_buttons[cat_code] = btn
+
+        cat_bar.addStretch()
+        main_layout.addLayout(cat_bar)
+
+        # Status / Launch feedback banner
+        self.status_msg = QLabel("O'yin tanlang va 'Ishga tushirish' tugmasini bosing")
+        self.status_msg.setFont(QFont("Segoe UI", 10))
+        self.status_msg.setStyleSheet("color: #64748b; background: rgba(15, 23, 42, 0.6); border-radius: 8px; padding: 6px 12px;")
+        main_layout.addWidget(self.status_msg)
+
+        # Game Cards Scroll Grid
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+
+        self.grid_widget = QWidget()
+        self.grid_layout = QGridLayout(self.grid_widget)
+        self.grid_layout.setSpacing(20)
+        self.grid_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        self.scroll_area.setWidget(self.grid_widget)
+
+        main_layout.addWidget(self.scroll_area, stretch=1)
+
+    def get_cat_btn_style(self, is_active):
+        if is_active:
+            return """
+                QPushButton {
+                    background: rgba(0, 240, 255, 0.25);
+                    color: #00f0ff;
+                    border: 1px solid #00f0ff;
+                    border-radius: 12px;
+                    padding: 8px 18px;
+                }
+            """
+        else:
+            return """
+                QPushButton {
+                    background: rgba(30, 41, 59, 0.5);
+                    color: #94a3b8;
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    border-radius: 12px;
+                    padding: 8px 18px;
+                }
+                QPushButton:hover {
+                    background: rgba(51, 65, 85, 0.8);
+                    color: #e2e8f0;
+                }
+            """
+
+    def set_category_filter(self, cat_code):
+        self.current_category = None if cat_code == "ALL" else cat_code
+        for code, btn in self.cat_buttons.items():
+            btn.setStyleSheet(self.get_cat_btn_style(code == (cat_code if cat_code else "ALL")))
+        self.render_games()
+
+    def on_search_changed(self, text):
+        self.search_query = text.strip().lower()
+        self.render_games()
+
+    def update_timer(self, seconds):
+        if seconds <= 0:
+            self.timer_label.setText("00:00:00")
+            return
+        h = seconds // 3600
+        m = (seconds % 3600) // 60
+        s = seconds % 60
+        self.timer_label.setText(f"{h:02d}:{m:02d}:{s:02d}")
+
+    def load_games(self):
+        try:
+            res = requests.get(f"{self.server_url}/api/games/", timeout=4)
+            if res.status_code == 200:
+                self.games = res.json()
+            else:
+                self.games = self.fallback_games
+        except Exception as e:
+            print(f"[GameLauncher] Error loading games from server: {e}, using fallback.")
+            self.games = self.fallback_games
+
+        self.render_games()
+
+    def on_image_downloaded(self, url, pixmap):
+        if url in self.pixmap_labels:
+            for lbl in self.pixmap_labels[url]:
+                lbl.setPixmap(pixmap)
+
+    def render_games(self):
+        for i in reversed(range(self.grid_layout.count())):
+            w = self.grid_layout.itemAt(i).widget()
+            if w:
+                w.setParent(None)
+
+        self.pixmap_labels.clear()
+
+        filtered = []
+        for g in self.games:
+            if self.current_category and g.get('category') != self.current_category:
+                continue
+            if self.search_query and self.search_query not in g.get('name', '').lower():
+                continue
+            filtered.append(g)
+
+        col_count = 4
+        for idx, game in enumerate(filtered):
+            card = QFrame()
+            card.setFixedSize(260, 250)
+            card.setStyleSheet("""
+                QFrame {
+                    background: rgba(18, 25, 41, 0.9);
+                    border: 1px solid rgba(0, 240, 255, 0.15);
+                    border-radius: 18px;
+                }
+                QFrame:hover {
+                    border: 1px solid rgba(0, 240, 255, 0.6);
+                    background: rgba(22, 33, 56, 0.95);
+                }
+            """)
+            c_layout = QVBoxLayout(card)
+            c_layout.setContentsMargins(12, 12, 12, 12)
+            c_layout.setSpacing(8)
+
+            cover_lbl = QLabel()
+            cover_lbl.setFixedHeight(120)
+            cover_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            cover_lbl.setStyleSheet("""
+                background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+                border-radius: 12px;
+            """)
+
+            cover_url = game.get('cover_path', '')
+            pix = ImageCache.get_cached(cover_url, 236, 120)
+            if pix:
+                cover_lbl.setPixmap(pix)
+            else:
+                cover_lbl.setText(f"🎮\n{game.get('name')}")
+                cover_lbl.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+                cover_lbl.setStyleSheet("color: #00f0ff; background: rgba(0, 240, 255, 0.1); border-radius: 12px;")
+                if cover_url and (cover_url.startswith("http://") or cover_url.startswith("https://")):
+                    if cover_url not in self.pixmap_labels:
+                        self.pixmap_labels[cover_url] = []
+                    self.pixmap_labels[cover_url].append(cover_lbl)
+                    self.image_downloader.fetch_image(cover_url, 236, 120)
+
+            c_layout.addWidget(cover_lbl)
+
+            info_row = QHBoxLayout()
+            g_name = QLabel(game.get('name', 'Unknown Game'))
+            g_name.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+            g_name.setStyleSheet("color: #ffffff;")
+            g_name.setWordWrap(True)
+            info_row.addWidget(g_name, stretch=1)
+
+            cat_pill = QLabel(game.get('category', 'FPS'))
+            cat_pill.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+            cat_pill.setStyleSheet("color: #38bdf8; background: rgba(56, 189, 248, 0.15); border-radius: 6px; padding: 2px 6px;")
+            info_row.addWidget(cat_pill)
+
+            c_layout.addLayout(info_row)
+
+            play_btn = QPushButton("▶ ISHGA TUSHIRISH")
+            play_btn.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+            play_btn.setStyleSheet("""
+                QPushButton {
+                    background: linear-gradient(135deg, #00f0ff 0%, #0284c7 100%);
+                    color: #030712;
+                    border: none;
+                    border-radius: 10px;
+                    padding: 8px;
+                }
+                QPushButton:hover {
+                    background: #00f0ff;
+                    color: #000000;
+                }
+            """)
+            g_obj = game
+            play_btn.clicked.connect(lambda checked, g=g_obj: self.launch_game(g))
+            c_layout.addWidget(play_btn)
+
+            row = idx // col_count
+            col = idx % col_count
+            self.grid_layout.addWidget(card, row, col)
+
+    def launch_game(self, game):
+        g_name = game.get('name', 'Game')
+        self.status_msg.setText(f"🚀 {g_name} ishga tushirilmoqda...")
+        self.status_msg.setStyleSheet("color: #10b981; background: rgba(16, 185, 129, 0.15); border-radius: 8px; padding: 6px 12px;")
+        self.game_launched_signal.emit(game)
+
+
 class ClientLockerApp:
     def __init__(self, config_path="config.json"):
         self.load_config(config_path)
@@ -643,9 +1007,18 @@ class ClientLockerApp:
         self.signals.status_updated.connect(self.handle_status_update)
         self.signals.bar_order_updated.connect(self.handle_bar_order_update)
 
+        self.launched_processes = []
+
         self.lock_window = LockScreenWindow(self.pc_name)
         self.bar_menu_window = BarMenuWindow(self.pc_name, self.server_url)
         self.overlay_window = TimerOverlayWidget(self.pc_name, on_bar_click=self.toggle_bar_menu)
+        self.launcher_window = GameLauncherWindow(
+            pc_name=self.pc_name,
+            server_url=self.server_url,
+            fallback_games=self.fallback_games,
+            on_bar_click=self.toggle_bar_menu
+        )
+        self.launcher_window.game_launched_signal.connect(self.handle_game_launch)
 
         self.current_status = 'LOCKED'
         self.time_remaining = 0
@@ -660,6 +1033,7 @@ class ClientLockerApp:
         self.lock_window.show()
         self.overlay_window.hide()
         self.bar_menu_window.hide()
+        self.launcher_window.hide()
 
         # Background thread for sync
         self.sync_thread = threading.Thread(target=self.run_sync_loop, daemon=True)
@@ -680,8 +1054,8 @@ class ClientLockerApp:
             "server_url": "http://localhost:8000",
             "websocket_url": "ws://localhost:8000/ws/pc-status/",
             "pc_name": "PC-01",
-            "playnite_path": "C:\\Program Files\\Playnite\\Playnite.FullscreenApp.exe",
-            "heartbeat_interval_seconds": 5
+            "heartbeat_interval_seconds": 5,
+            "fallback_games": []
         }
         if os.path.exists(path):
             try:
@@ -694,8 +1068,8 @@ class ClientLockerApp:
         self.server_url = default_config["server_url"]
         self.ws_url = default_config["websocket_url"]
         self.pc_name = default_config["pc_name"]
-        self.playnite_path = default_config["playnite_path"]
         self.heartbeat_interval = default_config["heartbeat_interval_seconds"]
+        self.fallback_games = default_config.get("fallback_games", [])
 
     def handle_status_update(self, data):
         new_status = data.get('status', 'LOCKED')
@@ -707,25 +1081,43 @@ class ClientLockerApp:
                 self.unlock_pc()
             self.current_status = new_status
             self.overlay_window.update_timer(self.time_remaining)
+            self.launcher_window.update_timer(self.time_remaining)
         else:
             if self.current_status != 'LOCKED':
                 self.lock_pc()
 
     def unlock_pc(self):
-        print("[Locker] Unlocking PC and starting Playnite...")
+        print("[Locker] Unlocking PC and opening Clutch Zone Game Launcher...")
         uninstall_keyboard_hook()
         self.lock_window.hide()
         self.overlay_window.show()
+        self.launcher_window.load_games()
+        self.launcher_window.showFullScreen()
         self.current_status = 'ACTIVE'
 
-        # Launch Playnite
-        if os.path.exists(self.playnite_path):
+    def handle_game_launch(self, game):
+        exe_path = game.get('executable_path')
+        g_name = game.get('name')
+        print(f"[Launcher] Launching game: '{g_name}' -> path: '{exe_path}'")
+
+        if exe_path and os.path.exists(exe_path):
             try:
-                subprocess.Popen([self.playnite_path])
+                proc = subprocess.Popen([exe_path])
+                self.launched_processes.append(proc)
+                print(f"[Launcher] Started PID: {proc.pid}")
             except Exception as e:
-                print(f"Error launching Playnite: {e}")
+                print(f"[Launcher] Execution error for {exe_path}: {e}")
         else:
-            print(f"[Playnite Simulator] Launching Playnite (Path not found: {self.playnite_path})")
+            print(f"[Launcher Simulator] Path not found ({exe_path}). Launching simulated process.")
+            try:
+                if IS_WINDOWS:
+                    proc = subprocess.Popen(["cmd.exe", "/c", "ping 127.0.0.1 -n 9999"])
+                else:
+                    proc = subprocess.Popen(["sleep", "9999"])
+                self.launched_processes.append(proc)
+                print(f"[Launcher Simulator] Started simulator PID: {proc.pid}")
+            except Exception as e:
+                print(f"[Launcher Simulator] Simulator error: {e}")
 
     def lock_pc(self):
         print("[Locker] Locking PC and terminating game processes...")
@@ -733,23 +1125,37 @@ class ClientLockerApp:
         self.time_remaining = 0
         self.overlay_window.hide()
         self.bar_menu_window.hide()
+        self.launcher_window.hide()
         self.lock_window.show()
         install_keyboard_hook()
 
-        # Session cleanup: Taskkill games/Playnite
-        if IS_WINDOWS:
+        # Terminate launched processes
+        for proc in self.launched_processes:
             try:
-                subprocess.run(["taskkill", "/F", "/IM", "Playnite.FullscreenApp.exe"], capture_output=True)
+                print(f"[Cleanup] Terminating PID: {proc.pid}")
+                proc.terminate()
+                proc.kill()
             except Exception as e:
-                print(f"Taskkill error: {e}")
+                print(f"[Cleanup] Error terminating process: {e}")
+        self.launched_processes.clear()
+
+        # Taskkill on Windows
+        if IS_WINDOWS:
+            exe_names = ["cs2.exe", "VALORANT.exe", "TslGame.exe", "GTA5.exe", "Cyberpunk2077.exe", "RDR2.exe", "FC24.exe", "NFSUnbound.exe", "NBA2K24.exe", "dota2.exe", "LeagueClient.exe"]
+            for exe in exe_names:
+                try:
+                    subprocess.run(["taskkill", "/F", "/IM", exe], capture_output=True)
+                except Exception as e:
+                    print(f"Taskkill error for {exe}: {e}")
         else:
-            print("[Cleanup Simulator] Terminating active game process trees...")
+            print("[Cleanup Simulator] All active game process trees terminated.")
 
     def local_tick(self):
         if self.current_status in ('ACTIVE', 'WARNING'):
             if self.time_remaining > 0:
                 self.time_remaining -= 1
                 self.overlay_window.update_timer(self.time_remaining)
+                self.launcher_window.update_timer(self.time_remaining)
             else:
                 self.lock_pc()
 

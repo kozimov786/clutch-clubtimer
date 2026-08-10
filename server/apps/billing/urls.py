@@ -2,7 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     DashboardView, ComputerViewSet, TariffViewSet, SessionViewSet,
-    AdminLoginView, AdminLogoutView, CategoryViewSet, ProductViewSet, OrderViewSet
+    AdminLoginView, AdminLogoutView, CategoryViewSet, ProductViewSet, OrderViewSet, ExpenseViewSet
 )
 
 router = DefaultRouter()
@@ -12,6 +12,7 @@ router.register(r'sessions', SessionViewSet, basename='session')
 router.register(r'categories', CategoryViewSet, basename='category')
 router.register(r'products', ProductViewSet, basename='product')
 router.register(r'orders', OrderViewSet, basename='order')
+router.register(r'expenses', ExpenseViewSet, basename='expense')
 
 urlpatterns = [
     path('', DashboardView.as_view(), name='dashboard'),
@@ -19,4 +20,5 @@ urlpatterns = [
     path('api/logout/', AdminLogoutView.as_view(), name='admin_logout'),
     path('api/', include(router.urls)),
 ]
+
 

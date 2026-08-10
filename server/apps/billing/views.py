@@ -1,4 +1,5 @@
-from datetime import timedelta
+from datetime import timedelta, datetime, time
+import calendar
 from django.utils import timezone
 from django.shortcuts import render
 from django.views import View
@@ -9,10 +10,10 @@ from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .models import Computer, Tariff, Session, Category, Product, Order, OrderItem
+from .models import Computer, Tariff, Session, Category, Product, Order, OrderItem, Expense
 from .serializers import (
     ComputerSerializer, TariffSerializer, SessionSerializer,
-    CategorySerializer, ProductSerializer, OrderSerializer, OrderItemSerializer
+    CategorySerializer, ProductSerializer, OrderSerializer, OrderItemSerializer, ExpenseSerializer
 )
 from .consumers import notify_pc_status_change, notify_bar_order_change
 
@@ -99,6 +100,8 @@ class ComputerViewSet(viewsets.ModelViewSet):
         pc.current_tariff = tariff
         pc.save()
 
+        payment_method = request.data.get('payment_method', 'CASH')
+
         # End old active sessions for this PC
         Session.objects.filter(computer=pc, is_active=True).update(is_active=False, end_time=now)
 
@@ -111,6 +114,7 @@ class ComputerViewSet(viewsets.ModelViewSet):
             end_time=end_time,
             duration_minutes=minutes,
             total_price=total_price,
+            payment_method=payment_method,
             is_active=True
         )
 
@@ -306,9 +310,12 @@ class OrderViewSet(viewsets.ModelViewSet):
                 'unit_price': product.price
             })
 
+        payment_method = request.data.get('payment_method', 'CASH')
+
         order = Order.objects.create(
             computer=computer,
             total_price=total_price,
+            payment_method=payment_method,
             status='PENDING'
         )
 
@@ -408,4 +415,78 @@ class OrderViewSet(viewsets.ModelViewSet):
             'inventory': inventory_serializer.data,
             'top_selling': list(top_selling_items)
         }, status=status.HTTP_200_OK)
+
+
+class ExpenseViewSet(viewsets.ModelViewSet):
+    queryset = Expense.objects.all().order_by('-created_at')
+    serializer_class = ExpenseSerializer
+
+    @action(detail=False, methods=['get'])
+    def cashflow(self, request):
+        period = request.query_params.get('period', 'daily')
+        date_from_str = request.query_params.get('date_from')
+        date_to_str = request.query_params.get('date_to')
+
+        now = timezone.localtime()
+
+        if period == 'monthly':
+            start_dt = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            _, last_day = calendar.monthrange(now.year, now.month)
+            end_dt = now.replace(day=last_day, hour=23, minute=59, second=59, microsecond=999999)
+        elif period == 'yearly':
+            start_dt = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+            end_dt = now.replace(month=12, day=31, hour=23, minute=59, second=59, microsecond=999999)
+        elif period == 'custom' and date_from_str and date_to_str:
+            try:
+                df = datetime.strptime(date_from_str, '%Y-%m-%d')
+                dt = datetime.strptime(date_to_str, '%Y-%m-%d')
+                start_dt = timezone.make_aware(datetime.combine(df.date(), time.min))
+                end_dt = timezone.make_aware(datetime.combine(dt.date(), time.max))
+            except Exception:
+                start_dt = timezone.make_aware(datetime.combine(now.date(), time.min))
+                end_dt = timezone.make_aware(datetime.combine(now.date(), time.max))
+        else:
+            start_dt = timezone.make_aware(datetime.combine(now.date(), time.min))
+            end_dt = timezone.make_aware(datetime.combine(now.date(), time.max))
+
+        sessions_qs = Session.objects.filter(start_time__range=(start_dt, end_dt))
+        session_cash = float(sessions_qs.filter(payment_method='CASH').aggregate(Sum('total_price'))['total_price__sum'] or 0.0)
+        session_card = float(sessions_qs.filter(payment_method='CARD').aggregate(Sum('total_price'))['total_price__sum'] or 0.0)
+
+        orders_qs = Order.objects.filter(status__in=['APPROVED', 'DELIVERED'], created_at__range=(start_dt, end_dt))
+        bar_cash = float(orders_qs.filter(payment_method='CASH').aggregate(Sum('total_price'))['total_price__sum'] or 0.0)
+        bar_card = float(orders_qs.filter(payment_method='CARD').aggregate(Sum('total_price'))['total_price__sum'] or 0.0)
+
+        expenses_qs = Expense.objects.filter(created_at__range=(start_dt, end_dt)).order_by('-created_at')
+        expense_cash = float(expenses_qs.filter(payment_method='CASH').aggregate(Sum('amount'))['amount__sum'] or 0.0)
+        expense_card = float(expenses_qs.filter(payment_method='CARD').aggregate(Sum('amount'))['amount__sum'] or 0.0)
+
+        cash_balance = (session_cash + bar_cash) - expense_cash
+        card_balance = (session_card + bar_card) - expense_card
+        total_balance = cash_balance + card_balance
+        total_expenses = expense_cash + expense_card
+        total_revenue = session_cash + session_card + bar_cash + bar_card
+
+        expense_serializer = ExpenseSerializer(expenses_qs, many=True)
+
+        return Response({
+            'period': period,
+            'start_date': start_dt.strftime('%Y-%m-%d %H:%M:%S'),
+            'end_date': end_dt.strftime('%Y-%m-%d %H:%M:%S'),
+            'session_cash': session_cash,
+            'session_card': session_card,
+            'bar_cash': bar_cash,
+            'bar_card': bar_card,
+            'total_session': session_cash + session_card,
+            'total_bar': bar_cash + bar_card,
+            'expense_cash': expense_cash,
+            'expense_card': expense_card,
+            'total_expenses': total_expenses,
+            'cash_balance': cash_balance,
+            'card_balance': card_balance,
+            'total_balance': total_balance,
+            'total_revenue': total_revenue,
+            'expenses': expense_serializer.data
+        }, status=status.HTTP_200_OK)
+
 

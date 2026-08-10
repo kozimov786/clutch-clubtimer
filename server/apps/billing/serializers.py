@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.utils import timezone
-from .models import Computer, Tariff, Session, Category, Product, Order, OrderItem
+from .models import Computer, Tariff, Session, Category, Product, Order, OrderItem, Expense
 
 class TariffSerializer(serializers.ModelSerializer):
     effective_price_per_hour = serializers.SerializerMethodField()
@@ -36,6 +36,7 @@ class ComputerSerializer(serializers.ModelSerializer):
 class SessionSerializer(serializers.ModelSerializer):
     computer_name = serializers.ReadOnlyField(source='computer.name')
     tariff_name = serializers.ReadOnlyField(source='tariff.name')
+    payment_method_display = serializers.CharField(source='get_payment_method_display', read_only=True)
 
     class Meta:
         model = Session
@@ -63,9 +64,18 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
 class OrderSerializer(serializers.ModelSerializer):
     computer_name = serializers.ReadOnlyField(source='computer.name')
+    payment_method_display = serializers.CharField(source='get_payment_method_display', read_only=True)
     items = OrderItemSerializer(many=True, read_only=True)
 
     class Meta:
         model = Order
-        fields = ['id', 'computer', 'computer_name', 'total_price', 'status', 'created_at', 'updated_at', 'items']
+        fields = ['id', 'computer', 'computer_name', 'total_price', 'payment_method', 'payment_method_display', 'status', 'created_at', 'updated_at', 'items']
+
+class ExpenseSerializer(serializers.ModelSerializer):
+    payment_method_display = serializers.CharField(source='get_payment_method_display', read_only=True)
+
+    class Meta:
+        model = Expense
+        fields = '__all__'
+
 

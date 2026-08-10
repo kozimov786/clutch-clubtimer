@@ -72,6 +72,11 @@ class Computer(models.Model):
     def __str__(self):
         return f"{self.name} ({self.status}) - {self.time_remaining}s {'elapsed' if self.is_open_time else 'remaining'}"
 
+PAYMENT_METHOD_CHOICES = [
+    ('CASH', 'Naqd'),
+    ('CARD', 'Plastik'),
+]
+
 class Session(models.Model):
     computer = models.ForeignKey(Computer, on_delete=models.CASCADE, related_name='sessions')
     tariff = models.ForeignKey(Tariff, on_delete=models.SET_NULL, null=True, blank=True)
@@ -80,10 +85,11 @@ class Session(models.Model):
     end_time = models.DateTimeField(null=True, blank=True)
     duration_minutes = models.IntegerField(default=0)
     total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    payment_method = models.CharField(max_length=10, choices=PAYMENT_METHOD_CHOICES, default='CASH')
     is_active = models.BooleanField(default=True)
 
     def __str__(self):
-        return f"Session for {self.computer.name} - {self.duration_minutes} mins"
+        return f"Session for {self.computer.name} ({self.payment_method}) - {self.duration_minutes} mins"
 
 class Category(models.Model):
     name = models.CharField(max_length=100)
@@ -114,12 +120,13 @@ class Order(models.Model):
 
     computer = models.ForeignKey(Computer, on_delete=models.CASCADE, related_name='bar_orders')
     total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    payment_method = models.CharField(max_length=10, choices=PAYMENT_METHOD_CHOICES, default='CASH')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Order #{self.id} ({self.computer.name}) - {self.status} - {self.total_price:,.0f} UZS"
+        return f"Order #{self.id} ({self.computer.name}) [{self.payment_method}] - {self.status} - {self.total_price:,.0f} UZS"
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
@@ -129,4 +136,16 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f"{self.quantity}x {self.product.name} @ Order #{self.order.id}"
+
+class Expense(models.Model):
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    payment_method = models.CharField(max_length=10, choices=PAYMENT_METHOD_CHOICES, default='CASH')
+    category = models.CharField(max_length=100, default='Boshqa')
+    recipient_name = models.CharField(max_length=150, blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Expense #{self.id}: {self.amount:,.0f} UZS ({self.get_payment_method_display()}) - {self.category}"
+
 

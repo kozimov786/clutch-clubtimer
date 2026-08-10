@@ -344,9 +344,12 @@ function switchTab(tabName) {
   document.getElementById('tab-view-sessions').classList.toggle('hidden', tabName !== 'sessions');
   document.getElementById('tab-view-bar').classList.toggle('hidden', tabName !== 'bar');
   document.getElementById('tab-view-analytics').classList.toggle('hidden', tabName !== 'analytics');
+  const finTab = document.getElementById('tab-view-finance');
+  if (finTab) finTab.classList.toggle('hidden', tabName !== 'finance');
 
   if (tabName === 'bar') fetchBarOrders();
   if (tabName === 'analytics') fetchAnalytics();
+  if (tabName === 'finance') fetchFinanceData();
 }
 
 
@@ -535,6 +538,22 @@ function renderSessionsTable() {
   });
 }
 
+function setStartPaymentMethod(method) {
+  const input = document.getElementById('start-payment-method');
+  if (input) input.value = method;
+
+  const btnCash = document.getElementById('start-pm-btn-cash');
+  const btnCard = document.getElementById('start-pm-btn-card');
+
+  if (method === 'CASH') {
+    if (btnCash) btnCash.className = "py-2.5 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 bg-emerald-500/20 text-emerald-400 border-emerald-500/50";
+    if (btnCard) btnCard.className = "py-2.5 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 bg-slate-900 text-slate-400 border-slate-800";
+  } else {
+    if (btnCash) btnCash.className = "py-2.5 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 bg-slate-900 text-slate-400 border-slate-800";
+    if (btnCard) btnCard.className = "py-2.5 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 bg-cyan-500/20 text-cyan-400 border-cyan-500/50";
+  }
+}
+
 // Modal Handlers & Presets
 function openStartModal(pcId) {
   selectedPcId = pcId;
@@ -545,6 +564,7 @@ function openStartModal(pcId) {
     document.getElementById('start-tariff-select').value = pc.current_tariff;
   }
   
+  setStartPaymentMethod('CASH');
   document.getElementById('start-modal').classList.remove('hidden');
   setMoneyPreset(5000); // Default to 5000 UZS quick preset
 }
@@ -626,9 +646,10 @@ async function confirmStartSession() {
   const tariffId = document.getElementById('start-tariff-select').value;
   const amount = parseFloat(document.getElementById('start-amount-input').value) || 0;
   const minutes = parseInt(document.getElementById('start-minutes-input').value) || 60;
+  const paymentMethod = document.getElementById('start-payment-method') ? document.getElementById('start-payment-method').value : 'CASH';
 
   try {
-    const bodyData = { tariff_id: tariffId };
+    const bodyData = { tariff_id: tariffId, payment_method: paymentMethod };
     if (activeInputMode === 'open') {
       bodyData.is_open_time = true;
     } else if (activeInputMode === 'money' && amount > 0) {
@@ -1084,4 +1105,159 @@ async function restockProduct(productId, qty) {
     console.error("Restock error:", err);
   }
 }
+
+// Kassa & Cashflow Accounting Logic
+let currentFinancePeriod = 'daily';
+
+function setFinancePeriod(period) {
+  currentFinancePeriod = period;
+
+  document.querySelectorAll('.finance-period-btn').forEach(btn => {
+    btn.className = 'finance-period-btn px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 text-slate-400 hover:text-white border border-slate-800 transition-all';
+  });
+
+  const activeBtn = document.getElementById(`btn-period-${period}`);
+  if (activeBtn) {
+    activeBtn.className = 'finance-period-btn px-4 py-2 rounded-xl text-xs font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 transition-all';
+  }
+
+  fetchFinanceData();
+}
+
+async function fetchFinanceData() {
+  try {
+    let url = `/api/expenses/cashflow/?period=${currentFinancePeriod}`;
+    if (currentFinancePeriod === 'custom') {
+      const df = document.getElementById('finance-date-from')?.value;
+      const dt = document.getElementById('finance-date-to')?.value;
+      if (df) url += `&date_from=${df}`;
+      if (dt) url += `&date_to=${dt}`;
+    }
+
+    const res = await fetch(url);
+    if (res.ok) {
+      const data = await res.json();
+      renderFinanceDashboard(data);
+    }
+  } catch (err) {
+    console.error("Fetch finance error:", err);
+  }
+}
+
+function renderFinanceDashboard(data) {
+  const cashBalEl = document.getElementById('finance-cash-balance');
+  const cardBalEl = document.getElementById('finance-card-balance');
+  const totalBalEl = document.getElementById('finance-total-balance');
+  const totalExpEl = document.getElementById('finance-total-expenses');
+  const expBreakdownEl = document.getElementById('finance-expenses-breakdown');
+
+  if (cashBalEl) cashBalEl.textContent = formatMoney(data.cash_balance || 0);
+  if (cardBalEl) cardBalEl.textContent = formatMoney(data.card_balance || 0);
+  if (totalBalEl) totalBalEl.textContent = formatMoney(data.total_balance || 0);
+  if (totalExpEl) totalExpEl.textContent = formatMoney(data.total_expenses || 0);
+  if (expBreakdownEl) {
+    expBreakdownEl.textContent = `Naqd: ${formatMoney(data.expense_cash || 0)} | Card: ${formatMoney(data.expense_card || 0)}`;
+  }
+
+  const sessCashEl = document.getElementById('breakdown-session-cash');
+  const sessCardEl = document.getElementById('breakdown-session-card');
+  const barCashEl = document.getElementById('breakdown-bar-cash');
+  const barCardEl = document.getElementById('breakdown-bar-card');
+
+  if (sessCashEl) sessCashEl.textContent = formatMoney(data.session_cash || 0);
+  if (sessCardEl) sessCardEl.textContent = formatMoney(data.session_card || 0);
+  if (barCashEl) barCashEl.textContent = formatMoney(data.bar_cash || 0);
+  if (barCardEl) barCardEl.textContent = formatMoney(data.bar_card || 0);
+
+  const countBadge = document.getElementById('expenses-count-badge');
+  const tbody = document.getElementById('expenses-table-body');
+  if (!tbody) return;
+
+  const expenses = data.expenses || [];
+  if (countBadge) countBadge.textContent = `${expenses.length} ta chiqim`;
+
+  if (expenses.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-xs text-slate-500">Ushbu davrda chiqimlar mavjud emas</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = expenses.map(e => `
+    <tr class="border-b border-slate-800 hover:bg-slate-900/50 transition-colors text-xs">
+      <td class="py-3 px-3 text-slate-400 font-mono">${new Date(e.created_at).toLocaleString('uz-UZ')}</td>
+      <td class="py-3 px-3">
+        <span class="px-2 py-0.5 rounded-full bg-slate-800 text-cyan-300 font-bold border border-slate-700">${e.category}</span>
+      </td>
+      <td class="py-3 px-3 font-semibold text-slate-200">${e.recipient_name || '—'}</td>
+      <td class="py-3 px-3">
+        ${e.payment_method === 'CASH' ? 
+          '<span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold">💵 Naqd</span>' : 
+          '<span class="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-bold">💳 Plastik</span>'}
+      </td>
+      <td class="py-3 px-3 font-bold text-rose-400 font-orbitron">-${formatMoney(e.amount)}</td>
+      <td class="py-3 px-3 text-slate-300 max-w-xs truncate" title="${e.description || ''}">${e.description || '—'}</td>
+      <td class="py-3 px-3 text-right">
+        <button onclick="handleDeleteExpense(${e.id})" class="p-1 rounded bg-rose-500/20 hover:bg-rose-500/40 text-rose-400 transition-colors" title="Chiqimni o'chirish">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+        </button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function handleCreateExpense(e) {
+  if (e) e.preventDefault();
+  const amount = parseFloat(document.getElementById('expense-amount-input').value) || 0;
+  const paymentMethod = document.getElementById('expense-payment-method').value || 'CASH';
+  const category = document.getElementById('expense-category-input').value || 'Boshqa';
+  const recipientName = document.getElementById('expense-recipient-input').value.trim();
+  const description = document.getElementById('expense-description-input').value.trim();
+
+  if (amount <= 0) {
+    alert("Iltimos, musbat summa kiriting!");
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/expenses/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount: amount,
+        payment_method: paymentMethod,
+        category: category,
+        recipient_name: recipientName,
+        description: description
+      })
+    });
+
+    if (res.ok) {
+      playSound('add');
+      document.getElementById('expense-amount-input').value = '';
+      document.getElementById('expense-recipient-input').value = '';
+      document.getElementById('expense-description-input').value = '';
+      fetchFinanceData();
+    } else {
+      alert("Chiqimni saqlashda xatolik yuz berdi!");
+    }
+  } catch (err) {
+    console.error("Create expense error:", err);
+  }
+}
+
+async function handleDeleteExpense(id) {
+  if (!confirm("Ushbu chiqim yozuvini o'chirmoqchimisiz?")) return;
+
+  try {
+    const res = await fetch(`/api/expenses/${id}/`, {
+      method: 'DELETE'
+    });
+    if (res.ok) {
+      playSound('lock');
+      fetchFinanceData();
+    }
+  } catch (err) {
+    console.error("Delete expense error:", err);
+  }
+}
+
 

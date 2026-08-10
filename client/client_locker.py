@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout, QScrollArea, QGridLayout, QLineEdit, QGraphicsDropShadowEffect,
     QSizePolicy
 )
-from PyQt6.QtGui import QFont, QColor, QPixmap
+from PyQt6.QtGui import QFont, QColor, QPixmap, QGuiApplication
 
 # Signals for UI thread communication
 class SyncSignals(QObject):
@@ -128,10 +128,6 @@ class LockScreenWindow(QWidget):
         self.init_ui()
 
     def init_ui(self):
-        # Ekran o'lchamiga dastlabki moslashtirish
-        screen_geo = QApplication.primaryScreen().geometry()
-        self.setGeometry(screen_geo)
-
         # ----------------------------------------------------------------
         # FULLSCREEN BACKGROUND — butun ekranni qoplaydigan to'q fon
         # ----------------------------------------------------------------
@@ -223,8 +219,8 @@ class LockScreenWindow(QWidget):
 
     # ----------------------------------------------------------------
     # FORCE FULLSCREEN — hide/show siklida ham ishlaydigan yechim.
-    # showFullScreen() + setGeometry() kombinatsiyasi Windows'da
-    # taskbar va desktop'ni 100% yopadi.
+    # WindowFlags qayta o'rnatish + primaryScreen geometry + showFullScreen
+    # kombinatsiyasi Windows'da taskbar va desktop'ni 100% ishonchli yopadi.
     # _showing guard — showEvent rekursiyasidan himoya qiladi.
     # ----------------------------------------------------------------
     def _apply_fullscreen(self):
@@ -233,9 +229,16 @@ class LockScreenWindow(QWidget):
             return
         self._showing = True
         try:
-            screen_geo = QApplication.primaryScreen().geometry()
-            self.setGeometry(screen_geo)
-            self.setWindowState(Qt.WindowState.WindowFullScreen)
+            flags = (
+                Qt.WindowType.FramelessWindowHint |
+                Qt.WindowType.WindowStaysOnTopHint |
+                Qt.WindowType.Window
+            )
+            if IS_WINDOWS:
+                flags |= Qt.WindowType.WindowDoesNotAcceptFocus
+            self.setWindowFlags(flags)
+            screen = QGuiApplication.primaryScreen().geometry()
+            self.setGeometry(screen)
             self.showFullScreen()
             self.raise_()
             self.activateWindow()
@@ -249,15 +252,23 @@ class LockScreenWindow(QWidget):
 
     def showEvent(self, event):
         """Oyna har safar ko'rsatilganda (show/hide sikl) fullscreen
-        holatni avtomatik tiklaydi. _showing guard rekursiyadan himoya qiladi."""
+        holatni avtomatik tiklaydi. _showing guard rekursiyadan himoya qiladi.
+        WindowFlags qayta o'rnatiladi va primaryScreen geometry majburan qo'llanadi."""
         super().showEvent(event)
         if self._showing:
             return
         self._showing = True
         try:
-            screen_geo = QApplication.primaryScreen().geometry()
-            self.setGeometry(screen_geo)
-            self.setWindowState(Qt.WindowState.WindowFullScreen)
+            flags = (
+                Qt.WindowType.FramelessWindowHint |
+                Qt.WindowType.WindowStaysOnTopHint |
+                Qt.WindowType.Window
+            )
+            if IS_WINDOWS:
+                flags |= Qt.WindowType.WindowDoesNotAcceptFocus
+            self.setWindowFlags(flags)
+            screen = QGuiApplication.primaryScreen().geometry()
+            self.setGeometry(screen)
             self.showFullScreen()
             self.raise_()
             self.activateWindow()
@@ -876,9 +887,8 @@ class GameLauncherWindow(QWidget):
         self.init_ui()
 
     def init_ui(self):
-        screen_geo = QApplication.primaryScreen().geometry()
-        self.setGeometry(screen_geo)
-
+        # Oyna geometriyasi showEvent / show_launcher orqali boshqariladi,
+        # init_ui da setGeometry ishlatilmaydi — kichik oyna muammosidan saqlanish uchun.
         self.setStyleSheet("""
             QWidget {
                 background-color: #0a0e17;
@@ -1016,8 +1026,8 @@ class GameLauncherWindow(QWidget):
 
     # ----------------------------------------------------------------
     # FORCE FULLSCREEN — hide/show siklida ham ishlaydigan yechim.
-    # showFullScreen() + setGeometry() kombinatsiyasi Windows'da
-    # taskbar va desktop'ni 100% yopadi.
+    # WindowFlags qayta o'rnatish + primaryScreen geometry + showFullScreen
+    # kombinatsiyasi Windows'da taskbar va desktop'ni 100% ishonchli yopadi.
     # _showing guard — showEvent rekursiyasidan himoya qiladi.
     # ----------------------------------------------------------------
     def _apply_fullscreen(self):
@@ -1026,9 +1036,16 @@ class GameLauncherWindow(QWidget):
             return
         self._showing = True
         try:
-            screen_geo = QApplication.primaryScreen().geometry()
-            self.setGeometry(screen_geo)
-            self.setWindowState(Qt.WindowState.WindowFullScreen)
+            flags = (
+                Qt.WindowType.FramelessWindowHint |
+                Qt.WindowType.WindowStaysOnTopHint |
+                Qt.WindowType.Window
+            )
+            if IS_WINDOWS:
+                flags |= Qt.WindowType.WindowDoesNotAcceptFocus
+            self.setWindowFlags(flags)
+            screen = QGuiApplication.primaryScreen().geometry()
+            self.setGeometry(screen)
             self.showFullScreen()
             self.raise_()
             self.activateWindow()
@@ -1042,15 +1059,23 @@ class GameLauncherWindow(QWidget):
 
     def showEvent(self, event):
         """Oyna har safar ko'rsatilganda (show/hide sikl) fullscreen
-        holatni avtomatik tiklaydi. _showing guard rekursiyadan himoya qiladi."""
+        holatni avtomatik tiklaydi. _showing guard rekursiyadan himoya qiladi.
+        WindowFlags qayta o'rnatiladi va primaryScreen geometry majburan qo'llanadi."""
         super().showEvent(event)
         if self._showing:
             return
         self._showing = True
         try:
-            screen_geo = QApplication.primaryScreen().geometry()
-            self.setGeometry(screen_geo)
-            self.setWindowState(Qt.WindowState.WindowFullScreen)
+            flags = (
+                Qt.WindowType.FramelessWindowHint |
+                Qt.WindowType.WindowStaysOnTopHint |
+                Qt.WindowType.Window
+            )
+            if IS_WINDOWS:
+                flags |= Qt.WindowType.WindowDoesNotAcceptFocus
+            self.setWindowFlags(flags)
+            screen = QGuiApplication.primaryScreen().geometry()
+            self.setGeometry(screen)
             self.showFullScreen()
             self.raise_()
             self.activateWindow()

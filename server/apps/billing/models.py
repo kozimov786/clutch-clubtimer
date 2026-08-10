@@ -175,6 +175,7 @@ class Game(models.Model):
     name = models.CharField(max_length=150)
     cover_path = models.CharField(max_length=500, help_text="Cover banner image URL or local file path")
     executable_path = models.CharField(max_length=500, help_text="Executable file path or launch command")
+    working_directory = models.CharField(max_length=500, blank=True, null=True, help_text="Working directory path for executable")
     category = models.CharField(max_length=50, choices=GAME_CATEGORY_CHOICES, default='FPS')
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

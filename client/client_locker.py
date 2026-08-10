@@ -1091,10 +1091,18 @@ class GameLauncherWindow(QWidget):
             col = idx % col_count
             self.grid_layout.addWidget(card, row, col)
 
+    def show_launch_error(self, message="O'yin fayli topilmadi, iltimos admonga murojaat qiling"):
+        self.status_msg.setText(f"❌ {message}")
+        self.status_msg.setStyleSheet("color: #ef4444; background: rgba(239, 68, 68, 0.18); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 8px; padding: 8px 14px; font-weight: bold;")
+
+    def show_launch_success(self, game_name):
+        self.status_msg.setText(f"🚀 {game_name} ishga tushirildi!")
+        self.status_msg.setStyleSheet("color: #10b981; background: rgba(16, 185, 129, 0.18); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 8px; padding: 8px 14px; font-weight: bold;")
+
     def launch_game(self, game):
         g_name = game.get('name', 'Game')
-        self.status_msg.setText(f"🚀 {g_name} ishga tushirilmoqda...")
-        self.status_msg.setStyleSheet("color: #10b981; background: rgba(16, 185, 129, 0.15); border-radius: 8px; padding: 6px 12px;")
+        self.status_msg.setText(f"⏳ {g_name} tekshirilmoqda...")
+        self.status_msg.setStyleSheet("color: #00f0ff; background: rgba(0, 240, 255, 0.15); border: 1px solid rgba(0, 240, 255, 0.3); border-radius: 8px; padding: 8px 14px;")
         self.game_launched_signal.emit(game)
 
 
@@ -1203,27 +1211,28 @@ class ClientLockerApp:
 
     def handle_game_launch(self, game):
         exe_path = game.get('executable_path')
-        g_name = game.get('name')
-        print(f"[Launcher] Launching game: '{g_name}' -> path: '{exe_path}'")
+        working_dir = game.get('working_directory')
+        g_name = game.get('name', 'Game')
+        print(f"[Launcher] Launching game: '{g_name}' -> exe: '{exe_path}', cwd: '{working_dir}'")
 
         if exe_path and os.path.exists(exe_path):
             try:
-                proc = subprocess.Popen([exe_path])
+                cwd = None
+                if working_dir and os.path.exists(working_dir):
+                    cwd = working_dir
+                elif exe_path and os.path.dirname(exe_path) and os.path.exists(os.path.dirname(exe_path)):
+                    cwd = os.path.dirname(exe_path)
+
+                proc = subprocess.Popen([exe_path], cwd=cwd)
                 self.launched_processes.append(proc)
-                print(f"[Launcher] Started PID: {proc.pid}")
+                print(f"[Launcher] Successfully started PID: {proc.pid}")
+                self.launcher_window.show_launch_success(g_name)
             except Exception as e:
                 print(f"[Launcher] Execution error for {exe_path}: {e}")
+                self.launcher_window.show_launch_error(f"Xatolik: {e}")
         else:
-            print(f"[Launcher Simulator] Path not found ({exe_path}). Launching simulated process.")
-            try:
-                if IS_WINDOWS:
-                    proc = subprocess.Popen(["cmd.exe", "/c", "ping 127.0.0.1 -n 9999"])
-                else:
-                    proc = subprocess.Popen(["sleep", "9999"])
-                self.launched_processes.append(proc)
-                print(f"[Launcher Simulator] Started simulator PID: {proc.pid}")
-            except Exception as e:
-                print(f"[Launcher Simulator] Simulator error: {e}")
+            print(f"[Launcher Error] Executable not found at path: {exe_path}")
+            self.launcher_window.show_launch_error("O'yin fayli topilmadi, iltimos admonga murojaat qiling")
 
     def lock_pc(self):
         print("[Locker] Locking PC and terminating game processes...")

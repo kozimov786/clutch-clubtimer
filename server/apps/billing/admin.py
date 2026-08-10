@@ -9,9 +9,9 @@ class StockSupplyAdmin(admin.ModelAdmin):
 
 @admin.register(Game)
 class GameAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name', 'category', 'executable_path', 'is_active', 'created_at')
+    list_display = ('id', 'name', 'category', 'executable_path', 'working_directory', 'is_active', 'created_at')
     list_filter = ('category', 'is_active')
-    search_fields = ('name', 'executable_path')
+    search_fields = ('name', 'executable_path', 'working_directory')
 
 
 @admin.register(Tariff)

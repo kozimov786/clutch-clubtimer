@@ -222,6 +222,7 @@ async function fetchSessions() {
     const res = await fetch('/api/sessions/');
     sessions = await res.json();
     renderSessionsTable();
+    updateStatsHeader();
   } catch (err) {
     console.error("Sessions fetch error:", err);
   }

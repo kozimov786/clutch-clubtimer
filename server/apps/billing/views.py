@@ -630,20 +630,14 @@ class StockSupplyViewSet(viewsets.ModelViewSet):
             product = Product.objects.filter(name__iexact=product_name).first()
 
         if not product:
-            product = Product.objects.create(
-                name=product_name or "Yangi Tovar",
-                cost_price=cost_price,
-                price=selling_price,
-                stock=quantity,
-                is_available=True
-            )
-        else:
-            product.stock += quantity
-            if cost_price > 0:
-                product.cost_price = cost_price
-            if selling_price > 0:
-                product.price = selling_price
-            product.save()
+            return Response({'error': 'Ushbu mahsulot ro\'yxatda mavjud emas! Omborga faqat ro\'yxatdagi mahsulotlarni kirim qilish mumkin.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        product.stock += quantity
+        if cost_price > 0:
+            product.cost_price = cost_price
+        if selling_price > 0:
+            product.price = selling_price
+        product.save()
 
         supply = StockSupply.objects.create(
             product=product,

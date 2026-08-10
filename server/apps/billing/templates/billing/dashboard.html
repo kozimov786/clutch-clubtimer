@@ -997,19 +997,14 @@
       </div>
 
       <form onsubmit="handleRestockSubmit(event)" class="mt-4 space-y-4">
-        <!-- Select Existing Product or Create New -->
+        <!-- Select Existing Product Only -->
         <div>
-          <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Mahsulot Tanlash / Yangi Kirim</label>
-          <select id="restock-product-select" onchange="onRestockProductSelect()" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 font-semibold">
-            <option value="">➕ Yangi Mahsulot Nomi Qo'lda Kiritish</option>
+          <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Mavjud Mahsulotni Tanlang</label>
+          <select id="restock-product-select" required onchange="onRestockProductSelect()" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 font-semibold">
+            <option value="">-- Ro'yxatdan Mahsulotni Tanlang --</option>
             <!-- Populated dynamically -->
           </select>
-        </div>
-
-        <!-- Product Name Input -->
-        <div>
-          <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Mahsulot Nomi</label>
-          <input type="text" id="restock-product-name" required placeholder="Masalan: Red Bull 0.25L" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 font-semibold">
+          <input type="hidden" id="restock-product-name">
         </div>
 
         <!-- Quantity & Cost Price Row -->

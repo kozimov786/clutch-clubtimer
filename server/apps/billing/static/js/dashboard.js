@@ -1146,11 +1146,8 @@ function renderInventoryTable(products) {
       <td class="py-3 px-3">${stockBadge}</td>
       <td class="py-3 px-3 font-mono text-slate-300 font-semibold">${formatMoney(totalAssetVal)}</td>
       <td class="py-3 px-3 text-right flex items-center justify-end gap-1.5">
-        <button onclick="openRestockModal(${p.id})" class="py-1 px-2.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold transition-all" title="Tovar kirim qilish">
-          + Kirim
-        </button>
-        <button onclick="openSpisaniyeModal(${p.id})" class="py-1 px-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition-all" title="Spisaniye (Ichki rasxod)">
-          🗑️
+        <button onclick="openSpisaniyeModal(${p.id})" class="py-1 px-2.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition-all flex items-center gap-1" title="Spisaniye (Ichki rasxod)">
+          🗑️ Spisaniye
         </button>
       </td>
     `;
@@ -1483,9 +1480,6 @@ async function productsCacheHTML() {
           <button onclick="addToPOSCart(${p.id})" class="px-2 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 font-bold text-[10px]" title="Savatga qo'shish">
             + Sabat
           </button>
-          <button onclick="restockProduct(${p.id}, 10)" class="px-1.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 font-bold text-[10px]" title="10 ta to'ldirish">
-            +10
-          </button>
           <button onclick="openSpisaniyeModal(${p.id})" class="px-1.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 font-bold text-[10px]" title="Spisaniye (Ichki rasxod)">
             🗑️
           </button>
@@ -1689,7 +1683,7 @@ function openRestockModal(productId = null) {
   if (!modal || !select) return;
 
   select.innerHTML = `
-    <option value="">➕ Yangi Mahsulot Nomi Qo'lda Kiritish</option>
+    <option value="">-- Ro'yxatdan Mahsulotni Tanlang --</option>
     ${cachedProducts.map(p => `<option value="${p.id}" ${productId === p.id ? 'selected' : ''}>${p.name} (Tannarx: ${formatMoney(p.cost_price || 0)} | Sotish: ${formatMoney(p.price)})</option>`).join('')}
   `;
 
@@ -1697,10 +1691,9 @@ function openRestockModal(productId = null) {
     select.value = productId;
     onRestockProductSelect();
   } else {
-    nameInput.value = '';
-    nameInput.readOnly = false;
-    costInput.value = '5000';
-    priceInput.value = '8000';
+    if (nameInput) nameInput.value = '';
+    if (costInput) costInput.value = '0';
+    if (priceInput) priceInput.value = '0';
     updateRestockCalc();
   }
 
@@ -1718,22 +1711,22 @@ function onRestockProductSelect() {
   const costInput = document.getElementById('restock-cost-price');
   const priceInput = document.getElementById('restock-selling-price');
 
-  if (!select || !nameInput) return;
+  if (!select) return;
 
   const productId = select.value;
   if (!productId) {
-    nameInput.value = '';
-    nameInput.readOnly = false;
-    nameInput.focus();
+    if (nameInput) nameInput.value = '';
+    if (costInput) costInput.value = '0';
+    if (priceInput) priceInput.value = '0';
+    updateRestockCalc();
     return;
   }
 
   const p = cachedProducts.find(prod => prod.id == productId);
   if (p) {
-    nameInput.value = p.name;
-    nameInput.readOnly = true;
-    costInput.value = p.cost_price || 0;
-    priceInput.value = p.price || 0;
+    if (nameInput) nameInput.value = p.name;
+    if (costInput) costInput.value = p.cost_price || 0;
+    if (priceInput) priceInput.value = p.price || 0;
     updateRestockCalc();
   }
 }
@@ -1765,8 +1758,8 @@ async function handleRestockSubmit(e) {
   const supplierNote = document.getElementById('restock-supplier-note')?.value || '';
   const submitBtn = document.getElementById('restock-submit-btn');
 
-  if (!productName) {
-    alert("Iltimos, mahsulot nomini kiriting!");
+  if (!productId) {
+    alert("Iltimos, ro'yxatdan mahsulotni tanlang!");
     return;
   }
 

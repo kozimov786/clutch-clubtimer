@@ -98,29 +98,15 @@ class LockScreenWindow(QWidget):
     def __init__(self, pc_name="PC-01"):
         super().__init__()
         self.pc_name = pc_name
-        self._force_fullscreen_enabled = False  # init ichida chaqirishga yo'l bermaslik uchun
         self.init_ui()
 
     def init_ui(self):
-        # -------------------------------------------------------------------
-        # WINDOW FLAGS:
-        #  - FramelessWindowHint        : sarlavha paneli bo'lmasin
-        #  - WindowStaysOnTopHint       : har doim eng tepada tursin
-        #  - Window                     : asosiy oyna turi
-        #  - WindowDoesNotAcceptFocus   : Windows taskbar'dan yashirish uchun
-        # -------------------------------------------------------------------
-        flags = (
-            Qt.WindowType.FramelessWindowHint |
+        self.setWindowFlags(
             Qt.WindowType.WindowStaysOnTopHint |
-            Qt.WindowType.Window
+            Qt.WindowType.FramelessWindowHint |
+            Qt.WindowType.Tool
         )
-        if IS_WINDOWS:
-            flags |= Qt.WindowType.WindowDoesNotAcceptFocus
-        self.setWindowFlags(flags)
-
-        # Ekran o'lchamiga moslashtirish
-        screen_geo = QApplication.primaryScreen().geometry()
-        self.setGeometry(screen_geo)
+        self.showFullScreen()
         
         # Deep Dark Cyberpunk Background
         self.setStyleSheet("""
@@ -203,36 +189,6 @@ class LockScreenWindow(QWidget):
         card_layout.addWidget(desc)
 
         layout.addWidget(card)
-
-        # Endi force fullscreen yoqiladi
-        self._force_fullscreen_enabled = True
-
-    def show_locker(self):
-        """WebSocket signali yoki lock_pc() dan chaqirilganda.
-        Oyna har doim fullscreen va eng ustda ko'rinishi kafolatlangan."""
-        screen_geo = QApplication.primaryScreen().geometry()
-        self.setGeometry(screen_geo)
-        self.setWindowState(Qt.WindowState.WindowFullScreen)
-        self.showFullScreen()
-        self.raise_()
-        self.activateWindow()
-
-    def changeEvent(self, event):
-        """Oyna holati o'zgarganda (minimize, v.b.) — majburan qayta fullscreen.
-        Bu Alt+Tab yoki Win tugmasi bosildaganda oyna kichrayib qolishiga yo'l bermaydi."""
-        super().changeEvent(event)
-        if self._force_fullscreen_enabled and self.isVisible():
-            state = self.windowState()
-            if state != Qt.WindowState.WindowFullScreen:
-                QTimer.singleShot(50, self.show_locker)
-
-    def closeEvent(self, event):
-        """Qulf oynasini yopishga yo'l bermaymiz."""
-        event.ignore()
-
-    def keyPressEvent(self, event):
-        """Barcha klaviatura kirishlarini bloklash."""
-        event.accept()
 
 
 class TimerOverlayWidget(QWidget):
@@ -802,7 +758,6 @@ class GameLauncherWindow(QWidget):
         self.current_category = None
         self.search_query = ""
         self.pixmap_labels = {}
-        self._force_fullscreen_enabled = False  # init ichida chaqirishga yo'l bermaslik uchun
 
         self.image_downloader = ImageCache()
         self.image_downloader.image_downloaded_signal.connect(self.on_image_downloaded)
@@ -810,21 +765,10 @@ class GameLauncherWindow(QWidget):
         self.init_ui()
 
     def init_ui(self):
-        # -------------------------------------------------------------------
-        # WINDOW FLAGS:
-        #  - FramelessWindowHint   : sarlavha paneli bo'lmasin
-        #  - WindowStaysOnTopHint  : har doim eng tepada tursin
-        #  - Window               : asosiy oyna turi
-        # -------------------------------------------------------------------
         self.setWindowFlags(
-            Qt.WindowType.FramelessWindowHint |
-            Qt.WindowType.WindowStaysOnTopHint |
-            Qt.WindowType.Window
+            Qt.WindowType.FramelessWindowHint
         )
-
-        # Ekran o'lchamiga moslashtirish
-        screen_geo = QApplication.primaryScreen().geometry()
-        self.setGeometry(screen_geo)
+        self.showFullScreen()
 
         self.setStyleSheet("""
             QWidget {
@@ -965,32 +909,6 @@ class GameLauncherWindow(QWidget):
         self.scroll_area.setWidget(self.grid_widget)
 
         main_layout.addWidget(self.scroll_area, stretch=1)
-
-        # Force fullscreen yoqildi
-        self._force_fullscreen_enabled = True
-
-    def show_launcher(self):
-        """WebSocket signali yoki unlock_pc() dan chaqirilganda.
-        Oyna har doim fullscreen va eng ustda ko'rinishi kafolatlangan."""
-        screen_geo = QApplication.primaryScreen().geometry()
-        self.setGeometry(screen_geo)
-        self.setWindowState(Qt.WindowState.WindowFullScreen)
-        self.showFullScreen()
-        self.raise_()
-        self.activateWindow()
-
-    def changeEvent(self, event):
-        """Oyna holati o'zgarganda (minimize, v.b.) — majburan qayta fullscreen.
-        Bu Alt+Tab yoki Win tugmasi bosildaganda oyna kichrayib qolishiga yo'l bermaydi."""
-        super().changeEvent(event)
-        if self._force_fullscreen_enabled and self.isVisible():
-            state = self.windowState()
-            if state != Qt.WindowState.WindowFullScreen:
-                QTimer.singleShot(50, self.show_launcher)
-
-    def closeEvent(self, event):
-        """Launcher oynasini yopishga yo'l bermaymiz — faqat yashirishga ruxsat."""
-        event.ignore()
 
     def get_cat_btn_style(self, is_active):
         if is_active:
@@ -1219,10 +1137,10 @@ class ClientLockerApp:
         self.countdown_timer.timeout.connect(self.local_tick)
         self.countdown_timer.start(1000)
 
-        # Start lock screen initially — majburan fullscreen qulf oynasi
+        # Start lock screen initially
         install_keyboard_hook()
         self.backdrop_overlay.hide()
-        self.lock_window.show_locker()
+        self.lock_window.show()
         self.overlay_window.hide()
         self.bar_menu_window.hide()
         self.launcher_window.hide()
@@ -1283,15 +1201,12 @@ class ClientLockerApp:
                 self.lock_pc()
 
     def unlock_pc(self):
-        """Seans boshlanganda chaqiriladi.
-        Qulf oynasi yashiriladi, Launcher fullscreen ko'rsatiladi."""
         print("[Locker] Unlocking PC and opening Clutch Zone Game Launcher...")
         uninstall_keyboard_hook()
         self.lock_window.hide()
         self.overlay_window.show()
         self.launcher_window.load_games()
-        # Launcher majburan fullscreen
-        self.launcher_window.show_launcher()
+        self.launcher_window.showFullScreen()
         self.current_status = 'ACTIVE'
 
     def handle_game_launch(self, game):
@@ -1320,8 +1235,6 @@ class ClientLockerApp:
             self.launcher_window.show_launch_error("O'yin fayli topilmadi, iltimos admonga murojaat qiling")
 
     def lock_pc(self):
-        """Seans tugaganda chaqiriladi.
-        Launcher yashiriladi, Qulf oynasi fullscreen ko'rsatiladi."""
         print("[Locker] Locking PC and terminating game processes...")
         self.current_status = 'LOCKED'
         self.time_remaining = 0
@@ -1329,8 +1242,7 @@ class ClientLockerApp:
         self.bar_menu_window.hide()
         self.backdrop_overlay.hide()
         self.launcher_window.hide()
-        # Qulf oynasini majburan fullscreen ko'rsatish
-        self.lock_window.show_locker()
+        self.lock_window.show()
         install_keyboard_hook()
 
         # Terminate launched processes

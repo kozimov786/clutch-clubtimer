@@ -1122,26 +1122,35 @@ function renderInventoryTable(products) {
 
   products.forEach(p => {
     const tr = document.createElement('tr');
-    tr.className = 'border-b border-slate-800/80 hover:bg-slate-900/50 transition-colors';
+    tr.className = 'border-b border-slate-800/80 hover:bg-slate-900/50 transition-colors text-xs';
 
     let stockBadge = `<span class="px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono">${p.stock} ta</span>`;
     if (p.stock < 5) {
       stockBadge = `<span class="px-2.5 py-1 text-xs font-bold rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40 font-mono animate-pulse">⚠️ ${p.stock} ta (KAM)</span>`;
     }
 
+    const costPrice = parseFloat(p.cost_price || 0);
+    const sellingPrice = parseFloat(p.price || 0);
+    const totalAssetVal = costPrice * p.stock;
+
     tr.innerHTML = `
       <td class="py-3 px-3">
         <div class="flex items-center gap-2.5">
           <img src="${p.image}" class="w-8 h-8 rounded-lg object-cover border border-slate-700">
-          <span class="font-bold text-white">${p.name}</span>
+          <span class="font-bold text-white text-sm">${p.name}</span>
         </div>
       </td>
       <td class="py-3 px-3 text-xs text-slate-400 font-semibold">${p.category_name || 'Barchasi'}</td>
-      <td class="py-3 px-3 font-mono text-cyan-400 font-bold">${formatMoney(p.price)}</td>
+      <td class="py-3 px-3 font-mono text-amber-400 font-bold">${formatMoney(costPrice)}</td>
+      <td class="py-3 px-3 font-mono text-emerald-400 font-bold">${formatMoney(sellingPrice)}</td>
       <td class="py-3 px-3">${stockBadge}</td>
-      <td class="py-3 px-3 text-right">
-        <button onclick="restockProduct(${p.id}, 10)" class="py-1.5 px-3 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold transition-all">
-          +10 Zaxira
+      <td class="py-3 px-3 font-mono text-slate-300 font-semibold">${formatMoney(totalAssetVal)}</td>
+      <td class="py-3 px-3 text-right flex items-center justify-end gap-1.5">
+        <button onclick="openRestockModal(${p.id})" class="py-1 px-2.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold transition-all" title="Tovar kirim qilish">
+          + Kirim
+        </button>
+        <button onclick="openSpisaniyeModal(${p.id})" class="py-1 px-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition-all" title="Spisaniye (Ichki rasxod)">
+          🗑️
         </button>
       </td>
     `;
@@ -1558,6 +1567,16 @@ function renderFinanceDashboard(data) {
     expBreakdownEl.textContent = `Naqd: ${formatMoney(data.expense_cash || 0)} | Card: ${formatMoney(data.expense_card || 0)}`;
   }
 
+  const barRevEl = document.getElementById('finance-bar-revenue');
+  const barCogsEl = document.getElementById('finance-bar-cogs');
+  const barMarginEl = document.getElementById('finance-bar-margin');
+  const barMarginPctEl = document.getElementById('finance-bar-margin-pct');
+
+  if (barRevEl) barRevEl.textContent = formatMoney(data.total_bar || 0);
+  if (barCogsEl) barCogsEl.textContent = formatMoney(data.bar_cogs || 0);
+  if (barMarginEl) barMarginEl.textContent = formatMoney(data.bar_margin || 0);
+  if (barMarginPctEl) barMarginPctEl.textContent = `${data.bar_margin_percent || 0}% Margin`;
+
   const sessCashEl = document.getElementById('breakdown-session-cash');
   const sessCardEl = document.getElementById('breakdown-session-card');
   const barCashEl = document.getElementById('breakdown-bar-cash');
@@ -1656,6 +1675,189 @@ async function handleDeleteExpense(id) {
     }
   } catch (err) {
     console.error("Delete expense error:", err);
+  }
+}
+
+// Restock Modal & StockSupply Functions
+function openRestockModal(productId = null) {
+  const modal = document.getElementById('modal-restock');
+  const select = document.getElementById('restock-product-select');
+  const nameInput = document.getElementById('restock-product-name');
+  const costInput = document.getElementById('restock-cost-price');
+  const priceInput = document.getElementById('restock-selling-price');
+
+  if (!modal || !select) return;
+
+  select.innerHTML = `
+    <option value="">➕ Yangi Mahsulot Nomi Qo'lda Kiritish</option>
+    ${cachedProducts.map(p => `<option value="${p.id}" ${productId === p.id ? 'selected' : ''}>${p.name} (Tannarx: ${formatMoney(p.cost_price || 0)} | Sotish: ${formatMoney(p.price)})</option>`).join('')}
+  `;
+
+  if (productId) {
+    select.value = productId;
+    onRestockProductSelect();
+  } else {
+    nameInput.value = '';
+    nameInput.readOnly = false;
+    costInput.value = '5000';
+    priceInput.value = '8000';
+    updateRestockCalc();
+  }
+
+  modal.classList.remove('hidden');
+}
+
+function closeRestockModal() {
+  const modal = document.getElementById('modal-restock');
+  if (modal) modal.classList.add('hidden');
+}
+
+function onRestockProductSelect() {
+  const select = document.getElementById('restock-product-select');
+  const nameInput = document.getElementById('restock-product-name');
+  const costInput = document.getElementById('restock-cost-price');
+  const priceInput = document.getElementById('restock-selling-price');
+
+  if (!select || !nameInput) return;
+
+  const productId = select.value;
+  if (!productId) {
+    nameInput.value = '';
+    nameInput.readOnly = false;
+    nameInput.focus();
+    return;
+  }
+
+  const p = cachedProducts.find(prod => prod.id == productId);
+  if (p) {
+    nameInput.value = p.name;
+    nameInput.readOnly = true;
+    costInput.value = p.cost_price || 0;
+    priceInput.value = p.price || 0;
+    updateRestockCalc();
+  }
+}
+
+function updateRestockCalc() {
+  const qty = parseInt(document.getElementById('restock-quantity')?.value) || 0;
+  const costPrice = parseFloat(document.getElementById('restock-cost-price')?.value) || 0;
+  const sellingPrice = parseFloat(document.getElementById('restock-selling-price')?.value) || 0;
+
+  const totalCost = qty * costPrice;
+  const unitProfit = sellingPrice - costPrice;
+
+  const totalCostEl = document.getElementById('restock-calc-total-cost');
+  const unitProfitEl = document.getElementById('restock-calc-unit-profit');
+
+  if (totalCostEl) totalCostEl.textContent = formatMoney(totalCost);
+  if (unitProfitEl) unitProfitEl.textContent = formatMoney(unitProfit);
+}
+
+async function handleRestockSubmit(e) {
+  e.preventDefault();
+
+  const productId = document.getElementById('restock-product-select')?.value || null;
+  const productName = document.getElementById('restock-product-name')?.value || '';
+  const quantity = parseInt(document.getElementById('restock-quantity')?.value) || 1;
+  const costPrice = parseFloat(document.getElementById('restock-cost-price')?.value) || 0;
+  const sellingPrice = parseFloat(document.getElementById('restock-selling-price')?.value) || 0;
+  const paymentMethod = document.getElementById('restock-payment-method')?.value || 'CASH';
+  const supplierNote = document.getElementById('restock-supplier-note')?.value || '';
+  const submitBtn = document.getElementById('restock-submit-btn');
+
+  if (!productName) {
+    alert("Iltimos, mahsulot nomini kiriting!");
+    return;
+  }
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerText = "SAQLANMOQDA...";
+  }
+
+  try {
+    const res = await fetch('/api/stock-supplies/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        product_id: productId,
+        product_name: productName,
+        quantity: quantity,
+        cost_price: costPrice,
+        selling_price: sellingPrice,
+        payment_method: paymentMethod,
+        supplier_note: supplierNote
+      })
+    });
+
+    if (res.ok) {
+      playSound('add');
+      closeRestockModal();
+      productsCacheHTML();
+      fetchAnalytics();
+      fetchFinanceData();
+      alert(`Kirim muvaffaqiyatli saqlandi! (${quantity}x ${productName} - Jami: ${formatMoney(quantity * costPrice)})`);
+    } else {
+      const errData = await res.json();
+      alert(errData.error || "Kirimni saqlashda xatolik!");
+    }
+  } catch (err) {
+    console.error("Restock submit error:", err);
+    alert("Kirimni saqlashda xatolik yuz berdi!");
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerText = "KIRIMNI SAQLASH";
+    }
+  }
+}
+
+function openStockHistoryModal() {
+  const modal = document.getElementById('modal-stock-history');
+  if (modal) {
+    modal.classList.remove('hidden');
+    fetchStockHistory();
+  }
+}
+
+function closeStockHistoryModal() {
+  const modal = document.getElementById('modal-stock-history');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function fetchStockHistory() {
+  const tbody = document.getElementById('stock-history-table-body');
+  if (!tbody) return;
+
+  tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-xs text-slate-500">Yuklanmoqda...</td></tr>`;
+
+  try {
+    const res = await fetch('/api/stock-supplies/');
+    if (res.ok) {
+      const supplies = await res.json();
+      if (supplies.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-xs text-slate-500">Kirimlar tarixi yo'q</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = supplies.map(s => `
+        <tr class="border-b border-slate-800 hover:bg-slate-900/50 transition-colors">
+          <td class="py-2.5 px-3 text-slate-400 font-mono">${new Date(s.created_at).toLocaleString('uz-UZ')}</td>
+          <td class="py-2.5 px-3 font-bold text-white">${s.product_name}</td>
+          <td class="py-2.5 px-3 font-mono text-cyan-400 font-bold">+${s.quantity} ta</td>
+          <td class="py-2.5 px-3 font-mono text-amber-400">${formatMoney(s.cost_price)}</td>
+          <td class="py-2.5 px-3 font-mono text-emerald-400">${formatMoney(s.selling_price)}</td>
+          <td class="py-2.5 px-3 font-mono text-rose-400 font-bold">${formatMoney(s.total_cost)}</td>
+          <td class="py-2.5 px-3">
+            ${s.payment_method === 'CASH' ?
+              '<span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold">💵 Naqd</span>' :
+              '<span class="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-bold">💳 Plastik</span>'}
+          </td>
+        </tr>
+      `).join('');
+    }
+  } catch (err) {
+    console.error("Stock history fetch error:", err);
   }
 }
 

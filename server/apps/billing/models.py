@@ -100,7 +100,8 @@ class Category(models.Model):
 
 class Product(models.Model):
     name = models.CharField(max_length=100)
-    price = models.DecimalField(max_digits=12, decimal_places=2)
+    cost_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Tannarx / Olish narxi")
+    price = models.DecimalField(max_digits=12, decimal_places=2, help_text="Sotish narxi")
     stock = models.IntegerField(default=0)
     image = models.CharField(max_length=255, default='https://images.unsplash.com/photo-1541592106381-b31e9677c0e5?w=200&q=80')
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
@@ -108,7 +109,21 @@ class Product(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.name} - {self.price:,.0f} UZS (Stock: {self.stock})"
+        return f"{self.name} - Sotish: {self.price:,.0f} UZS | Tannarx: {self.cost_price:,.0f} UZS (Stock: {self.stock})"
+
+class StockSupply(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True, blank=True, related_name='stock_supplies')
+    product_name = models.CharField(max_length=150)
+    quantity = models.IntegerField(default=1)
+    cost_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    selling_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    total_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    payment_method = models.CharField(max_length=10, choices=PAYMENT_METHOD_CHOICES, default='CASH')
+    supplier_note = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Kirim: {self.quantity}x {self.product_name} @ {self.cost_price:,.0f} UZS ({self.get_payment_method_display()}) - Jami: {self.total_cost:,.0f} UZS"
 
 class Order(models.Model):
     STATUS_CHOICES = [

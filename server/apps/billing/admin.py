@@ -1,5 +1,11 @@
 from django.contrib import admin
-from .models import Computer, Session, Tariff, Category, Product, Order, OrderItem, Expense, Game
+from .models import Computer, Session, Tariff, Category, Product, Order, OrderItem, Expense, Game, StockSupply
+
+@admin.register(StockSupply)
+class StockSupplyAdmin(admin.ModelAdmin):
+    list_display = ('id', 'product_name', 'quantity', 'cost_price', 'selling_price', 'total_cost', 'payment_method', 'created_at')
+    list_filter = ('payment_method',)
+    search_fields = ('product_name', 'supplier_note')
 
 @admin.register(Game)
 class GameAdmin(admin.ModelAdmin):

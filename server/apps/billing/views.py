@@ -10,11 +10,11 @@ from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .models import Computer, Tariff, Session, Category, Product, Order, OrderItem, Expense, Game
+from .models import Computer, Tariff, Session, Category, Product, Order, OrderItem, Expense, Game, StockSupply
 from .serializers import (
     ComputerSerializer, TariffSerializer, SessionSerializer,
     CategorySerializer, ProductSerializer, OrderSerializer, OrderItemSerializer, ExpenseSerializer,
-    GameSerializer
+    GameSerializer, StockSupplySerializer
 )
 from .consumers import notify_pc_status_change, notify_bar_order_change
 
@@ -167,48 +167,63 @@ class ComputerViewSet(viewsets.ModelViewSet):
         pc = self.get_object()
         now = timezone.now()
         active_session = Session.objects.filter(computer=pc, is_active=True).first()
+        if not active_session:
+            active_session = Session.objects.filter(computer=pc).order_by('-start_time').first()
+
+        start_time = active_session.start_time if (active_session and active_session.start_time) else pc.session_start_time
+        tariff = (active_session.tariff if active_session else None) or pc.current_tariff or Tariff.objects.first()
+        tariff_name = tariff.name if tariff else "Standard"
 
         duration_minutes = 0
         time_price = 0.0
-        tariff_name = "Standard"
 
-        if active_session:
-            tariff = pc.current_tariff or active_session.tariff or Tariff.objects.first()
-            if tariff:
-                tariff_name = tariff.name
-            if pc.is_open_time and pc.session_start_time:
-                elapsed_seconds = max(0, (now - pc.session_start_time).total_seconds())
-                duration_minutes = int(round(elapsed_seconds / 60.0))
-                price_per_min = (tariff.get_effective_price_per_hour() / 60.0) if tariff else 200.0
-                time_price = round(price_per_min * duration_minutes)
+        if pc.is_open_time and start_time:
+            elapsed_seconds = max(0, (now - start_time).total_seconds())
+            duration_minutes = int(round(elapsed_seconds / 60.0))
+            price_per_min = (tariff.get_effective_price_per_hour() / 60.0) if tariff else 200.0
+            time_price = round(price_per_min * duration_minutes)
+        elif active_session and active_session.duration_minutes > 0:
+            duration_minutes = active_session.duration_minutes
+            time_price = float(active_session.total_price)
+        elif start_time:
+            if pc.session_end_time:
+                duration_minutes = int(round(max(0, (pc.session_end_time - start_time).total_seconds()) / 60.0))
             else:
-                duration_minutes = active_session.duration_minutes
-                time_price = float(active_session.total_price)
-        elif pc.current_tariff:
-            tariff_name = pc.current_tariff.name
+                duration_minutes = int(round(max(0, (now - start_time).total_seconds()) / 60.0))
+            price_per_min = (tariff.get_effective_price_per_hour() / 60.0) if tariff else 200.0
+            time_price = round(price_per_min * duration_minutes)
 
         bar_items = []
         bar_total_price = 0.0
 
-        if active_session and active_session.start_time:
-            orders = Order.objects.filter(computer=pc, created_at__gte=active_session.start_time).exclude(status='CANCELLED')
-            items_map = {}
-            for order in orders:
-                for item in order.items.all():
-                    p_id = item.product.id
-                    if p_id not in items_map:
-                        items_map[p_id] = {
-                            'id': p_id,
-                            'product_name': item.product.name,
-                            'quantity': 0,
-                            'unit_price': float(item.unit_price),
-                            'total_price': 0.0
-                        }
-                    items_map[p_id]['quantity'] += item.quantity
-                    item_cost = float(item.unit_price * item.quantity)
-                    items_map[p_id]['total_price'] += item_cost
-                    bar_total_price += item_cost
-            bar_items = list(items_map.values())
+        if start_time:
+            orders = Order.objects.filter(
+                computer=pc,
+                created_at__gte=start_time - timedelta(seconds=30)
+            ).exclude(status='CANCELLED')
+        else:
+            orders = Order.objects.filter(
+                computer=pc,
+                status__in=['PENDING', 'APPROVED', 'DELIVERED']
+            ).exclude(status='CANCELLED')
+
+        items_map = {}
+        for order in orders:
+            for item in order.items.all():
+                p_id = item.product.id
+                if p_id not in items_map:
+                    items_map[p_id] = {
+                        'id': p_id,
+                        'product_name': item.product.name,
+                        'quantity': 0,
+                        'unit_price': float(item.unit_price),
+                        'total_price': 0.0
+                    }
+                items_map[p_id]['quantity'] += item.quantity
+                item_cost = float(item.unit_price * item.quantity)
+                items_map[p_id]['total_price'] += item_cost
+                bar_total_price += item_cost
+        bar_items = list(items_map.values())
 
         grand_total = time_price + bar_total_price
         payment_method = active_session.payment_method if active_session else 'CASH'
@@ -218,7 +233,7 @@ class ComputerViewSet(viewsets.ModelViewSet):
             'computer_name': pc.name,
             'zone': pc.zone,
             'is_open_time': pc.is_open_time,
-            'session_start_time': pc.session_start_time.isoformat() if pc.session_start_time else None,
+            'session_start_time': start_time.isoformat() if start_time else None,
             'duration_minutes': duration_minutes,
             'tariff_name': tariff_name,
             'time_price': time_price,
@@ -235,27 +250,61 @@ class ComputerViewSet(viewsets.ModelViewSet):
         payment_method = request.data.get('payment_method', 'CASH')
 
         active_session = Session.objects.filter(computer=pc, is_active=True).first()
+        if not active_session:
+            active_session = Session.objects.filter(computer=pc).order_by('-start_time').first()
+
+        start_time = active_session.start_time if (active_session and active_session.start_time) else pc.session_start_time
+        tariff = (active_session.tariff if active_session else None) or pc.current_tariff or Tariff.objects.first()
+
+        duration_minutes = 0
+        time_price = 0.0
+
+        if pc.is_open_time and start_time:
+            elapsed_seconds = max(0, (now - start_time).total_seconds())
+            duration_minutes = int(round(elapsed_seconds / 60.0))
+            price_per_min = (tariff.get_effective_price_per_hour() / 60.0) if tariff else 200.0
+            time_price = round(price_per_min * duration_minutes)
+        elif active_session and active_session.duration_minutes > 0:
+            duration_minutes = active_session.duration_minutes
+            time_price = float(active_session.total_price)
+        elif start_time:
+            if pc.session_end_time:
+                duration_minutes = int(round(max(0, (pc.session_end_time - start_time).total_seconds()) / 60.0))
+            else:
+                duration_minutes = int(round(max(0, (now - start_time).total_seconds()) / 60.0))
+            price_per_min = (tariff.get_effective_price_per_hour() / 60.0) if tariff else 200.0
+            time_price = round(price_per_min * duration_minutes)
+
         if active_session:
-            if pc.is_open_time and pc.session_start_time:
-                elapsed_seconds = max(0, (now - pc.session_start_time).total_seconds())
-                duration_minutes = int(round(elapsed_seconds / 60.0))
-                tariff = pc.current_tariff or active_session.tariff or Tariff.objects.first()
-                price_per_min = (tariff.get_effective_price_per_hour() / 60.0) if tariff else 200.0
-                total_price = round(price_per_min * duration_minutes)
-                active_session.duration_minutes = duration_minutes
-                active_session.total_price = total_price
-            
+            active_session.duration_minutes = duration_minutes
+            active_session.total_price = time_price
             active_session.payment_method = payment_method
             active_session.end_time = now
             active_session.is_active = False
             active_session.save()
+        else:
+            Session.objects.create(
+                computer=pc,
+                tariff=tariff,
+                is_open_time=pc.is_open_time,
+                start_time=start_time or now,
+                end_time=now,
+                duration_minutes=duration_minutes,
+                total_price=time_price,
+                payment_method=payment_method,
+                is_active=False
+            )
 
-            session_orders = Order.objects.filter(computer=pc, created_at__gte=active_session.start_time).exclude(status='CANCELLED')
-            for order in session_orders:
-                order.payment_method = payment_method
-                if order.status == 'PENDING':
-                    order.status = 'DELIVERED'
-                order.save()
+        if start_time:
+            session_orders = Order.objects.filter(computer=pc, created_at__gte=start_time - timedelta(seconds=30)).exclude(status='CANCELLED')
+        else:
+            session_orders = Order.objects.filter(computer=pc).exclude(status='CANCELLED')
+
+        for order in session_orders:
+            order.payment_method = payment_method
+            if order.status == 'PENDING':
+                order.status = 'DELIVERED'
+            order.save()
 
         pc.status = 'LOCKED'
         pc.is_open_time = False
@@ -526,9 +575,14 @@ class OrderViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def analytics(self, request):
         valid_orders = Order.objects.filter(status__in=['APPROVED', 'DELIVERED'])
-        total_revenue = valid_orders.aggregate(Sum('total_price'))['total_price__sum'] or 0.00
+        total_revenue = float(valid_orders.aggregate(Sum('total_price'))['total_price__sum'] or 0.00)
         total_orders_count = Order.objects.count()
         pending_orders_count = Order.objects.filter(status='PENDING').count()
+
+        bar_cogs = float(OrderItem.objects.filter(order__status__in=['APPROVED', 'DELIVERED']).aggregate(
+            total_cogs=Sum(F('quantity') * F('product__cost_price'))
+        )['total_cogs'] or 0.00)
+        bar_gross_profit = total_revenue - bar_cogs
 
         low_stock_products = Product.objects.filter(stock__lt=5).order_by('stock')
         low_stock_serializer = ProductSerializer(low_stock_products, many=True)
@@ -543,6 +597,8 @@ class OrderViewSet(viewsets.ModelViewSet):
 
         return Response({
             'total_revenue': total_revenue,
+            'bar_cogs': bar_cogs,
+            'bar_gross_profit': bar_gross_profit,
             'total_orders_count': total_orders_count,
             'pending_orders_count': pending_orders_count,
             'low_stock_count': low_stock_products.count(),
@@ -550,6 +606,67 @@ class OrderViewSet(viewsets.ModelViewSet):
             'inventory': inventory_serializer.data,
             'top_selling': list(top_selling_items)
         }, status=status.HTTP_200_OK)
+
+
+class StockSupplyViewSet(viewsets.ModelViewSet):
+    queryset = StockSupply.objects.all().order_by('-created_at')
+    serializer_class = StockSupplySerializer
+
+    def create(self, request, *args, **kwargs):
+        product_id = request.data.get('product_id')
+        product_name = request.data.get('product_name', '').strip()
+        quantity = int(request.data.get('quantity', 1))
+        cost_price = float(request.data.get('cost_price', 0.0))
+        selling_price = float(request.data.get('selling_price', 0.0))
+        payment_method = request.data.get('payment_method', 'CASH')
+        supplier_note = request.data.get('supplier_note', '').strip()
+
+        total_cost = float(quantity * cost_price)
+
+        product = None
+        if product_id:
+            product = Product.objects.filter(id=product_id).first()
+        if not product and product_name:
+            product = Product.objects.filter(name__iexact=product_name).first()
+
+        if not product:
+            product = Product.objects.create(
+                name=product_name or "Yangi Tovar",
+                cost_price=cost_price,
+                price=selling_price,
+                stock=quantity,
+                is_available=True
+            )
+        else:
+            product.stock += quantity
+            if cost_price > 0:
+                product.cost_price = cost_price
+            if selling_price > 0:
+                product.price = selling_price
+            product.save()
+
+        supply = StockSupply.objects.create(
+            product=product,
+            product_name=product.name,
+            quantity=quantity,
+            cost_price=cost_price,
+            selling_price=selling_price,
+            total_cost=total_cost,
+            payment_method=payment_method,
+            supplier_note=supplier_note
+        )
+
+        note_str = f" ({supplier_note})" if supplier_note else ""
+        Expense.objects.create(
+            amount=total_cost,
+            payment_method=payment_method,
+            category='Tovar Kirimi',
+            recipient_name=supplier_note or product.name,
+            description=f"{quantity}x {product.name} kirim qilindi (@ {cost_price:,.0f} UZS){note_str}"
+        )
+
+        serializer = self.get_serializer(supply)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class ExpenseViewSet(viewsets.ModelViewSet):
@@ -591,6 +708,13 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         orders_qs = Order.objects.filter(status__in=['APPROVED', 'DELIVERED'], created_at__range=(start_dt, end_dt))
         bar_cash = float(orders_qs.filter(payment_method='CASH').aggregate(Sum('total_price'))['total_price__sum'] or 0.0)
         bar_card = float(orders_qs.filter(payment_method='CARD').aggregate(Sum('total_price'))['total_price__sum'] or 0.0)
+        total_bar = bar_cash + bar_card
+
+        bar_cogs = float(OrderItem.objects.filter(order__in=orders_qs).aggregate(
+            total_cogs=Sum(F('quantity') * F('product__cost_price'))
+        )['total_cogs'] or 0.0)
+        bar_margin = total_bar - bar_cogs
+        bar_margin_percent = round((bar_margin / total_bar * 100), 1) if total_bar > 0 else 0.0
 
         expenses_qs = Expense.objects.filter(created_at__range=(start_dt, end_dt)).order_by('-created_at')
         expense_cash = float(expenses_qs.filter(payment_method='CASH').aggregate(Sum('amount'))['amount__sum'] or 0.0)
@@ -613,7 +737,10 @@ class ExpenseViewSet(viewsets.ModelViewSet):
             'bar_cash': bar_cash,
             'bar_card': bar_card,
             'total_session': session_cash + session_card,
-            'total_bar': bar_cash + bar_card,
+            'total_bar': total_bar,
+            'bar_cogs': bar_cogs,
+            'bar_margin': bar_margin,
+            'bar_margin_percent': bar_margin_percent,
             'expense_cash': expense_cash,
             'expense_card': expense_card,
             'total_expenses': total_expenses,

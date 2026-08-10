@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.utils import timezone
-from .models import Computer, Tariff, Session, Category, Product, Order, OrderItem, Expense, Game
+from .models import Computer, Tariff, Session, Category, Product, Order, OrderItem, Expense, Game, StockSupply
 
 class TariffSerializer(serializers.ModelSerializer):
     effective_price_per_hour = serializers.SerializerMethodField()
@@ -52,7 +52,7 @@ class ProductSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Product
-        fields = ['id', 'name', 'price', 'stock', 'image', 'category', 'category_name', 'is_available', 'created_at']
+        fields = ['id', 'name', 'cost_price', 'price', 'stock', 'image', 'category', 'category_name', 'is_available', 'created_at']
 
 class OrderItemSerializer(serializers.ModelSerializer):
     product_name = serializers.ReadOnlyField(source='product.name')
@@ -84,6 +84,14 @@ class GameSerializer(serializers.ModelSerializer):
     class Meta:
         model = Game
         fields = '__all__'
+
+class StockSupplySerializer(serializers.ModelSerializer):
+    payment_method_display = serializers.CharField(source='get_payment_method_display', read_only=True)
+
+    class Meta:
+        model = StockSupply
+        fields = '__all__'
+
 
 
 

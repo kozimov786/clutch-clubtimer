@@ -35,7 +35,7 @@
       </div>
 
       <!-- Right Header Actions -->
-      <div class="flex items-center gap-5">
+      <div class="flex items-center gap-3">
         
         <!-- Live WS Status Badge -->
         <div id="ws-status-badge" class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 border border-slate-800">
@@ -54,12 +54,19 @@
           <!-- Populated by JS -->
         </div>
 
-        <!-- Global Emergency Lock -->
-        <button onclick="emergencyLockAll()" class="glow-btn-rose py-2 px-3.5 rounded-xl text-xs flex items-center gap-2">
+        <!-- Global Emergency Lock (desktop) -->
+        <button onclick="emergencyLockAll()" class="hidden md:flex glow-btn-rose py-2 px-3.5 rounded-xl text-xs items-center gap-2">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
           </svg>
-          <span class="hidden sm:inline font-bold">EMERGENCY LOCK</span>
+          <span class="font-bold">EMERGENCY LOCK</span>
+        </button>
+
+        <!-- Hamburger Menu (mobile only) -->
+        <button id="mobile-menu-btn" onclick="openMobileNav()" aria-label="Navigation menu">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
         </button>
 
       </div>
@@ -67,8 +74,8 @@
     </div>
   </header>
 
-  <!-- Navigation Tabs Bar -->
-  <nav class="bg-slate-950/60 border-b border-slate-800/80 px-6 py-2 overflow-x-auto">
+  <!-- Navigation Tabs Bar (DESKTOP) -->
+  <nav class="desktop-nav bg-slate-950/60 border-b border-slate-800/80 px-6 py-2 overflow-x-auto">
     <div class="max-w-7xl mx-auto flex items-center gap-2 whitespace-nowrap min-w-max">
       <button onclick="switchTab('grid')" data-tab="grid" class="main-nav-btn px-4 py-2 rounded-xl text-xs font-bold border border-transparent transition-all flex items-center gap-2 nav-tab-active shrink-0">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
@@ -99,11 +106,102 @@
     </div>
   </nav>
 
+  <!-- ===== MOBILE NAV OVERLAY (backdrop) ===== -->
+  <div id="mobile-nav-overlay" onclick="closeMobileNav()"></div>
+
+  <!-- ===== MOBILE NAV DRAWER ===== -->
+  <div id="mobile-nav-drawer" role="dialog" aria-label="Navigation Menu">
+    <!-- Drawer Header -->
+    <div class="mobile-nav-header">
+      <div class="flex items-center gap-3">
+        <div class="h-9 w-9 rounded-xl bg-slate-950 border border-cyan-500/40 overflow-hidden flex items-center justify-center">
+          <img src="{% static 'images/logo.jpg' %}" alt="Logo" class="h-full w-full object-contain">
+        </div>
+        <div>
+          <div class="text-sm font-black font-orbitron text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-rose-400">CLUTCH ZONE</div>
+          <div class="text-[10px] text-cyan-400/70 font-mono">BILLING SYSTEM</div>
+        </div>
+      </div>
+      <button onclick="closeMobileNav()" class="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 flex items-center justify-center">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <!-- Nav Items -->
+    <button onclick="mobileSwitchTab('grid')" data-mobile-tab="grid" class="mobile-nav-drawer-btn mobile-nav-active" id="mnav-grid">
+      <span class="mobile-nav-icon text-cyan-400">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+      </span>
+      <div>
+        <div class="font-bold text-sm">Stations Grid</div>
+        <div class="text-[11px] text-slate-500 font-normal">40 PC boshqaruvi</div>
+      </div>
+    </button>
+
+    <button onclick="mobileSwitchTab('tariffs')" data-mobile-tab="tariffs" class="mobile-nav-drawer-btn" id="mnav-tariffs">
+      <span class="mobile-nav-icon text-sky-400">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      </span>
+      <div>
+        <div class="font-bold text-sm">Tariflar va Narxlar</div>
+        <div class="text-[11px] text-slate-500 font-normal">Tarif rejalarini boshqarish</div>
+      </div>
+    </button>
+
+    <button onclick="mobileSwitchTab('sessions')" data-mobile-tab="sessions" class="mobile-nav-drawer-btn" id="mnav-sessions">
+      <span class="mobile-nav-icon text-slate-400">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+      </span>
+      <div>
+        <div class="font-bold text-sm">Seanslar Tarixi</div>
+        <div class="text-[11px] text-slate-500 font-normal">O'tgan seanslar jurnali</div>
+      </div>
+    </button>
+
+    <button onclick="mobileSwitchTab('bar')" data-mobile-tab="bar" class="mobile-nav-drawer-btn" id="mnav-bar">
+      <span class="mobile-nav-icon text-purple-400">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 01-2-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+      </span>
+      <div class="flex-1">
+        <div class="font-bold text-sm flex items-center gap-2">Bar & Buyurtmalar <span id="mnav-bar-badge" class="hidden px-2 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-mono font-black">0</span></div>
+        <div class="text-[11px] text-slate-500 font-normal">POS terminal va buyurtmalar</div>
+      </div>
+    </button>
+
+    <button onclick="mobileSwitchTab('analytics')" data-mobile-tab="analytics" class="mobile-nav-drawer-btn" id="mnav-analytics">
+      <span class="mobile-nav-icon text-emerald-400">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      </span>
+      <div>
+        <div class="font-bold text-sm">Ombor & Hisobot</div>
+        <div class="text-[11px] text-slate-500 font-normal">Inventar va analitika</div>
+      </div>
+    </button>
+
+    <button onclick="mobileSwitchTab('finance')" data-mobile-tab="finance" class="mobile-nav-drawer-btn" id="mnav-finance">
+      <span class="mobile-nav-icon text-amber-400">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      </span>
+      <div>
+        <div class="font-bold text-sm">Kassa & Cashflow</div>
+        <div class="text-[11px] text-slate-500 font-normal">Moliya va chiqimlar nazorati</div>
+      </div>
+    </button>
+
+    <!-- Emergency lock in drawer -->
+    <div class="p-4 border-t border-slate-800/80">
+      <button onclick="emergencyLockAll(); closeMobileNav();" class="w-full py-3.5 rounded-xl glow-btn-rose text-xs font-bold flex items-center justify-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+        EMERGENCY LOCK — Barcha PC yoping
+      </button>
+    </div>
+  </div>
+
   <!-- Main Content Layout -->
   <main class="max-w-7xl mx-auto px-6 py-6">
 
     <!-- Key Metrics Cards -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
+    <div class="mobile-2col-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
       
       <!-- Total Stations -->
       <div class="glass-panel p-4 rounded-2xl flex items-center justify-between border-l-4 border-l-cyan-500 min-w-0">
@@ -155,27 +253,27 @@
     <div id="tab-view-grid" class="space-y-6">
       
       <!-- Zone & Filter Control Toolbar -->
-      <div class="glass-panel p-4 rounded-2xl flex flex-wrap items-center justify-between gap-4">
+      <div class="glass-panel p-4 rounded-2xl zone-toolbar flex flex-wrap items-center justify-between gap-4">
         
         <!-- Zone Navigation Buttons -->
-        <div class="flex items-center flex-wrap gap-2">
-          <button onclick="filterZone('ALL')" data-zone="ALL" class="zone-btn px-4 py-2 rounded-xl text-xs font-bold border transition-all nav-tab-active">Hamma Xonalar (40 PC)</button>
-          <button onclick="filterZone('1-VIP Zone')" data-zone="1-VIP Zone" class="zone-btn px-4 py-2 rounded-xl text-xs font-bold border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white transition-all">👑 1-VIP Zone (10 PC)</button>
-          <button onclick="filterZone('2-VIP Zone')" data-zone="2-VIP Zone" class="zone-btn px-4 py-2 rounded-xl text-xs font-bold border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white transition-all">👑 2-VIP Zone (10 PC)</button>
-          <button onclick="filterZone('Main Zone')" data-zone="Main Zone" class="zone-btn px-4 py-2 rounded-xl text-xs font-bold border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white transition-all">⚡ Main Zone (10 PC)</button>
-          <button onclick="filterZone('Standard Zone')" data-zone="Standard Zone" class="zone-btn px-4 py-2 rounded-xl text-xs font-bold border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white transition-all">🎮 Standard Zone (10 PC)</button>
+        <div class="zone-filter-row flex items-center flex-wrap gap-2 w-full lg:w-auto">
+          <button onclick="filterZone('ALL')" data-zone="ALL" class="zone-btn px-4 py-2 rounded-xl text-xs font-bold border transition-all nav-tab-active shrink-0">Hamma (40 PC)</button>
+          <button onclick="filterZone('1-VIP Zone')" data-zone="1-VIP Zone" class="zone-btn px-4 py-2 rounded-xl text-xs font-bold border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white transition-all shrink-0">👑 1-VIP Zone</button>
+          <button onclick="filterZone('2-VIP Zone')" data-zone="2-VIP Zone" class="zone-btn px-4 py-2 rounded-xl text-xs font-bold border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white transition-all shrink-0">👑 2-VIP Zone</button>
+          <button onclick="filterZone('Main Zone')" data-zone="Main Zone" class="zone-btn px-4 py-2 rounded-xl text-xs font-bold border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white transition-all shrink-0">⚡ Main Zone</button>
+          <button onclick="filterZone('Standard Zone')" data-zone="Standard Zone" class="zone-btn px-4 py-2 rounded-xl text-xs font-bold border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white transition-all shrink-0">🎮 Standard Zone</button>
         </div>
 
         <!-- Status Filter & Search -->
-        <div class="flex items-center gap-3">
+        <div class="status-filter-block flex flex-wrap items-center gap-3 w-full lg:w-auto">
           <div class="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
             <button onclick="filterStatus('ALL')" data-status="ALL" class="status-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 transition-all">Barchasi</button>
             <button onclick="filterStatus('ACTIVE')" data-status="ACTIVE" class="status-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-slate-400 hover:text-white border border-slate-800 transition-all">Band</button>
             <button onclick="filterStatus('LOCKED')" data-status="LOCKED" class="status-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-slate-400 hover:text-white border border-slate-800 transition-all">Bo'sh</button>
           </div>
 
-          <div class="relative">
-            <input type="text" oninput="handleSearch(this.value)" placeholder="Qidiruv (masalan: PC-05)..." class="bg-slate-900/90 border border-slate-800 rounded-xl px-3.5 py-2 pl-9 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-mono w-48">
+          <div class="relative flex-1 lg:flex-none">
+            <input type="text" oninput="handleSearch(this.value)" placeholder="Qidiruv: PC-05..." class="bg-slate-900/90 border border-slate-800 rounded-xl px-3.5 py-2 pl-9 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-mono w-full lg:w-48">
             <svg class="w-4 h-4 text-slate-500 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
           </div>
         </div>
@@ -627,8 +725,8 @@
 
 
   <!-- Admin Login Modal -->
-  <div id="login-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
-    <div class="glass-panel w-full max-w-md rounded-2xl p-8 relative border border-slate-700 shadow-2xl">
+  <div id="login-modal" class="modal-wrapper fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="modal-sheet-inner glass-panel w-full max-w-md rounded-2xl p-8 relative border border-slate-700 shadow-2xl">
       
       <div class="text-center mb-6">
         <div class="w-16 h-16 mx-auto rounded-2xl bg-slate-950 border border-cyan-500/40 p-1.5 shadow-xl shadow-cyan-500/30 mb-3 flex items-center justify-center">
@@ -665,8 +763,8 @@
   </div>
 
   <!-- Start Session Modal (With VIP Open Time Presets) -->
-  <div id="start-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
-    <div class="glass-panel w-full max-w-lg rounded-2xl p-6 relative border border-slate-700 shadow-2xl">
+  <div id="start-modal" class="modal-wrapper fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="modal-sheet-inner glass-panel w-full max-w-lg rounded-2xl p-6 relative border border-slate-700 shadow-2xl">
       <div class="flex items-center justify-between pb-4 border-b border-slate-800">
         <h3 class="text-xl font-bold font-orbitron text-white">Seans Boshlash - <span id="start-pc-title" class="text-cyan-400">PC-01</span></h3>
         <button onclick="closeStartModal()" class="text-slate-400 hover:text-white">
@@ -776,8 +874,8 @@
   </div>
 
   <!-- Add Time Modal -->
-  <div id="add-time-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
-    <div class="glass-panel w-full max-w-md rounded-2xl p-6 relative border border-slate-700 shadow-2xl">
+  <div id="add-time-modal" class="modal-wrapper fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="modal-sheet-inner glass-panel w-full max-w-md rounded-2xl p-6 relative border border-slate-700 shadow-2xl">
       <div class="flex items-center justify-between pb-4 border-b border-slate-800">
         <h3 class="text-xl font-bold font-orbitron text-white">Vaqt Qo'shish - <span id="add-pc-title" class="text-emerald-400">PC-01</span></h3>
         <button onclick="closeAddTimeModal()" class="text-slate-400 hover:text-white">
@@ -810,8 +908,8 @@
   </div>
 
   <!-- Session Finish & Invoice Summary Modal (Yekuniy Chek) -->
-  <div id="finish-session-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
-    <div class="glass-panel w-full max-w-lg rounded-2xl p-6 relative border border-slate-700 shadow-2xl overflow-hidden">
+  <div id="finish-session-modal" class="modal-wrapper fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="modal-sheet-inner glass-panel w-full max-w-lg rounded-2xl p-6 relative border border-slate-700 shadow-2xl overflow-hidden">
       <!-- Header -->
       <div class="flex items-center justify-between pb-4 border-b border-slate-800">
         <div class="flex items-center gap-3">
@@ -918,8 +1016,8 @@
   </div>
 
   <!-- Write-off / Internal Expense Modal (Spisaniye / Ichki Rasxod) -->
-  <div id="spisaniye-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
-    <div class="glass-panel w-full max-w-md rounded-2xl p-6 relative border border-slate-700 shadow-2xl">
+  <div id="spisaniye-modal" class="modal-wrapper fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="modal-sheet-inner glass-panel w-full max-w-md rounded-2xl p-6 relative border border-slate-700 shadow-2xl">
       <div class="flex items-center justify-between pb-4 border-b border-slate-800">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold">
@@ -978,8 +1076,8 @@
   </div>
 
   <!-- Restock Modal (Yangi Tovar Kirim Qilish) -->
-  <div id="modal-restock" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
-    <div class="glass-panel w-full max-w-lg rounded-2xl p-6 relative border border-slate-700 shadow-2xl overflow-hidden">
+  <div id="modal-restock" class="modal-wrapper fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="modal-sheet-inner glass-panel w-full max-w-lg rounded-2xl p-6 relative border border-slate-700 shadow-2xl overflow-hidden">
       <!-- Header -->
       <div class="flex items-center justify-between pb-4 border-b border-slate-800">
         <div class="flex items-center gap-3">
@@ -1066,8 +1164,8 @@
   </div>
 
   <!-- Stock History Modal (Kirimlar Jurnali) -->
-  <div id="modal-stock-history" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
-    <div class="glass-panel w-full max-w-3xl rounded-2xl p-6 relative border border-slate-700 shadow-2xl overflow-hidden">
+  <div id="modal-stock-history" class="modal-wrapper fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="modal-sheet-inner glass-panel w-full max-w-3xl rounded-2xl p-6 relative border border-slate-700 shadow-2xl overflow-hidden">
       <div class="flex items-center justify-between pb-4 border-b border-slate-800">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400 font-bold">
@@ -1106,5 +1204,98 @@
 
   <!-- Dashboard Script -->
   <script src="{% static 'js/dashboard.js' %}"></script>
+
+  <!-- ===== MOBILE RESPONSIVE SCRIPT ===== -->
+  <script>
+    // ---- Mobile Navigation ----
+    function openMobileNav() {
+      const overlay = document.getElementById('mobile-nav-overlay');
+      const drawer  = document.getElementById('mobile-nav-drawer');
+      overlay.style.display = 'block';
+      drawer.style.display  = 'block';
+      document.body.style.overflow = 'hidden';
+      // Trigger animation
+      requestAnimationFrame(() => {
+        overlay.classList.add('nav-open');
+        drawer.classList.add('nav-open');
+      });
+    }
+
+    function closeMobileNav() {
+      const overlay = document.getElementById('mobile-nav-overlay');
+      const drawer  = document.getElementById('mobile-nav-drawer');
+      overlay.classList.remove('nav-open');
+      drawer.classList.remove('nav-open');
+      document.body.style.overflow = '';
+      setTimeout(() => {
+        overlay.style.display = 'none';
+        drawer.style.display  = 'none';
+      }, 350);
+    }
+
+    // Switch tab from mobile nav drawer
+    function mobileSwitchTab(tab) {
+      // Call the existing switchTab function
+      if (typeof switchTab === 'function') switchTab(tab);
+      // Update active state in mobile drawer
+      document.querySelectorAll('.mobile-nav-drawer-btn').forEach(btn => {
+        btn.classList.remove('mobile-nav-active');
+      });
+      const activeBtn = document.getElementById('mnav-' + tab);
+      if (activeBtn) activeBtn.classList.add('mobile-nav-active');
+      // Close the drawer
+      closeMobileNav();
+    }
+
+    // ---- Sync bar pending badge to mobile drawer ----
+    const _origSyncBarBadge = window.syncBarBadge;
+    function syncMobileBarBadge(count) {
+      const badge = document.getElementById('mnav-bar-badge');
+      if (!badge) return;
+      if (count > 0) {
+        badge.textContent = count;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    }
+
+    // Observe nav-bar-pending-badge changes and mirror to mobile
+    (function() {
+      const desktopBadge = document.getElementById('nav-bar-pending-badge');
+      if (!desktopBadge) return;
+      const observer = new MutationObserver(() => {
+        const hidden = desktopBadge.classList.contains('hidden');
+        const count  = parseInt(desktopBadge.textContent) || 0;
+        syncMobileBarBadge(hidden ? 0 : count);
+      });
+      observer.observe(desktopBadge, { childList: true, attributes: true, attributeFilter: ['class'] });
+    })();
+
+    // ---- PC Grid responsive class injection ----
+    // The JS renders grids with Tailwind sm: classes; we add our custom class
+    // to ensure pure CSS breakpoints work alongside Tailwind's JIT.
+    // We re-class every rendered pc-zone-grid after renderPCGrid runs.
+    (function patchGridRenderer() {
+      const container = document.getElementById('pc-grid-container');
+      if (!container) return;
+      const mo = new MutationObserver(() => {
+        container.querySelectorAll('[class*="grid-cols"]').forEach(el => {
+          if (!el.classList.contains('pc-zone-grid')) {
+            el.classList.add('pc-zone-grid');
+          }
+        });
+      });
+      mo.observe(container, { childList: true, subtree: true });
+    })();
+
+    // ---- Close mobile nav on resize to desktop ----
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 768) {
+        closeMobileNav();
+      }
+    });
+  </script>
+
 </body>
 </html>

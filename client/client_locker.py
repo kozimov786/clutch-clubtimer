@@ -169,6 +169,30 @@ except ImportError as err:
     print("Iltimos, `pip install PyQt6-WebEngine` buyrug'ini bajaring.")
 
 
+# Turli kompyuterlarda PyQt6-WebEngine'ning turli versiyalari o'rnatilgan bo'lishi
+# mumkin (masalan yangi Qt6 versiyalarida Accelerated2DCanvasEnabled kabi eskirgan
+# atributlar olib tashlangan). getattr bilan tekshirib, mavjud bo'lmagan atributni
+# jimgina o'tkazib yuborish — versiya farqi butun ilovani AttributeError bilan
+# yiqitib qo'ymasligi uchun.
+WEBENGINE_ATTRIBUTES = [
+    ('JavascriptEnabled', True),
+    ('LocalStorageEnabled', False),
+    ('LocalContentCanAccessRemoteUrls', True),
+    ('AllowRunningInsecureContent', True),
+    ('ScrollAnimatorEnabled', True),
+    ('Accelerated2DCanvasEnabled', True),
+    ('WebGLEnabled', True),
+    ('ShowScrollBars', False),
+]
+
+
+def _configure_webengine_settings(settings):
+    for name, value in WEBENGINE_ATTRIBUTES:
+        attr = getattr(QWebEngineSettings.WebAttribute, name, None)
+        if attr is not None:
+            settings.setAttribute(attr, value)
+
+
 class PyQtBridge(QObject):
     game_launch_requested = pyqtSignal(str, str, str)
 
@@ -329,14 +353,7 @@ class LockerWindow(FullscreenMixin, QMainWindow):
             profile.clearHttpCache()
 
             settings = profile.settings()
-            settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, False)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.AllowRunningInsecureContent, True)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.ScrollAnimatorEnabled, True)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.Accelerated2DCanvasEnabled, True)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.WebGLEnabled, True)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.ShowScrollBars, False)
+            _configure_webengine_settings(settings)
 
             try:
                 QWebEngineSettings.globalSettings().setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, False)
@@ -424,14 +441,7 @@ class LauncherWindow(FullscreenMixin, QMainWindow):
             profile.clearHttpCache()
 
             settings = profile.settings()
-            settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, False)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.AllowRunningInsecureContent, True)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.ScrollAnimatorEnabled, True)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.Accelerated2DCanvasEnabled, True)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.WebGLEnabled, True)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.ShowScrollBars, False)
+            _configure_webengine_settings(settings)
 
             try:
                 QWebEngineSettings.globalSettings().setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, False)

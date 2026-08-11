@@ -697,12 +697,17 @@ class ProductCard(QFrame):
 
 
 class BarPage(QWidget):
+    # create_order_async'ning on_done callback'i fon oqimidan chaqiriladi —
+    # shu signal orqali natija xavfsiz tarzda GUI oqimiga uzatiladi.
+    _order_result = pyqtSignal(bool, dict)
+
     def __init__(self, api_client, pc_name, parent=None):
         super().__init__(parent)
         self.api_client = api_client
         self.pc_name = pc_name
         self.cart = {}  # product_id -> (product, qty)
         self.setStyleSheet("background-color: #060911;")
+        self._order_result.connect(self._on_order_done)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -780,7 +785,10 @@ class BarPage(QWidget):
             return
         self.order_btn.setEnabled(False)
         self.order_btn.setText("YUBORILMOQDA...")
-        self.api_client.create_order_async(self.pc_name, items, on_done=self._on_order_done)
+        self.api_client.create_order_async(
+            self.pc_name, items,
+            on_done=lambda ok, data: self._order_result.emit(ok, data)
+        )
 
     def _on_order_done(self, ok, data):
         self.order_btn.setText("✅  BUYURTMA BERISH")
@@ -823,6 +831,13 @@ class AchievementsPage(QWidget):
 # ──────────────────────────────────────────────────────────────────────────────
 class LauncherPage(QWidget):
     game_launch_requested = pyqtSignal(dict)
+    # Fon oqimidan (threading.Thread) kelgan natijalarni asosiy GUI oqimiga
+    # xavfsiz uzatish uchun — Qt signal/slot mexanizmi thread'lar orasida
+    # avtomatik ravishda queued-connection ishlatadi, shuning uchun
+    # QTimer.singleShot()'ni fon oqimidan chaqirishdan farqli o'laroq,
+    # bu widget'larni to'g'ridan-to'g'ri noto'g'ri oqimdan o'zgartirmaydi.
+    _games_loaded = pyqtSignal(list)
+    _products_loaded = pyqtSignal(list)
 
     def __init__(self, pc_name, server_url, api_client, fallback_games=None, parent=None):
         super().__init__(parent)
@@ -849,6 +864,9 @@ class LauncherPage(QWidget):
         self.inner_stack.addWidget(self.achievements_page)    # 2
         root.addWidget(self.inner_stack, 1)
 
+        self._games_loaded.connect(self.games_page.set_games)
+        self._products_loaded.connect(self.bar_page.set_products)
+
         footer = QHBoxLayout()
         footer.setContentsMargins(28, 8, 28, 10)
         rules = QLabel("Qoidalar   Yordam")
@@ -874,13 +892,13 @@ class LauncherPage(QWidget):
     def reload_games(self):
         def _fetch():
             games = self.api_client.get_games() or list(self.fallback_games)
-            QTimer.singleShot(0, lambda: self.games_page.set_games(games))
+            self._games_loaded.emit(games)
         threading.Thread(target=_fetch, daemon=True).start()
 
     def reload_products(self):
         def _fetch():
             products = self.api_client.get_products()
-            QTimer.singleShot(0, lambda: self.bar_page.set_products(products))
+            self._products_loaded.emit(products)
         threading.Thread(target=_fetch, daemon=True).start()
 
     def show_launch_error(self, msg):
@@ -1157,14 +1175,7 @@ class ClientLockerApp:
         self.main_window.load_games()
         self.main_window.switch_to_launcher()
         self.main_window.force_native_fullscreen()
-        # DIAGNOSTIKA: overlay.show() vaqtincha o'chirilgan — MainWindow bilan
-        # ikkinchi "har doim tepada" oyna orasida ziddiyat bor-yo'qligini
-        # tekshirish uchun. Agar shu holatda MainWindow to'g'ri ko'rinsa,
-        # muammo aynan shu ikki oyna orasidagi ziddiyatda ekan.
-        if os.environ.get("CLUTCH_SHOW_OVERLAY") == "1":
-            self.overlay.show()
-        else:
-            print("[Diag] overlay.show() o'tkazib yuborildi (CLUTCH_SHOW_OVERLAY=1 bilan yoqish mumkin)")
+        self.overlay.show()
         self.current_status = 'ACTIVE'
 
     def _lock(self):

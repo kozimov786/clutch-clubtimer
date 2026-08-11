@@ -1,7 +1,11 @@
 """
 client_locker.py  —  Clutch Zone Client PC Locker (Windows Native Win32 API & High-DPI Awareness Architecture)
 ===================================================================================
-1. SetProcessDpiAwareness(2) called before QApplication instantiation.
+1. SetProcessDpiAwarenessContext/SetProcessDpiAwareness called before QApplication
+   instantiation, AND Qt's own HiDPI auto-scaling disabled — this prevents the
+   "double DPI scaling" bug where Windows (physical pixels) and Qt (device-pixel-
+   ratio scaling) both scale the same geometry, shrinking the window into a
+   corner of the screen at 125%/150% display scale.
 2. Win32 Native GetSystemMetrics(SM_CXSCREEN / SM_CYSCREEN) geometry calculation with force_native_fullscreen().
 3. ShowEvent override for LockScreenWindow, LockerWindow, LauncherWindow & MainWindow.
 4. Expanding setSizePolicy on root containers and centered responsive card / launcher grid.
@@ -13,16 +17,38 @@ import ctypes
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  1. CRITICAL: SET PROCESS DPI AWARENESS (QApplication yaratilishidan OLDIN)
+#     va Qt'ning o'z HiDPI scale qatlamini o'chirish.
+#
+#     Root cause: Windows darajasida Per-Monitor DPI Aware o'rnatilgach,
+#     GetSystemMetrics() FIZIK piksellarni qaytaradi (masalan 1920x1080).
+#     Agar shu qiymatlar setGeometry()/setFixedSize()ga uzatilganda Qt6'ning
+#     o'z HiDPI scaling qatlami HAM ishlab tursa, Qt bu qiymatni yana bir
+#     bor devicePixelRatio'ga bo'lib tashlaydi (masalan 1.5x) — natijada
+#     oyna w/1.5 x h/1.5 o'lchamda, ekranning (0,0) burchagida chizilib
+#     qoladi. Buni oldini olish uchun Qt scaling'ni butunlay o'chiramiz va
+#     geometriyani faqat native Win32 fizik piksellar bilan boshqaramiz.
 # ──────────────────────────────────────────────────────────────────────────────
 if sys.platform == 'win32':
     try:
-        # Windows OS piksellarni majburan bo'lib/ko'paytirib tashlamasligi uchun:
-        ctypes.windll.shcore.SetProcessDpiAwareness(2) # PROCESS_PER_MONITOR_DPI_AWARE
+        # Windows 10 1703+ uchun eng ishonchli usul: Per-Monitor-V2 DPI
+        # awareness — monitor almashtirilganda yoki scale dinamik
+        # o'zgarganda ham to'g'ri qayta hisoblanadi.
+        DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = ctypes.c_void_p(-4)
+        ctypes.windll.user32.SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
     except Exception:
         try:
-            ctypes.windll.user32.SetProcessDPIAware()
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)  # PROCESS_PER_MONITOR_DPI_AWARE
         except Exception:
-            pass
+            try:
+                ctypes.windll.user32.SetProcessDPIAware()
+            except Exception:
+                pass
+
+    # Windows darajasida DPI allaqachon qo'lda (native) boshqarilyapti,
+    # shuning uchun Qt'ning avtomatik HiDPI scale qatlami o'chiriladi —
+    # aks holda yuqoridagi "double scaling" xatosi yuzaga keladi.
+    os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "0"
+    os.environ["QT_SCALE_FACTOR"] = "1"
 
 import time
 import json
@@ -42,18 +68,28 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QFont, QColor, QPixmap, QGuiApplication
 
 # ──────────────────────────────────────────────────────────────────────────────
-#  2 & 3. NATIVE GEOMETRY CALCULATION, FORCE FULLSCREEN & SHOW EVENT OVERRIDE
+#  2. NATIVE GEOMETRY CALCULATION (fizik piksellar — Qt scaling o'chirilgan)
+# ──────────────────────────────────────────────────────────────────────────────
+def get_screen_resolution():
+    if sys.platform == 'win32':
+        try:
+            width = ctypes.windll.user32.GetSystemMetrics(0)   # SM_CXSCREEN
+            height = ctypes.windll.user32.GetSystemMetrics(1)  # SM_CYSCREEN
+            if width > 0 and height > 0:
+                return width, height
+        except Exception as e:
+            print(f"[user32 API Error] {e}")
+
+    screen = QGuiApplication.primaryScreen().geometry()
+    return screen.width(), screen.height()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  3. FORCE FULLSCREEN & SHOW EVENT OVERRIDE
 # ──────────────────────────────────────────────────────────────────────────────
 class FullscreenMixin:
     def force_native_fullscreen(self):
-        if sys.platform == 'win32':
-            user32 = ctypes.windll.user32
-            user32.SetProcessDPIAware()
-            w = user32.GetSystemMetrics(0) # SM_CXSCREEN
-            h = user32.GetSystemMetrics(1) # SM_CYSCREEN
-        else:
-            screen = QGuiApplication.primaryScreen().geometry()
-            w, h = screen.width(), screen.height()
+        w, h = get_screen_resolution()
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint |
@@ -131,22 +167,6 @@ try:
 except ImportError as err:
     print(f"[WebEngine Warning] PyQt6.QtWebEngineWidgets import qilib bo'lmadi: {err}")
     print("Iltimos, `pip install PyQt6-WebEngine` buyrug'ini bajaring.")
-
-
-def get_screen_resolution():
-    if sys.platform == 'win32':
-        try:
-            user32 = ctypes.windll.user32
-            user32.SetProcessDPIAware()
-            width = user32.GetSystemMetrics(0)   # SM_CXSCREEN
-            height = user32.GetSystemMetrics(1)  # SM_CYSCREEN
-            if width > 0 and height > 0:
-                return width, height
-        except Exception as e:
-            print(f"[user32 API Error] {e}")
-
-    screen = QGuiApplication.primaryScreen().geometry()
-    return screen.width(), screen.height()
 
 
 class PyQtBridge(QObject):
@@ -784,18 +804,9 @@ class ClientLockerApp:
 #  ENTRY POINT
 # ──────────────────────────────────────────────────────────────────────────────
 def main():
-    if sys.platform == 'win32':
-        try:
-            ctypes.windll.shcore.SetProcessDpiAwareness(2)
-        except Exception:
-            try:
-                ctypes.windll.user32.SetProcessDPIAware()
-            except Exception:
-                pass
-
-    os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
-    QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
-    
+    # DPI awareness va Qt HiDPI scaling o'chirish fayl boshida (QApplication
+    # yaratilishidan oldin, hatto PyQt6 import qilinishidan oldin) allaqachon
+    # bajarilgan — bu yerda takrorlash shart emas.
     app = QApplication(sys.argv)
     app.setStyleSheet("""
         QWidget {

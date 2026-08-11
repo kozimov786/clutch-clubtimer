@@ -52,21 +52,17 @@ if sys.platform == 'win32':
 
     # Ba'zi Windows kompyuterlarda (eski/virtual videokarta drayveri, GPU
     # passthrough'siz VM) Chromium GLES kontekstini yarata olmay, sahifani
-    # butunlay bo'sh (fon rangida, matnsiz) ko'rsatib qo'yadi — bitta
-    # "--disable-gpu" yetarli bo'lmasligi mumkin, chunki Chromium baribir
-    # GPU-orqali compositing'ga urinishda davom etadi. SwiftShader'ga
-    # (sof dasturiy OpenGL implementatsiyasi, hech qanday GPU drayveriga
-    # tayanmaydi) majburlash bu holatni butunlay chetlab o'tadi — sodda
-    # HTML/CSS sahifa uchun ishlash tezligiga sezilarli ta'sir qilmaydi.
+    # butunlay bo'sh (fon rangida, matnsiz) ko'rsatib qo'yadi. Tekshirilgan
+    # va real klient PC'da ishlagan yechim: GL backend'ni ANGLE orqali
+    # SwiftShader'ga (sof dasturiy render, GPU drayveriga tayanmaydi)
+    # majburlash. --disable-gpu QO'YILMAYDI — u --use-gl/--use-angle bilan
+    # ziddiyatga kirib, Chromium'ni darhol chiqib ketishga majbur qiladi
+    # ("Expect troubles!" / "is not supported with the current configuration").
     # setdefault — agar tizim darajasida allaqachon QTWEBENGINE_CHROMIUM_FLAGS
     # sozlangan bo'lsa (masalan qo'lda sinov uchun), uni bosib qolmaslik uchun.
-    # --disable-gpu va --use-gl=swiftshader birga qo'llanilsa, Chromium
-    # ziddiyat deb hisoblab darhol chiqib ketishi mumkin ("Expect
-    # troubles!" / "is not supported") — shuning uchun --disable-gpu
-    # QO'YILMAYDI, faqat GL backend'ni swiftshader'ga majburlaymiz.
     os.environ.setdefault(
         "QTWEBENGINE_CHROMIUM_FLAGS",
-        "--use-gl=swiftshader --disable-gpu-compositing"
+        "--use-angle=swiftshader --disable-gpu-compositing"
     )
 
 import time

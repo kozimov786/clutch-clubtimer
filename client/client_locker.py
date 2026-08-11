@@ -276,6 +276,7 @@ class LockerWindow(FullscreenMixin, QMainWindow):
         if HAS_WEBENGINE:
             self.browser = QWebEngineView(self)
             self.browser.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+            self.browser.setZoomFactor(1.0)
             
             profile = QWebEngineProfile.defaultProfile()
             profile.setHttpCacheType(QWebEngineProfile.HttpCacheType.NoCache)
@@ -289,11 +290,14 @@ class LockerWindow(FullscreenMixin, QMainWindow):
             settings.setAttribute(QWebEngineSettings.WebAttribute.ScrollAnimatorEnabled, True)
             settings.setAttribute(QWebEngineSettings.WebAttribute.Accelerated2DCanvasEnabled, True)
             settings.setAttribute(QWebEngineSettings.WebAttribute.WebGLEnabled, True)
+            settings.setAttribute(QWebEngineSettings.WebAttribute.ShowScrollBars, False)
 
             try:
                 QWebEngineSettings.globalSettings().setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, False)
             except Exception:
                 pass
+
+            self.browser.page().loadFinished.connect(self._apply_full_viewport_css)
 
             timestamp_url = f"{self.url}&_t={int(time.time() * 1000)}"
             self.browser.setUrl(QUrl(timestamp_url))
@@ -301,6 +305,22 @@ class LockerWindow(FullscreenMixin, QMainWindow):
         else:
             lock_widget = LockScreenWindow(pc_name=self.pc_name, parent=self)
             self.setCentralWidget(lock_widget)
+
+    def _apply_full_viewport_css(self, ok):
+        if ok and HAS_WEBENGINE and hasattr(self, 'browser'):
+            js_fix = """
+            var meta = document.querySelector('meta[name="viewport"]');
+            if (!meta) {
+                meta = document.createElement('meta');
+                meta.name = 'viewport';
+                document.getElementsByTagName('head')[0].appendChild(meta);
+            }
+            meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+            document.body.style.width = '100vw';
+            document.body.style.height = '100vh';
+            document.body.style.overflow = 'hidden';
+            """
+            self.browser.page().runJavaScript(js_fix)
 
     def reload_page(self):
         if HAS_WEBENGINE and hasattr(self, 'browser'):
@@ -357,6 +377,7 @@ class LauncherWindow(FullscreenMixin, QMainWindow):
         if HAS_WEBENGINE:
             self.browser = QWebEngineView(self)
             self.browser.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+            self.browser.setZoomFactor(1.0)
             
             profile = QWebEngineProfile.defaultProfile()
             profile.setHttpCacheType(QWebEngineProfile.HttpCacheType.NoCache)
@@ -370,6 +391,7 @@ class LauncherWindow(FullscreenMixin, QMainWindow):
             settings.setAttribute(QWebEngineSettings.WebAttribute.ScrollAnimatorEnabled, True)
             settings.setAttribute(QWebEngineSettings.WebAttribute.Accelerated2DCanvasEnabled, True)
             settings.setAttribute(QWebEngineSettings.WebAttribute.WebGLEnabled, True)
+            settings.setAttribute(QWebEngineSettings.WebAttribute.ShowScrollBars, False)
 
             try:
                 QWebEngineSettings.globalSettings().setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, False)
@@ -382,12 +404,30 @@ class LauncherWindow(FullscreenMixin, QMainWindow):
             self.channel.registerObject("pyqt_bridge", self.bridge)
             self.browser.page().setWebChannel(self.channel)
 
+            self.browser.page().loadFinished.connect(self._apply_full_viewport_css)
+
             timestamp_url = f"{self.url}&_t={int(time.time() * 1000)}"
             self.browser.setUrl(QUrl(timestamp_url))
             self.setCentralWidget(self.browser)
         else:
             grid = ResponsiveGameGrid(card_min_width=220, card_height=280, parent=self)
             self.setCentralWidget(grid)
+
+    def _apply_full_viewport_css(self, ok):
+        if ok and HAS_WEBENGINE and hasattr(self, 'browser'):
+            js_fix = """
+            var meta = document.querySelector('meta[name="viewport"]');
+            if (!meta) {
+                meta = document.createElement('meta');
+                meta.name = 'viewport';
+                document.getElementsByTagName('head')[0].appendChild(meta);
+            }
+            meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+            document.body.style.width = '100vw';
+            document.body.style.height = '100vh';
+            document.body.style.overflow = 'hidden';
+            """
+            self.browser.page().runJavaScript(js_fix)
 
     def reload_page(self):
         if HAS_WEBENGINE and hasattr(self, 'browser'):

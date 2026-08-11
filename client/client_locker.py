@@ -154,11 +154,24 @@ def load_image_async(url_or_path, label):
                     data = r.content
                     _image_cache[url_or_path] = data
                     _image_signal.loaded.emit(label, data)
+                else:
+                    print(f"[Image] {url_or_path}: HTTP {r.status_code}")
             else:
+                script_dir = os.path.dirname(os.path.abspath(__file__))
+                # config.json'dagi fallback_games "client/assets/..." kabi
+                # repo-ildizga nisbatan yo'l beradi, lekin dastur odatda
+                # client/ papkasining o'zidan ishga tushiriladi — shuning
+                # uchun boshidagi "client/" qismini olib tashlab ham sinaymiz.
+                stripped = url_or_path
+                for prefix in ("client/", "client\\"):
+                    if stripped.startswith(prefix):
+                        stripped = stripped[len(prefix):]
+                        break
                 candidates = [
                     url_or_path,
-                    os.path.join(os.path.dirname(os.path.abspath(__file__)), url_or_path),
-                    os.path.join(os.path.dirname(os.path.abspath(__file__)), os.path.basename(url_or_path)),
+                    os.path.join(script_dir, url_or_path),
+                    os.path.join(script_dir, stripped),
+                    os.path.join(script_dir, os.path.basename(url_or_path)),
                 ]
                 for path in candidates:
                     if os.path.exists(path):
@@ -167,6 +180,7 @@ def load_image_async(url_or_path, label):
                         _image_cache[url_or_path] = data
                         _image_signal.loaded.emit(label, data)
                         return
+                print(f"[Image] {url_or_path}: fayl topilmadi (sinovlar: {candidates})")
         except Exception as e:
             print(f"[Image] {url_or_path}: {e}")
 
@@ -416,6 +430,11 @@ class ResponsiveGrid(QScrollArea):
         self.setWidgetResizable(True)
         self.setStyleSheet("QScrollArea { border: none; background-color: #060911; }")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        # QScrollArea'ning ichki viewport widget'i alohida bo'lib, yuqoridagi
+        # stylesheet uni har doim ham to'liq qamrab olavermaydi (ayniqsa
+        # panjara bo'sh bo'lganda, tizim palitrasidagi och rang ko'rinib
+        # qolishi mumkin edi) — shuning uchun uni ham aniq belgilaymiz.
+        self.viewport().setStyleSheet("background-color: #060911;")
 
         self.container = QWidget()
         self.container.setStyleSheet("background-color: #060911;")
@@ -905,13 +924,17 @@ class LauncherPage(QWidget):
 
     def reload_games(self):
         def _fetch():
-            games = self.api_client.get_games() or list(self.fallback_games)
+            api_games = self.api_client.get_games()
+            games = api_games or list(self.fallback_games)
+            print(f"[Launcher] games: api={len(api_games) if api_games else 0} "
+                  f"fallback_used={not api_games} total={len(games)}")
             self._games_loaded.emit(games)
         threading.Thread(target=_fetch, daemon=True).start()
 
     def reload_products(self):
         def _fetch():
             products = self.api_client.get_products()
+            print(f"[Launcher] products: {len(products)}")
             self._products_loaded.emit(products)
         threading.Thread(target=_fetch, daemon=True).start()
 
@@ -1075,6 +1098,7 @@ class EmergencyExitWidget(QWidget):
             }
             QPushButton:hover { background: rgba(239,68,68,1.0); }
         """)
+        btn.setToolTip("Windows ish stoliga qaytish uchun bosing (dastur to'liq yopiladi)")
         btn.clicked.connect(lambda: os._exit(0))
         lo.addWidget(btn)
 

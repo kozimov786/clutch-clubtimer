@@ -63,9 +63,8 @@ class Computer(models.Model):
                     return 0
                 elif diff <= 300: # 5 minutes left -> WARNING
                     self.time_remaining = int(diff)
-                    if self.status != 'WARNING':
-                        self.status = 'WARNING'
-                        self.save(update_fields=['status', 'time_remaining'])
+                    self.status = 'WARNING'
+                    self.save(update_fields=['status', 'time_remaining'])
                     return self.time_remaining
                 else:
                     self.time_remaining = int(diff)

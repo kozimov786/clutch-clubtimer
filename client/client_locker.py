@@ -26,6 +26,7 @@ if sys.platform == 'win32':
 
 import time
 import json
+import socket
 import subprocess
 import platform
 import threading
@@ -149,12 +150,12 @@ def get_screen_resolution():
 
 
 class PyQtBridge(QObject):
-    game_launch_requested = pyqtSignal(str, str)
+    game_launch_requested = pyqtSignal(str, str, str)
 
-    @pyqtSlot(str, str)
-    def launchGame(self, exe_path, game_name):
+    @pyqtSlot(str, str, str)
+    def launchGame(self, exe_path, game_name, working_directory):
         print(f"[WebBridge] launchGame buyrug'i keldi: '{game_name}' -> {exe_path}")
-        self.game_launch_requested.emit(exe_path, game_name)
+        self.game_launch_requested.emit(exe_path, game_name, working_directory)
 
 
 class SyncSignals(QObject):
@@ -458,10 +459,11 @@ class LauncherWindow(FullscreenMixin, QMainWindow):
         self.reload_page()
         self.force_native_fullscreen()
 
-    def _on_bridge_game_launch(self, exe_path, game_name):
+    def _on_bridge_game_launch(self, exe_path, game_name, working_directory):
         self.game_launched_signal.emit({
             'name': game_name,
-            'executable_path': exe_path
+            'executable_path': exe_path,
+            'working_directory': working_directory
         })
 
     def update_timer(self, seconds):
@@ -648,7 +650,7 @@ class ClientLockerApp:
         new_status = data.get('status', 'LOCKED')
         seconds = data.get('time_remaining', 0)
         self.time_remaining = seconds
-        if new_status in ('ACTIVE', 'WARNING') and seconds > 0:
+        if new_status in ('ACTIVE', 'WARNING'):
             if self.current_status == 'LOCKED':
                 self._unlock()
             self.current_status = new_status
@@ -727,11 +729,23 @@ class ClientLockerApp:
             else:
                 self._lock()
 
+    @staticmethod
+    def _get_local_ip():
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(('8.8.8.8', 80))
+            return s.getsockname()[0]
+        except Exception:
+            return '127.0.0.1'
+        finally:
+            s.close()
+
     def _run_sync(self):
         threading.Thread(target=self._run_ws, daemon=True).start()
+        local_ip = self._get_local_ip()
         while True:
             try:
-                r = requests.post(f"{self.server_url}/api/computers/heartbeat/", json={"pc_name": self.pc_name}, timeout=4)
+                r = requests.post(f"{self.server_url}/api/computers/heartbeat/", json={"pc_name": self.pc_name, "ip_address": local_ip}, timeout=4)
                 if r.status_code == 200:
                     self.signals.status_updated.emit(r.json())
             except Exception as e:

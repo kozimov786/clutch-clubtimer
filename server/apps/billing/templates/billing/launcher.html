@@ -676,22 +676,23 @@
                         <span class="game-title">${g.name}</span>
                         <span class="game-cat">${(g.category || 'FPS').toUpperCase()}</span>
                     </div>
-                    <button class="btn-launch" onclick="launchGame('${g.id}', '${encodeURIComponent(g.name)}', '${encodeURIComponent(g.executable_path || '')}')">▶ ISHGA TUSHIRISH</button>
+                    <button class="btn-launch" onclick="launchGame('${g.id}', '${encodeURIComponent(g.name)}', '${encodeURIComponent(g.executable_path || '')}', '${encodeURIComponent(g.working_directory || '')}')">▶ ISHGA TUSHIRISH</button>
                 `;
                 container.appendChild(card);
             });
         }
 
-        function launchGame(id, name, path) {
+        function launchGame(id, name, path, workdir) {
             const exe = decodeURIComponent(path);
             const gName = decodeURIComponent(name);
-            console.log("Launching game:", gName, exe);
+            const gWorkdir = decodeURIComponent(workdir || '');
+            console.log("Launching game:", gName, exe, gWorkdir);
 
             // PyQt Bridge or Custom Handler Integration
             if (window.pyqt_bridge && window.pyqt_bridge.launchGame) {
-                window.pyqt_bridge.launchGame(exe, gName);
+                window.pyqt_bridge.launchGame(exe, gName, gWorkdir);
             } else if (window.QtBridge) {
-                window.QtBridge.launchGame(exe, gName);
+                window.QtBridge.launchGame(exe, gName, gWorkdir);
             } else {
                 alert(`🚀 ${gName} ishga tushirilmoqda...`);
             }

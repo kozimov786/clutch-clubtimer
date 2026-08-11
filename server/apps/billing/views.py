@@ -20,6 +20,53 @@ from .serializers import (
 )
 from .consumers import notify_pc_status_change, notify_bar_order_change
 
+
+def _calculate_session_duration_and_price(pc, active_session, start_time, tariff, now):
+    """Shared by finish_summary and stop_session so both always agree on the charge."""
+    duration_minutes = 0
+    time_price = 0.0
+
+    if pc.is_open_time and start_time:
+        elapsed_seconds = max(0, (now - start_time).total_seconds())
+        duration_minutes = round(elapsed_seconds / 60.0)
+        price_per_min = (tariff.get_effective_price_per_hour() / 60.0) if tariff else 200.0
+        time_price = round(price_per_min * duration_minutes)
+    elif active_session and active_session.duration_minutes > 0:
+        duration_minutes = active_session.duration_minutes
+        time_price = float(active_session.total_price)
+    elif start_time:
+        if pc.session_end_time:
+            duration_minutes = round(max(0, (pc.session_end_time - start_time).total_seconds()) / 60.0)
+        else:
+            duration_minutes = round(max(0, (now - start_time).total_seconds()) / 60.0)
+        price_per_min = (tariff.get_effective_price_per_hour() / 60.0) if tariff else 200.0
+        time_price = round(price_per_min * duration_minutes)
+
+    return duration_minutes, time_price
+
+
+def _split_payment(payment_method, grand_total, req_cash, req_card):
+    """Shared CASH/CARD/SPLIT reconciliation used by session stop and bar-order creation."""
+    if payment_method == 'CASH':
+        return grand_total, 0.0
+    elif payment_method == 'CARD':
+        return 0.0, grand_total
+    elif payment_method == 'SPLIT':
+        final_cash = req_cash
+        final_card = req_card
+        if abs((final_cash + final_card) - grand_total) > 0.01:
+            final_card = max(0.0, grand_total - final_cash)
+        return final_cash, final_card
+    else:
+        return grand_total, 0.0
+
+
+def _deduct_stock_for_order(order):
+    """Shared by approve()/deliver()/stop_session() when a PENDING order clears."""
+    for item in order.items.all():
+        item.product.stock = max(0, item.product.stock - item.quantity)
+        item.product.save()
+
 class AdminLoginView(APIView):
     def post(self, request):
         username = request.data.get('username')
@@ -157,8 +204,8 @@ class ComputerViewSet(viewsets.ModelViewSet):
         active_session = Session.objects.filter(computer=pc, is_active=True).first()
         if active_session:
             active_session.duration_minutes += minutes
-            price_per_minute = (active_session.tariff.price_per_hour / 60) if active_session.tariff else 250
-            active_session.total_price += price_per_minute * minutes
+            price_per_minute = (active_session.tariff.get_effective_price_per_hour() / 60) if active_session.tariff else 250
+            active_session.total_price = float(active_session.total_price) + price_per_minute * minutes
             active_session.end_time = pc.session_end_time
             active_session.save()
 
@@ -181,24 +228,7 @@ class ComputerViewSet(viewsets.ModelViewSet):
         tariff = (active_session.tariff if active_session else None) or pc.current_tariff or Tariff.objects.first()
         tariff_name = tariff.name if tariff else "Standard"
 
-        duration_minutes = 0
-        time_price = 0.0
-
-        if pc.is_open_time and start_time:
-            elapsed_seconds = max(0, (now - start_time).total_seconds())
-            duration_minutes = round(elapsed_seconds / 60.0)
-            price_per_min = (tariff.get_effective_price_per_hour() / 60.0) if tariff else 200.0
-            time_price = round(price_per_min * duration_minutes)
-        elif active_session and active_session.duration_minutes > 0:
-            duration_minutes = active_session.duration_minutes
-            time_price = float(active_session.total_price)
-        elif start_time:
-            if pc.session_end_time:
-                duration_minutes = round(max(0, (pc.session_end_time - start_time).total_seconds()) / 60.0)
-            else:
-                duration_minutes = round(max(0, (now - start_time).total_seconds()) / 60.0)
-            price_per_min = (tariff.get_effective_price_per_hour() / 60.0) if tariff else 200.0
-            time_price = round(price_per_min * duration_minutes)
+        duration_minutes, time_price = _calculate_session_duration_and_price(pc, active_session, start_time, tariff, now)
 
         bar_items = []
         bar_total_price = 0.0
@@ -265,24 +295,7 @@ class ComputerViewSet(viewsets.ModelViewSet):
         start_time = active_session.start_time if (active_session and active_session.start_time) else pc.session_start_time
         tariff = (active_session.tariff if active_session else None) or pc.current_tariff or Tariff.objects.first()
 
-        duration_minutes = 0
-        time_price = 0.0
-
-        if pc.is_open_time and start_time:
-            elapsed_seconds = max(0, (now - start_time).total_seconds())
-            duration_minutes = round(elapsed_seconds / 60.0)
-            price_per_min = (tariff.get_effective_price_per_hour() / 60.0) if tariff else 200.0
-            time_price = round(price_per_min * duration_minutes)
-        elif active_session and active_session.duration_minutes > 0:
-            duration_minutes = active_session.duration_minutes
-            time_price = float(active_session.total_price)
-        elif start_time:
-            if pc.session_end_time:
-                duration_minutes = round(max(0, (pc.session_end_time - start_time).total_seconds()) / 60.0)
-            else:
-                duration_minutes = round(max(0, (now - start_time).total_seconds()) / 60.0)
-            price_per_min = (tariff.get_effective_price_per_hour() / 60.0) if tariff else 200.0
-            time_price = round(price_per_min * duration_minutes)
+        duration_minutes, time_price = _calculate_session_duration_and_price(pc, active_session, start_time, tariff, now)
 
         if start_time:
             session_orders = Order.objects.filter(computer=pc, created_at__gte=start_time - timedelta(seconds=30)).exclude(status='CANCELLED')
@@ -292,20 +305,7 @@ class ComputerViewSet(viewsets.ModelViewSet):
         bar_total_price = float(sum(o.total_price for o in session_orders))
         grand_total = float(time_price) + bar_total_price
 
-        if payment_method == 'CASH':
-            final_cash = grand_total
-            final_card = 0.0
-        elif payment_method == 'CARD':
-            final_cash = 0.0
-            final_card = grand_total
-        elif payment_method == 'SPLIT':
-            final_cash = req_cash
-            final_card = req_card
-            if abs((final_cash + final_card) - grand_total) > 0.01:
-                final_card = max(0.0, grand_total - final_cash)
-        else:
-            final_cash = grand_total
-            final_card = 0.0
+        final_cash, final_card = _split_payment(payment_method, grand_total, req_cash, req_card)
 
         if grand_total > 0:
             time_ratio = float(time_price) / grand_total
@@ -350,6 +350,7 @@ class ComputerViewSet(viewsets.ModelViewSet):
                 order.card_amount = float(order.total_price) if payment_method == 'CARD' else 0.0
 
             if order.status == 'PENDING':
+                _deduct_stock_for_order(order)
                 order.status = 'DELIVERED'
             order.save()
 
@@ -375,6 +376,7 @@ class ComputerViewSet(viewsets.ModelViewSet):
 
         pc.status = 'LOCKED'
         pc.time_remaining = 0
+        pc.is_open_time = False
         pc.session_start_time = None
         pc.session_end_time = None
         pc.save()
@@ -395,6 +397,7 @@ class ComputerViewSet(viewsets.ModelViewSet):
         for pc in computers:
             pc.status = 'LOCKED'
             pc.time_remaining = 0
+            pc.is_open_time = False
             pc.session_start_time = None
             pc.session_end_time = None
             pc.save()
@@ -409,7 +412,7 @@ class ComputerViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     def heartbeat(self, request):
         pc_name = request.data.get('pc_name')
-        ip_addr = request.data.get('ip_address', '127.0.0.1')
+        ip_addr = request.data.get('ip_address')
         mac_addr = request.data.get('mac_address', '')
 
         if not pc_name:
@@ -417,10 +420,11 @@ class ComputerViewSet(viewsets.ModelViewSet):
 
         pc, created = Computer.objects.get_or_create(
             name=pc_name,
-            defaults={'ip_address': ip_addr, 'mac_address': mac_addr, 'status': 'LOCKED'}
+            defaults={'ip_address': ip_addr or '127.0.0.1', 'mac_address': mac_addr, 'status': 'LOCKED'}
         )
 
-        pc.ip_address = ip_addr
+        if ip_addr:
+            pc.ip_address = ip_addr
         if mac_addr:
             pc.mac_address = mac_addr
         pc.calculate_time_remaining()
@@ -538,20 +542,11 @@ class OrderViewSet(viewsets.ModelViewSet):
         if is_direct_sale:
             order_status = 'DELIVERED'
 
-        if payment_method == 'CASH':
-            cash_amt = float(total_price)
-            card_amt = 0.0
-        elif payment_method == 'CARD':
-            cash_amt = 0.0
-            card_amt = float(total_price)
-        elif payment_method == 'SPLIT':
-            cash_amt = float(request.data.get('cash_amount', 0.0))
-            card_amt = float(request.data.get('card_amount', 0.0))
-            if abs((cash_amt + card_amt) - float(total_price)) > 0.01:
-                card_amt = max(0.0, float(total_price) - cash_amt)
-        else:
-            cash_amt = float(total_price)
-            card_amt = 0.0
+        cash_amt, card_amt = _split_payment(
+            payment_method, float(total_price),
+            float(request.data.get('cash_amount', 0.0)),
+            float(request.data.get('card_amount', 0.0))
+        )
 
         order = Order.objects.create(
             computer=computer,
@@ -586,9 +581,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     def approve(self, request, pk=None):
         order = self.get_object()
         if order.status == 'PENDING':
-            for item in order.items.all():
-                item.product.stock = max(0, item.product.stock - item.quantity)
-                item.product.save()
+            _deduct_stock_for_order(order)
 
         order.status = 'APPROVED'
         order.save()
@@ -604,9 +597,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     def deliver(self, request, pk=None):
         order = self.get_object()
         if order.status == 'PENDING':
-            for item in order.items.all():
-                item.product.stock = max(0, item.product.stock - item.quantity)
-                item.product.save()
+            _deduct_stock_for_order(order)
 
         order.status = 'DELIVERED'
         order.save()

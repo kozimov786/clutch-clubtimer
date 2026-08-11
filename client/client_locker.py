@@ -991,6 +991,19 @@ class MainWindow(FullscreenMixin, QMainWindow):
         self.stacked.setCurrentIndex(self.PAGE_LAUNCHER)
         self.force_native_fullscreen()
 
+    def yield_to_app(self):
+        """O'yin/dastur ishga tushganda chaqiriladi: launcher minimize
+        BO'LMAYDI (bu Windows ish stolini ochib qo'yardi) — u faqat
+        "har doim tepada" xususiyatini vaqtincha yo'qotib, orqa qatlamga
+        o'tadi. Shu tarzda: o'yin ustida, launcher o'rtada (butun ekranni
+        hamon egallab turibdi), Windows ish stoli esa hech qachon
+        ko'rinmaydi. force_native_fullscreen() (F9/BAR yoki keyingi
+        lock-unlock o'tishida) uni yana eng tepaga qaytaradi."""
+        flags = self.windowFlags() & ~Qt.WindowType.WindowStaysOnTopHint
+        self.setWindowFlags(flags)
+        self.show()
+        self.lower()
+
     def load_games(self):
         self.launcher_page.reload_games()
 
@@ -1030,7 +1043,7 @@ if IS_WINDOWS:
     kernel32 = ctypes.windll.kernel32
     WH_KEYBOARD_LL = 13
     VK_TAB = 0x09; VK_LWIN = 0x5B; VK_RWIN = 0x5C; VK_F4 = 0x73; VK_ESCAPE = 0x1B
-    VK_CONTROL = 0x11; VK_SHIFT = 0x10; VK_U = 0x55; VK_F9 = 0x78
+    VK_CONTROL = 0x11; VK_SHIFT = 0x10; VK_U = 0x55; VK_F9 = 0x78; VK_P = 0x50
 
     class KBDLLHOOKSTRUCT(ctypes.Structure):
         _fields_ = [
@@ -1048,6 +1061,8 @@ if IS_WINDOWS:
             ctrl_down = (user32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
             shift_down = (user32.GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0
             if ctrl_down and alt and shift_down and vk == VK_U:
+                EMERGENCY_UNLOCK_REQUESTED = True
+            elif ctrl_down and shift_down and vk == VK_P:
                 EMERGENCY_UNLOCK_REQUESTED = True
             elif vk == VK_F9:
                 SHOW_LAUNCHER_REQUESTED = True
@@ -1074,86 +1089,6 @@ else:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-#  FAVQULODDA CHIQISH TUGMASI — doim ko'rinadigan, mustaqil, kichik oyna.
-#  TimerOverlayWidget bilan bir xil (ishonchli ishlashi tasdiqlangan) naqsh:
-#  alohida, kichik, WindowStaysOnTopHint oyna — MainWindow qanday holatda
-#  bo'lishidan (hatto ko'rinmasa ham) qat'iy nazar doim bosish mumkin bo'ladi.
-# ──────────────────────────────────────────────────────────────────────────────
-class EmergencyExitWidget(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.FramelessWindowHint | Qt.WindowType.SubWindow)
-        self.move(12, 12)
-
-        lo = QHBoxLayout(self)
-        lo.setContentsMargins(0, 0, 0, 0)
-        btn = QPushButton("🛑 CHIQISH")
-        btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-        btn.setFixedSize(110, 34)
-        btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn.setStyleSheet("""
-            QPushButton {
-                background: rgba(239,68,68,0.85); color: #ffffff;
-                border: 1px solid rgba(255,255,255,0.4); border-radius: 8px;
-            }
-            QPushButton:hover { background: rgba(239,68,68,1.0); }
-        """)
-        btn.setToolTip("Windows ish stoliga qaytish uchun bosing (dastur to'liq yopiladi)")
-        btn.clicked.connect(lambda: os._exit(0))
-        lo.addWidget(btn)
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-#  TIMER OVERLAY (o'yin ustidan doim ko'rinadigan HUD)
-# ──────────────────────────────────────────────────────────────────────────────
-class TimerOverlayWidget(QWidget):
-    def __init__(self, pc_name="PC-01", on_bar_click=None):
-        super().__init__()
-        self.pc_name = pc_name
-        self.on_bar_click = on_bar_click
-        self._build_ui()
-
-    def _build_ui(self):
-        self.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.FramelessWindowHint | Qt.WindowType.SubWindow)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-
-        width, height = get_screen_resolution()
-        self.move(width - 370, 20)
-
-        lo = QHBoxLayout(self)
-        lo.setContentsMargins(0, 0, 0, 0)
-        con = QFrame()
-        con.setStyleSheet("QFrame{background:rgba(10,14,23,0.92);border:1px solid rgba(0,240,255,0.4);border-radius:16px;}")
-        cl = QHBoxLayout(con)
-        cl.setContentsMargins(14, 8, 14, 8)
-        tb = QVBoxLayout()
-        tb.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.timer_label = QLabel("00:00:00")
-        self.timer_label.setFont(QFont("Consolas", 18, QFont.Weight.Bold))
-        self.timer_label.setStyleSheet("color:#00f0ff;")
-        self.timer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        tb.addWidget(self.timer_label)
-        sub = QLabel(f"{self.pc_name} - ACTIVE SESSION")
-        sub.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
-        sub.setStyleSheet("color:#10b981;letter-spacing:1px;")
-        sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        tb.addWidget(sub)
-        cl.addLayout(tb)
-        bb = QPushButton("🍸 BAR")
-        bb.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        bb.setStyleSheet("QPushButton{background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #a855f7,stop:0.5 #d946ef,stop:1 #ec4899);color:#fff;border:1px solid rgba(255,255,255,0.4);border-radius:12px;font-weight:bold;}QPushButton:hover{background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #c084fc,stop:1 #f472b6);border:1px solid #00f0ff;}")
-        if self.on_bar_click: bb.clicked.connect(self.on_bar_click)
-        cl.addWidget(bb)
-        lo.addWidget(con)
-
-    def update_timer(self, seconds):
-        if seconds <= 0:
-            self.timer_label.setText("00:00:00")
-            return
-        self.timer_label.setText(f"{seconds//3600:02d}:{(seconds%3600)//60:02d}:{seconds%60:02d}")
-
-
-# ──────────────────────────────────────────────────────────────────────────────
 #  APPLICATION CONTROLLER
 # ──────────────────────────────────────────────────────────────────────────────
 class SyncSignals(QObject):
@@ -1171,19 +1106,11 @@ class ClientLockerApp:
         self.current_status = 'LOCKED'
         self.time_remaining = 0
 
-        # Hamma narsadan OLDIN ko'rsatiladi — MainWindow qanday ishlashidan
-        # qat'iy nazar doim mavjud, sichqoncha bilan bosiladigan chiqish yo'li.
-        self.emergency_exit = EmergencyExitWidget()
-        self.emergency_exit.show()
-
         self.main_window = MainWindow(
             pc_name=self.pc_name, server_url=self.server_url,
             fallback_games=self.fallback_games
         )
         self.main_window.game_launched_signal.connect(self._handle_game_launch)
-
-        self.overlay = TimerOverlayWidget(pc_name=self.pc_name, on_bar_click=self._show_launcher_over_game)
-        self.overlay.hide()
 
         self.countdown = QTimer()
         self.countdown.timeout.connect(self._tick)
@@ -1201,7 +1128,7 @@ class ClientLockerApp:
     def _check_global_hotkeys(self):
         global EMERGENCY_UNLOCK_REQUESTED, SHOW_LAUNCHER_REQUESTED
         if EMERGENCY_UNLOCK_REQUESTED:
-            print("[Emergency] Ctrl+Alt+Shift+U aniqlandi — kiosk rejimi o'chirilmoqda")
+            print("[Emergency] Ctrl+Alt+Shift+U yoki Ctrl+Shift+P aniqlandi — kiosk rejimi o'chirilmoqda")
             uninstall_keyboard_hook()
             os._exit(0)
         if SHOW_LAUNCHER_REQUESTED:
@@ -1242,7 +1169,6 @@ class ClientLockerApp:
             if self.current_status == 'LOCKED':
                 self._unlock()
             self.current_status = new_status
-            self.overlay.update_timer(self.time_remaining)
             self.main_window.update_timer(self.time_remaining)
         else:
             if self.current_status != 'LOCKED':
@@ -1256,14 +1182,12 @@ class ClientLockerApp:
         self.main_window.load_games()
         self.main_window.switch_to_launcher()
         self.main_window.force_native_fullscreen()
-        self.overlay.show()
         self.current_status = 'ACTIVE'
 
     def _lock(self):
         print("[Locker] LOCK -> LockScreen")
         self.current_status = 'LOCKED'
         self.time_remaining = 0
-        self.overlay.hide()
         self.main_window.switch_to_lock()
         self.main_window.force_native_fullscreen()
         install_keyboard_hook()
@@ -1301,11 +1225,11 @@ class ClientLockerApp:
                 self.launched_processes.append(proc)
                 print(f"[Launcher] PID: {proc.pid}")
                 self.main_window.show_launch_success(name)
-                # Launcher har doim "tepada" turgani uchun, endi ishga
-                # tushgan o'yin/dastur oynasi orqada qolib ketmasligi
-                # uchun launcherni kichraytiramiz. F9 yoki HUD'dagi BAR
-                # tugmasi orqali istalgan payt qaytarib chiqarish mumkin.
-                self.main_window.showMinimized()
+                # Launcher minimize qilinmaydi (bu Windows ish stolini
+                # ochib qo'yardi) — faqat orqa qatlamga o'tadi, shunda
+                # o'yin uning ustida ochiladi, lekin o'yin yopilsa
+                # mijoz baribir launcherni ko'radi, ish stolini emas.
+                self.main_window.yield_to_app()
             except Exception as e:
                 print(f"[Launcher] Error: {e}")
                 self.main_window.show_launch_error(f"Xatolik: {e}")
@@ -1317,7 +1241,6 @@ class ClientLockerApp:
         if self.current_status in ('ACTIVE', 'WARNING'):
             if self.time_remaining > 0:
                 self.time_remaining -= 1
-                self.overlay.update_timer(self.time_remaining)
                 self.main_window.update_timer(self.time_remaining)
             else:
                 self._lock()

@@ -228,13 +228,17 @@ IS_WINDOWS = platform.system() == 'Windows'
 # always-on-top oyna ostida qolib ko'rinmay qolishi mumkin edi).
 EMERGENCY_UNLOCK_REQUESTED = False
 
+# F9 — seans ACTIVE bo'lganda, o'yin ishlab turgan holatda ham, launcher/bar
+# menyusini o'yin ustiga qaytarib chiqarish uchun global hotkey.
+SHOW_LAUNCHER_REQUESTED = False
+
 if IS_WINDOWS:
     from ctypes import wintypes
     user32  = ctypes.windll.user32
     kernel32 = ctypes.windll.kernel32
     WH_KEYBOARD_LL = 13
     VK_TAB = 0x09; VK_LWIN = 0x5B; VK_RWIN = 0x5C; VK_F4 = 0x73; VK_ESCAPE = 0x1B
-    VK_CONTROL = 0x11; VK_SHIFT = 0x10; VK_U = 0x55
+    VK_CONTROL = 0x11; VK_SHIFT = 0x10; VK_U = 0x55; VK_F9 = 0x78
 
     class KBDLLHOOKSTRUCT(ctypes.Structure):
         _fields_ = [
@@ -243,34 +247,46 @@ if IS_WINDOWS:
             ("dwExtraInfo", ctypes.POINTER(wintypes.ULONG))
         ]
     HOOKPROC = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_int, wintypes.WPARAM, ctypes.POINTER(KBDLLHOOKSTRUCT))
+    # hook_id: OS darajasidagi hook butun ilova umri davomida o'rnatilgan
+    # turadi (F9 va favqulodda kombinatsiya ACTIVE seansda ham ishlashi
+    # uchun). is_hook_enabled esa faqat Alt+Tab/Win/Alt+F4/Alt+Esc
+    # bloklashni yoqib/o'chirib turadi (LOCKED holatda True, ACTIVE'da False).
     hook_id = None; is_hook_enabled = False
 
     def low_level_keyboard_proc(nCode, wParam, lParam):
-        global is_hook_enabled, EMERGENCY_UNLOCK_REQUESTED
-        if nCode >= 0 and is_hook_enabled:
+        global is_hook_enabled, EMERGENCY_UNLOCK_REQUESTED, SHOW_LAUNCHER_REQUESTED
+        if nCode >= 0:
             kb = lParam.contents; vk = kb.vkCode; alt = (kb.flags & 0x20) != 0
             ctrl_down = (user32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
             shift_down = (user32.GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0
             if ctrl_down and alt and shift_down and vk == VK_U:
                 EMERGENCY_UNLOCK_REQUESTED = True
-                return user32.CallNextHookEx(hook_id, nCode, wParam, lParam)
-            if (alt and vk == VK_TAB) or (vk in (VK_LWIN, VK_RWIN)) or \
-               (alt and vk == VK_F4) or (alt and vk == VK_ESCAPE):
+            elif vk == VK_F9:
+                SHOW_LAUNCHER_REQUESTED = True
+            elif is_hook_enabled and (
+                (alt and vk == VK_TAB) or (vk in (VK_LWIN, VK_RWIN)) or
+                (alt and vk == VK_F4) or (alt and vk == VK_ESCAPE)
+            ):
                 return 1
         return user32.CallNextHookEx(hook_id, nCode, wParam, lParam)
     pointer_proc = HOOKPROC(low_level_keyboard_proc)
 
     def install_keyboard_hook():
+        """Alt+Tab/Win/Alt+F4/Alt+Esc bloklashni yoqadi (LOCKED holat uchun).
+        OS hook doim o'rnatilgan bo'ladi — bu yerda faqat birinchi marta
+        yaratiladi, keyingi chaqiruvlar faqat bloklashni qayta yoqadi."""
         global hook_id, is_hook_enabled
         is_hook_enabled = True
         if not hook_id:
             hook_id = user32.SetWindowsHookExA(WH_KEYBOARD_LL, pointer_proc, kernel32.GetModuleHandleW(None), 0)
 
     def uninstall_keyboard_hook():
-        global hook_id, is_hook_enabled
+        """Faqat Alt+Tab/Win/Alt+F4/Alt+Esc bloklashni o'chiradi (ACTIVE
+        seans uchun, o'yin o'ynashga xalaqit bermasligi kerak). OS hook
+        o'zi o'rnatilgan qolaveradi — shu tufayli F9 va favqulodda chiqish
+        kombinatsiyasi ACTIVE holatda ham ishlayveradi."""
+        global is_hook_enabled
         is_hook_enabled = False
-        if hook_id:
-            user32.UnhookWindowsHookEx(hook_id); hook_id = None
 else:
     def install_keyboard_hook():   print("[Hook] enabled (sim)")
     def uninstall_keyboard_hook(): print("[Hook] disabled (sim)")
@@ -681,31 +697,41 @@ class ClientLockerApp:
         )
         self.main_window.game_launched_signal.connect(self._handle_game_launch)
 
-        self.overlay = TimerOverlayWidget(pc_name=self.pc_name)
+        self.overlay = TimerOverlayWidget(pc_name=self.pc_name, on_bar_click=self._show_launcher_over_game)
         self.overlay.hide()
 
         self.countdown = QTimer()
         self.countdown.timeout.connect(self._tick)
         self.countdown.start(1000)
 
-        # Ctrl+Alt+Shift+U bosilganini kuzatib turadi (low_level_keyboard_proc
-        # shu bayroqni o'rnatadi) va aniqlansa kiosk rejimidan darhol chiqadi —
-        # bu yagona hech qachon bloklanmaydigan favqulodda chiqish yo'li.
-        self.emergency_timer = QTimer()
-        self.emergency_timer.timeout.connect(self._check_emergency_unlock)
-        self.emergency_timer.start(250)
+        # Ctrl+Alt+Shift+U (favqulodda chiqish) va F9 (o'yin ustiga
+        # launcher/bar menyusini qaytarish) bosilganini kuzatib turadi —
+        # low_level_keyboard_proc shu bayroqlarni o'rnatadi.
+        self.hotkey_timer = QTimer()
+        self.hotkey_timer.timeout.connect(self._check_global_hotkeys)
+        self.hotkey_timer.start(250)
 
         install_keyboard_hook()
         self.main_window.switch_to_lock()
 
         threading.Thread(target=self._run_sync, daemon=True).start()
 
-    def _check_emergency_unlock(self):
-        global EMERGENCY_UNLOCK_REQUESTED
+    def _check_global_hotkeys(self):
+        global EMERGENCY_UNLOCK_REQUESTED, SHOW_LAUNCHER_REQUESTED
         if EMERGENCY_UNLOCK_REQUESTED:
             print("[Emergency] Ctrl+Alt+Shift+U aniqlandi — kiosk rejimi o'chirilmoqda")
             uninstall_keyboard_hook()
             os._exit(0)
+        if SHOW_LAUNCHER_REQUESTED:
+            SHOW_LAUNCHER_REQUESTED = False
+            self._show_launcher_over_game()
+
+    def _show_launcher_over_game(self):
+        # F9 yoki overlay'dagi BAR tugmasi bilan chaqiriladi: o'yinni
+        # o'chirmasdan, launcher/bar menyusini uning ustiga qaytaradi.
+        if self.current_status in ('ACTIVE', 'WARNING'):
+            self.main_window.stacked.setCurrentIndex(self.main_window.PAGE_LAUNCHER)
+            self.main_window.force_native_fullscreen()
 
     def _load_config(self, path):
         cfg = {"server_url": "http://localhost:8001", "websocket_url": "ws://localhost:8001/ws/pc-status/",

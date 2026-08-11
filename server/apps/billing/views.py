@@ -630,7 +630,18 @@ class StockSupplyViewSet(viewsets.ModelViewSet):
             product = Product.objects.filter(name__iexact=product_name).first()
 
         if not product:
-            return Response({'error': 'Ushbu mahsulot ro\'yxatda mavjud emas! Omborga faqat ro\'yxatdagi mahsulotlarni kirim qilish mumkin.'}, status=status.HTTP_400_BAD_REQUEST)
+            if not product_name:
+                return Response({'error': 'Iltimos, mahsulotni tanlang yoki yangi mahsulot nomini kiriting!'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            default_category = Category.objects.first()
+            product = Product.objects.create(
+                name=product_name,
+                cost_price=cost_price,
+                price=selling_price,
+                stock=0,
+                category=default_category,
+                is_available=True
+            )
 
         product.stock += quantity
         if cost_price > 0:

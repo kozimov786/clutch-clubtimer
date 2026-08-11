@@ -284,7 +284,7 @@ function updateStatsHeader() {
   sessions.forEach(s => {
     revenue += parseFloat(s.total_price || 0);
   });
-  document.getElementById('stat-revenue').textContent = formatMoney(revenue);
+  document.getElementById('stat-revenue').textContent = (revenue > 0 ? '+' : '') + formatMoney(revenue);
 
   const isDaytime = isDaytimeDiscountActive();
   const discountBanner = document.getElementById('daytime-discount-badge');
@@ -984,71 +984,95 @@ function renderBarOrders() {
   }
 
   container.innerHTML = filtered.map(order => {
-    let statusBadge = `<span class="px-2.5 py-1 text-xs font-bold rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">⏳ PENDING</span>`;
+    let statusBadge = `<span class="px-3 py-1 text-xs font-bold rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse flex items-center gap-1">⏳ KUTILMOQDA</span>`;
     if (order.status === 'APPROVED') {
-      statusBadge = `<span class="px-2.5 py-1 text-xs font-bold rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">👍 APPROVED</span>`;
+      statusBadge = `<span class="px-3 py-1 text-xs font-bold rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center gap-1">👍 TASDIQLANDI</span>`;
     } else if (order.status === 'DELIVERED') {
-      statusBadge = `<span class="px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">🚚 DELIVERED</span>`;
+      statusBadge = `<span class="px-3 py-1 text-xs font-bold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center gap-1">🚚 TOPSHIRILDI</span>`;
     } else if (order.status === 'CANCELLED') {
-      statusBadge = `<span class="px-2.5 py-1 text-xs font-bold rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40">❌ CANCELLED</span>`;
+      statusBadge = `<span class="px-3 py-1 text-xs font-bold rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40 flex items-center gap-1">❌ BEKOR QILINDI</span>`;
     }
 
+    const pcDisplayName = order.computer_name || (order.computer ? `PC-${String(order.computer).padStart(2, '0')}` : 'TEZKOR BAR');
+    const isDirectBarSale = !order.computer && (!order.computer_name || order.computer_name === 'TEZKOR BAR');
+
+    const pcBadgeHTML = isDirectBarSale ? `
+      <div class="px-3.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 font-orbitron font-extrabold text-xs flex items-center gap-1.5 shrink-0 whitespace-nowrap shadow-md shadow-amber-500/10">
+        <span class="text-base">🛍️</span>
+        <span>TEZKOR BAR SOTUV</span>
+      </div>
+    ` : `
+      <div class="px-3.5 py-1.5 rounded-xl bg-cyan-500/20 border border-cyan-400/50 text-cyan-300 font-orbitron font-black text-sm flex items-center gap-2 shrink-0 whitespace-nowrap shadow-lg shadow-cyan-500/15">
+        <span class="text-base">🖥️</span>
+        <span class="tracking-wider text-white">${pcDisplayName}</span>
+      </div>
+    `;
+
     const itemsHTML = (order.items || []).map(item => `
-      <div class="flex items-center justify-between text-xs py-1.5 border-b border-slate-800/50">
-        <div class="flex items-center gap-2">
-          <img src="${item.product_image}" class="w-7 h-7 rounded-lg object-cover border border-slate-700">
-          <span class="text-slate-200 font-semibold">${item.product_name}</span>
-          <span class="text-cyan-400 font-bold font-mono">x${item.quantity}</span>
+      <div class="flex items-center justify-between text-xs py-2 border-b border-slate-800/60 last:border-0">
+        <div class="flex items-center gap-2.5">
+          ${item.product_image ? `<img src="${item.product_image}" class="w-8 h-8 rounded-lg object-cover border border-slate-700">` : `<div class="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-xs">🥤</div>`}
+          <span class="text-slate-100 font-bold text-xs">${item.product_name}</span>
+          <span class="px-2 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-bold font-mono text-[11px]">x${item.quantity}</span>
         </div>
-        <span class="text-slate-300 font-mono">${formatMoney(item.unit_price * item.quantity)}</span>
+        <span class="text-slate-200 font-bold font-mono text-xs">${formatMoney(item.unit_price * item.quantity)}</span>
       </div>
     `).join('');
 
-    const timeAgo = new Date(order.created_at).toLocaleTimeString();
+    const timeAgo = new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const paymentMethodLabel = order.payment_method === 'CARD' ? '💳 Plastik' : '💵 Naqd';
 
     return `
-      <div class="glass-panel p-5 rounded-2xl border border-slate-800 space-y-3 relative">
-        <div class="flex items-center justify-between">
+      <div class="glass-panel p-5 rounded-2xl border border-slate-800 space-y-3.5 relative hover:border-slate-700 transition-all">
+        <!-- Top Row Header -->
+        <div class="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-slate-800/80">
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/40 text-purple-300 flex items-center justify-center font-orbitron font-black text-sm">
-              ${order.computer_name}
-            </div>
+            ${pcBadgeHTML}
             <div>
-              <div class="text-sm font-bold text-white font-orbitron">Order #${order.id}</div>
-              <div class="text-[11px] text-slate-400 font-mono">${timeAgo}</div>
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-black text-white font-orbitron">Order #${order.id}</span>
+                <span class="px-2 py-0.5 rounded-md bg-slate-900 border border-slate-800 text-[10px] font-bold text-slate-400">${paymentMethodLabel}</span>
+              </div>
+              <div class="text-[11px] text-slate-400 font-mono mt-0.5">Vaqti: ${timeAgo}</div>
             </div>
           </div>
-          ${statusBadge}
-        </div>
-
-        <div class="bg-slate-950/70 p-3 rounded-xl border border-slate-800/80 space-y-1">
-          ${itemsHTML}
-          <div class="flex justify-between items-center pt-2 font-bold text-sm">
-            <span class="text-slate-400 uppercase text-xs">Jami Summa:</span>
-            <span class="text-emerald-400 font-orbitron text-base">${formatMoney(order.total_price)}</span>
+          <div>
+            ${statusBadge}
           </div>
         </div>
 
+        <!-- Products List & Total -->
+        <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800/80 space-y-1">
+          ${itemsHTML}
+          <div class="flex justify-between items-center pt-2.5 mt-1 border-t border-slate-800/80">
+            <span class="text-slate-400 font-bold uppercase tracking-wider text-xs">Jami Summa:</span>
+            <span class="text-emerald-400 font-orbitron font-black text-lg">${formatMoney(order.total_price)}</span>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
         <div class="flex items-center gap-2 pt-1">
           ${order.status === 'PENDING' ? `
-            <button onclick="approveOrder(${order.id})" class="flex-1 py-2 rounded-xl glow-btn-cyan text-xs flex items-center justify-center gap-1">
+            <button onclick="approveOrder(${order.id})" class="flex-1 py-2.5 rounded-xl glow-btn-cyan text-xs font-bold flex items-center justify-center gap-1.5 transition-all">
               ✓ Tasdiqlash (Approve)
             </button>
-            <button onclick="deliverOrder(${order.id})" class="flex-1 py-2 rounded-xl glow-btn-emerald text-xs flex items-center justify-center gap-1">
+            <button onclick="deliverOrder(${order.id})" class="flex-1 py-2.5 rounded-xl glow-btn-emerald text-xs font-bold flex items-center justify-center gap-1.5 transition-all">
               🚚 Topshirildi (Deliver)
             </button>
-            <button onclick="cancelOrder(${order.id})" class="py-2 px-3 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/40 text-xs font-bold transition-all">
+            <button onclick="cancelOrder(${order.id})" class="py-2.5 px-3.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/40 text-xs font-bold transition-all">
               Bekor Qilish
             </button>
           ` : order.status === 'APPROVED' ? `
-            <button onclick="deliverOrder(${order.id})" class="flex-1 py-2 rounded-xl glow-btn-emerald text-xs flex items-center justify-center gap-1">
+            <button onclick="deliverOrder(${order.id})" class="flex-1 py-2.5 rounded-xl glow-btn-emerald text-xs font-bold flex items-center justify-center gap-1.5 transition-all">
               🚚 Topshirildi (Deliver)
             </button>
-            <button onclick="cancelOrder(${order.id})" class="py-2 px-3 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/40 text-xs font-bold transition-all">
+            <button onclick="cancelOrder(${order.id})" class="py-2.5 px-3.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/40 text-xs font-bold transition-all">
               Bekor Qilish
             </button>
           ` : `
-            <div class="text-xs text-slate-500 font-mono italic">Buyurtma yakunlangan (${order.status})</div>
+            <div class="text-xs text-slate-500 font-mono italic flex items-center gap-1">
+              <span>✓ Buyurtma yakunlangan (${order.status})</span>
+            </div>
           `}
         </div>
       </div>
@@ -1556,12 +1580,57 @@ function renderFinanceDashboard(data) {
   const totalExpEl = document.getElementById('finance-total-expenses');
   const expBreakdownEl = document.getElementById('finance-expenses-breakdown');
 
-  if (cashBalEl) cashBalEl.textContent = formatMoney(data.cash_balance || 0);
-  if (cardBalEl) cardBalEl.textContent = formatMoney(data.card_balance || 0);
-  if (totalBalEl) totalBalEl.textContent = formatMoney(data.total_balance || 0);
-  if (totalExpEl) totalExpEl.textContent = formatMoney(data.total_expenses || 0);
+  const cashBal = data.cash_balance || 0;
+  const cardBal = data.card_balance || 0;
+  const totalBal = data.total_balance || 0;
+  const totalExp = data.total_expenses || 0;
+
+  if (cashBalEl) {
+    if (cashBal > 0) {
+      cashBalEl.textContent = `+${formatMoney(cashBal)}`;
+      cashBalEl.className = "text-2xl font-black font-orbitron text-emerald-400 mt-2";
+    } else if (cashBal < 0) {
+      cashBalEl.textContent = `-${formatMoney(Math.abs(cashBal))}`;
+      cashBalEl.className = "text-2xl font-black font-orbitron text-rose-400 mt-2";
+    } else {
+      cashBalEl.textContent = `0 UZS`;
+      cashBalEl.className = "text-2xl font-black font-orbitron text-slate-400 mt-2";
+    }
+  }
+
+  if (cardBalEl) {
+    if (cardBal > 0) {
+      cardBalEl.textContent = `+${formatMoney(cardBal)}`;
+      cardBalEl.className = "text-2xl font-black font-orbitron text-cyan-400 mt-2";
+    } else if (cardBal < 0) {
+      cardBalEl.textContent = `-${formatMoney(Math.abs(cardBal))}`;
+      cardBalEl.className = "text-2xl font-black font-orbitron text-rose-400 mt-2";
+    } else {
+      cardBalEl.textContent = `0 UZS`;
+      cardBalEl.className = "text-2xl font-black font-orbitron text-slate-400 mt-2";
+    }
+  }
+
+  if (totalBalEl) {
+    if (totalBal > 0) {
+      totalBalEl.textContent = `+${formatMoney(totalBal)}`;
+      totalBalEl.className = "text-2xl font-black font-orbitron text-purple-400 mt-2";
+    } else if (totalBal < 0) {
+      totalBalEl.textContent = `-${formatMoney(Math.abs(totalBal))}`;
+      totalBalEl.className = "text-2xl font-black font-orbitron text-rose-400 mt-2";
+    } else {
+      totalBalEl.textContent = `0 UZS`;
+      totalBalEl.className = "text-2xl font-black font-orbitron text-slate-400 mt-2";
+    }
+  }
+
+  if (totalExpEl) {
+    totalExpEl.textContent = totalExp > 0 ? `-${formatMoney(totalExp)}` : `0 UZS`;
+  }
   if (expBreakdownEl) {
-    expBreakdownEl.textContent = `Naqd: ${formatMoney(data.expense_cash || 0)} | Card: ${formatMoney(data.expense_card || 0)}`;
+    const expCash = data.expense_cash || 0;
+    const expCard = data.expense_card || 0;
+    expBreakdownEl.textContent = `Naqd: ${expCash > 0 ? '-' : ''}${formatMoney(expCash)} | Card: ${expCard > 0 ? '-' : ''}${formatMoney(expCard)}`;
   }
 
   const barRevEl = document.getElementById('finance-bar-revenue');
@@ -1569,9 +1638,9 @@ function renderFinanceDashboard(data) {
   const barMarginEl = document.getElementById('finance-bar-margin');
   const barMarginPctEl = document.getElementById('finance-bar-margin-pct');
 
-  if (barRevEl) barRevEl.textContent = formatMoney(data.total_bar || 0);
-  if (barCogsEl) barCogsEl.textContent = formatMoney(data.bar_cogs || 0);
-  if (barMarginEl) barMarginEl.textContent = formatMoney(data.bar_margin || 0);
+  if (barRevEl) barRevEl.textContent = (data.total_bar > 0 ? '+' : '') + formatMoney(data.total_bar || 0);
+  if (barCogsEl) barCogsEl.textContent = (data.bar_cogs > 0 ? '-' : '') + formatMoney(data.bar_cogs || 0);
+  if (barMarginEl) barMarginEl.textContent = (data.bar_margin > 0 ? '+' : data.bar_margin < 0 ? '-' : '') + formatMoney(Math.abs(data.bar_margin || 0));
   if (barMarginPctEl) barMarginPctEl.textContent = `${data.bar_margin_percent || 0}% Margin`;
 
   const sessCashEl = document.getElementById('breakdown-session-cash');
@@ -1579,10 +1648,10 @@ function renderFinanceDashboard(data) {
   const barCashEl = document.getElementById('breakdown-bar-cash');
   const barCardEl = document.getElementById('breakdown-bar-card');
 
-  if (sessCashEl) sessCashEl.textContent = formatMoney(data.session_cash || 0);
-  if (sessCardEl) sessCardEl.textContent = formatMoney(data.session_card || 0);
-  if (barCashEl) barCashEl.textContent = formatMoney(data.bar_cash || 0);
-  if (barCardEl) barCardEl.textContent = formatMoney(data.bar_card || 0);
+  if (sessCashEl) sessCashEl.textContent = (data.session_cash > 0 ? '+' : '') + formatMoney(data.session_cash || 0);
+  if (sessCardEl) sessCardEl.textContent = (data.session_card > 0 ? '+' : '') + formatMoney(data.session_card || 0);
+  if (barCashEl) barCashEl.textContent = (data.bar_cash > 0 ? '+' : '') + formatMoney(data.bar_cash || 0);
+  if (barCardEl) barCardEl.textContent = (data.bar_card > 0 ? '+' : '') + formatMoney(data.bar_card || 0);
 
   const countBadge = document.getElementById('expenses-count-badge');
   const tbody = document.getElementById('expenses-table-body');
@@ -1596,27 +1665,28 @@ function renderFinanceDashboard(data) {
     return;
   }
 
-  tbody.innerHTML = expenses.map(e => `
-    <tr class="border-b border-slate-800 hover:bg-slate-900/50 transition-colors text-xs whitespace-nowrap">
-      <td class="py-3 px-3 text-slate-400 font-mono whitespace-nowrap">${new Date(e.created_at).toLocaleString('uz-UZ')}</td>
-      <td class="py-3 px-3 whitespace-nowrap">
-        <span class="px-2 py-0.5 rounded-full bg-slate-800 text-cyan-300 font-bold border border-slate-700">${e.category}</span>
-      </td>
-      <td class="py-3 px-3 font-semibold text-slate-200 truncate max-w-[140px]" title="${e.recipient_name || ''}">${e.recipient_name || '—'}</td>
-      <td class="py-3 px-3 whitespace-nowrap">
-        ${e.payment_method === 'CASH' ? 
-          '<span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold">💵 Naqd</span>' : 
-          '<span class="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-bold">💳 Plastik</span>'}
-      </td>
-      <td class="py-3 px-3 font-bold text-rose-400 font-orbitron whitespace-nowrap">-${formatMoney(e.amount)}</td>
-      <td class="py-3 px-3 text-slate-300 max-w-xs truncate" title="${e.description || ''}">${e.description || '—'}</td>
-      <td class="py-3 px-3 text-right whitespace-nowrap">
-        <button onclick="handleDeleteExpense(${e.id})" class="p-1 rounded bg-rose-500/20 hover:bg-rose-500/40 text-rose-400 transition-colors" title="Chiqimni o'chirish">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-        </button>
-      </td>
-    </tr>
-  `).join('');
+  tbody.innerHTML = expenses.map(e => {
+    const formattedDate = new Date(e.created_at).toLocaleString();
+    return `
+      <tr class="border-b border-slate-800/60 hover:bg-slate-900/50 transition-all text-xs">
+        <td class="py-3 px-3 font-mono text-slate-400 whitespace-nowrap">${formattedDate}</td>
+        <td class="py-3 px-3 font-semibold text-cyan-300 whitespace-nowrap">${e.category || 'Boshqa'}</td>
+        <td class="py-3 px-3 text-slate-200 font-medium whitespace-nowrap">${e.recipient_name || '-'}</td>
+        <td class="py-3 px-3 whitespace-nowrap">
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold ${e.payment_method === 'CASH' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'}">
+            ${e.payment_method_display || e.payment_method}
+          </span>
+        </td>
+        <td class="py-3 px-3 font-bold text-rose-400 font-orbitron whitespace-nowrap">-${formatMoney(Math.abs(parseFloat(e.amount || 0)))}</td>
+        <td class="py-3 px-3 text-slate-400 max-w-[200px] truncate" title="${e.description || ''}">${e.description || '-'}</td>
+        <td class="py-3 px-3 text-right whitespace-nowrap">
+          <button onclick="deleteExpense(${e.id})" class="text-rose-400 hover:text-rose-300 p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 transition-all">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
 }
 
 async function handleCreateExpense(e) {
@@ -1676,10 +1746,52 @@ async function handleDeleteExpense(id) {
 }
 
 // Restock Modal & StockSupply Functions
+let currentRestockMode = 'existing';
+
+function toggleRestockProductMode(mode) {
+  currentRestockMode = mode;
+  const existingContainer = document.getElementById('restock-existing-container');
+  const newContainer = document.getElementById('restock-new-container');
+  const tabExisting = document.getElementById('restock-tab-existing');
+  const tabNew = document.getElementById('restock-tab-new');
+  const select = document.getElementById('restock-product-select');
+  const newNameInput = document.getElementById('restock-new-product-name');
+  const costInput = document.getElementById('restock-cost-price');
+  const priceInput = document.getElementById('restock-selling-price');
+
+  if (mode === 'existing') {
+    if (existingContainer) existingContainer.classList.remove('hidden');
+    if (newContainer) newContainer.classList.add('hidden');
+    
+    if (tabExisting) tabExisting.className = "px-2.5 py-1 rounded-md text-xs font-semibold transition-all bg-cyan-500/20 text-cyan-400 border border-cyan-500/40";
+    if (tabNew) tabNew.className = "px-2.5 py-1 rounded-md text-xs font-semibold transition-all text-slate-400 hover:text-white border border-transparent";
+    
+    if (select) {
+      if (select.value === '__NEW__') select.value = '';
+      onRestockProductSelect();
+    }
+  } else {
+    if (existingContainer) existingContainer.classList.add('hidden');
+    if (newContainer) newContainer.classList.remove('hidden');
+
+    if (tabNew) tabNew.className = "px-2.5 py-1 rounded-md text-xs font-semibold transition-all bg-cyan-500/20 text-cyan-400 border border-cyan-500/40";
+    if (tabExisting) tabExisting.className = "px-2.5 py-1 rounded-md text-xs font-semibold transition-all text-slate-400 hover:text-white border border-transparent";
+
+    if (select) select.value = '__NEW__';
+    if (costInput) costInput.value = '0';
+    if (priceInput) priceInput.value = '0';
+    if (newNameInput) {
+      newNameInput.focus();
+    }
+  }
+  updateRestockCalc();
+}
+
 function openRestockModal(productId = null) {
   const modal = document.getElementById('modal-restock');
   const select = document.getElementById('restock-product-select');
   const nameInput = document.getElementById('restock-product-name');
+  const newNameInput = document.getElementById('restock-new-product-name');
   const costInput = document.getElementById('restock-cost-price');
   const priceInput = document.getElementById('restock-selling-price');
 
@@ -1687,14 +1799,20 @@ function openRestockModal(productId = null) {
 
   select.innerHTML = `
     <option value="">-- Ro'yxatdan Mahsulotni Tanlang --</option>
+    <option value="__NEW__">➕ Yangi Mahsulot Qo'shish...</option>
     ${cachedProducts.map(p => `<option value="${p.id}" ${productId === p.id ? 'selected' : ''}>${p.name} (Tannarx: ${formatMoney(p.cost_price || 0)} | Sotish: ${formatMoney(p.price)})</option>`).join('')}
   `;
 
+  if (newNameInput) newNameInput.value = '';
+  if (nameInput) nameInput.value = '';
+
   if (productId) {
+    toggleRestockProductMode('existing');
     select.value = productId;
     onRestockProductSelect();
   } else {
-    if (nameInput) nameInput.value = '';
+    toggleRestockProductMode('existing');
+    select.value = '';
     if (costInput) costInput.value = '0';
     if (priceInput) priceInput.value = '0';
     updateRestockCalc();
@@ -1717,6 +1835,11 @@ function onRestockProductSelect() {
   if (!select) return;
 
   const productId = select.value;
+  if (productId === '__NEW__') {
+    toggleRestockProductMode('new');
+    return;
+  }
+
   if (!productId) {
     if (nameInput) nameInput.value = '';
     if (costInput) costInput.value = '0';
@@ -1752,19 +1875,35 @@ function updateRestockCalc() {
 async function handleRestockSubmit(e) {
   e.preventDefault();
 
-  const productId = document.getElementById('restock-product-select')?.value || null;
-  const productName = document.getElementById('restock-product-name')?.value || '';
+  const selectVal = document.getElementById('restock-product-select')?.value || '';
+  const newNameInputVal = document.getElementById('restock-new-product-name')?.value.trim() || '';
+
+  let productId = null;
+  let productName = '';
+
+  if (currentRestockMode === 'new' || selectVal === '__NEW__') {
+    if (!newNameInputVal) {
+      alert("Iltimos, yangi mahsulot nomini kiriting!");
+      document.getElementById('restock-new-product-name')?.focus();
+      return;
+    }
+    productName = newNameInputVal;
+  } else {
+    if (!selectVal) {
+      alert("Iltimos, ro'yxatdan mahsulotni tanlang yoki '+ Yangi Mahsulot' tugmasini bosing!");
+      return;
+    }
+    productId = selectVal;
+    const selectedProd = cachedProducts.find(p => p.id == productId);
+    productName = selectedProd ? selectedProd.name : (document.getElementById('restock-product-name')?.value || '');
+  }
+
   const quantity = parseInt(document.getElementById('restock-quantity')?.value) || 1;
   const costPrice = parseFloat(document.getElementById('restock-cost-price')?.value) || 0;
   const sellingPrice = parseFloat(document.getElementById('restock-selling-price')?.value) || 0;
   const paymentMethod = document.getElementById('restock-payment-method')?.value || 'CASH';
   const supplierNote = document.getElementById('restock-supplier-note')?.value || '';
   const submitBtn = document.getElementById('restock-submit-btn');
-
-  if (!productId) {
-    alert("Iltimos, ro'yxatdan mahsulotni tanlang!");
-    return;
-  }
 
   if (submitBtn) {
     submitBtn.disabled = true;

@@ -360,31 +360,8 @@
     <div id="tab-view-bar" class="hidden space-y-6">
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        <!-- Live Bar Orders Feed (2 columns) -->
-        <div class="lg:col-span-2 space-y-4">
-          <div class="glass-panel p-4 rounded-2xl flex flex-wrap items-center justify-between gap-3">
-            <h3 class="text-lg font-bold font-orbitron text-white flex items-center gap-2">
-              <span>🍸 BAR BUYURTMALARI</span>
-              <span id="bar-pending-badge" class="px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40 text-xs font-mono font-bold">0 Kutilmoqda</span>
-            </h3>
-
-            <!-- Status filter buttons -->
-            <div class="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-semibold">
-              <button onclick="filterBarOrders('ALL')" data-bar-status="ALL" class="bar-filter-btn px-3 py-1.5 rounded-lg bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 transition-all">Barchasi</button>
-              <button onclick="filterBarOrders('PENDING')" data-bar-status="PENDING" class="bar-filter-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all">Kutilmoqda</button>
-              <button onclick="filterBarOrders('APPROVED')" data-bar-status="APPROVED" class="bar-filter-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all">Tasdiqlangan</button>
-              <button onclick="filterBarOrders('DELIVERED')" data-bar-status="DELIVERED" class="bar-filter-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all">Topshirilgan</button>
-            </div>
-          </div>
-
-          <!-- Orders Container -->
-          <div id="bar-orders-container" class="space-y-4">
-            <!-- Dynamically populated -->
-          </div>
-        </div>
-
-        <!-- Quick POS Stock, Cart & Direct Sale Controls (1 column) -->
-        <div class="glass-panel p-5 rounded-2xl space-y-4 border border-slate-800 flex flex-col justify-between">
+        <!-- Quick POS Stock, Cart & Direct Sale Controls (Left side, 1 column) -->
+        <div class="lg:col-span-1 glass-panel p-5 rounded-2xl space-y-4 border border-slate-800 flex flex-col justify-start self-start sticky top-6">
           <div>
             <div class="flex items-center justify-between pb-3 border-b border-slate-800">
               <h3 class="text-base font-bold font-orbitron text-white flex items-center gap-2">
@@ -439,6 +416,29 @@
             <div id="bar-pos-products-list" class="space-y-2 max-h-[300px] overflow-y-auto pr-1">
               <!-- Dynamically populated -->
             </div>
+          </div>
+        </div>
+
+        <!-- Live Bar Orders Feed (Right side, 2 columns) -->
+        <div class="lg:col-span-2 space-y-4">
+          <div class="glass-panel p-4 rounded-2xl flex flex-wrap items-center justify-between gap-3">
+            <h3 class="text-lg font-bold font-orbitron text-white flex items-center gap-2">
+              <span>🍸 BAR BUYURTMALARI</span>
+              <span id="bar-pending-badge" class="px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40 text-xs font-mono font-bold">0 Kutilmoqda</span>
+            </h3>
+
+            <!-- Status filter buttons -->
+            <div class="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-semibold">
+              <button onclick="filterBarOrders('ALL')" data-bar-status="ALL" class="bar-filter-btn px-3 py-1.5 rounded-lg bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 transition-all">Barchasi</button>
+              <button onclick="filterBarOrders('PENDING')" data-bar-status="PENDING" class="bar-filter-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all">Kutilmoqda</button>
+              <button onclick="filterBarOrders('APPROVED')" data-bar-status="APPROVED" class="bar-filter-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all">Tasdiqlangan</button>
+              <button onclick="filterBarOrders('DELIVERED')" data-bar-status="DELIVERED" class="bar-filter-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all">Topshirilgan</button>
+            </div>
+          </div>
+
+          <!-- Orders Container -->
+          <div id="bar-orders-container" class="space-y-4">
+            <!-- Dynamically populated -->
           </div>
         </div>
 
@@ -1095,13 +1095,33 @@
       </div>
 
       <form onsubmit="handleRestockSubmit(event)" class="mt-4 space-y-4">
-        <!-- Select Existing Product Only -->
+        <!-- Select Existing or New Product -->
         <div>
-          <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Mavjud Mahsulotni Tanlang</label>
-          <select id="restock-product-select" required onchange="onRestockProductSelect()" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 font-semibold">
-            <option value="">-- Ro'yxatdan Mahsulotni Tanlang --</option>
-            <!-- Populated dynamically -->
-          </select>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Mahsulot</label>
+            <div class="flex gap-1 bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[11px]">
+              <button type="button" id="restock-tab-existing" onclick="toggleRestockProductMode('existing')" class="px-2.5 py-1 rounded-md text-xs font-semibold transition-all bg-cyan-500/20 text-cyan-400 border border-cyan-500/40">
+                Mavjud Ro'yxatdan
+              </button>
+              <button type="button" id="restock-tab-new" onclick="toggleRestockProductMode('new')" class="px-2.5 py-1 rounded-md text-xs font-semibold transition-all text-slate-400 hover:text-white border border-transparent">
+                + Yangi Mahsulot
+              </button>
+            </div>
+          </div>
+
+          <!-- Existing Product Select -->
+          <div id="restock-existing-container">
+            <select id="restock-product-select" onchange="onRestockProductSelect()" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 font-semibold">
+              <option value="">-- Ro'yxatdan Mahsulotni Tanlang --</option>
+              <!-- Populated dynamically -->
+            </select>
+          </div>
+
+          <!-- New Product Input -->
+          <div id="restock-new-container" class="hidden">
+            <input type="text" id="restock-new-product-name" placeholder="Yangi mahsulot nomi (masalan: RedBull 250ml)" class="w-full bg-slate-900/90 border border-cyan-500/50 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 font-semibold">
+          </div>
+
           <input type="hidden" id="restock-product-name">
         </div>
 

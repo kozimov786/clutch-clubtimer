@@ -3,6 +3,8 @@ import calendar
 from django.utils import timezone
 from django.shortcuts import render
 from django.views import View
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 from django.contrib.auth import authenticate, login, logout
 from django.db.models import Sum, Count, F, Case, When, Value, DecimalField
 from rest_framework import viewsets, status
@@ -665,6 +667,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         }, status=status.HTTP_200_OK)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class StockSupplyViewSet(viewsets.ModelViewSet):
     queryset = StockSupply.objects.all().order_by('-created_at')
     serializer_class = StockSupplySerializer
@@ -731,6 +734,7 @@ class StockSupplyViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class ExpenseViewSet(viewsets.ModelViewSet):
     queryset = Expense.objects.all().order_by('-created_at')
     serializer_class = ExpenseSerializer

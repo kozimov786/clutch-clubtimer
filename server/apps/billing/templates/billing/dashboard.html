@@ -530,13 +530,8 @@
           <p class="text-xs text-slate-400 mt-0.5">Real vaqtdagi kassa balanslari, seanslar, bar va chiqimlar hisobi</p>
         </div>
 
-        <!-- Expense Modal Button & Period Filters -->
+        <!-- Period Filters -->
         <div class="flex items-center flex-wrap gap-2.5">
-          <button onclick="openExpenseModal()" class="px-4 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-extrabold text-xs shadow-lg shadow-rose-600/30 flex items-center gap-1.5 transition-all font-orbitron tracking-wider">
-            <span>➖ CHIQIM KIRITISH</span>
-          </button>
-
-          <div class="h-6 w-[1px] bg-slate-800 mx-1 hidden sm:block"></div>
 
           <button onclick="setFinancePeriod('daily')" id="btn-period-daily" class="finance-period-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 transition-all">Bugun</button>
           <button onclick="setFinancePeriod('monthly')" id="btn-period-monthly" class="finance-period-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-900 text-slate-400 hover:text-white border border-slate-800 transition-all">Shu Oy</button>
@@ -654,7 +649,12 @@
             <h3 class="text-base font-bold font-orbitron text-white flex items-center gap-2">
               <span>📋 OXIRGI CHIQIMLAR</span>
             </h3>
-            <span id="expenses-count-badge" class="text-xs font-mono text-rose-400 bg-rose-500/10 border border-rose-500/30 px-2 py-0.5 rounded-full font-bold">0 ta chiqim</span>
+            <div class="flex items-center gap-2">
+              <button onclick="openExpenseModal()" class="px-2.5 py-1 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-400 text-xs font-bold transition-all flex items-center gap-1">
+                <span>➕ Chiqim Kiritish</span>
+              </button>
+              <span id="expenses-count-badge" class="text-xs font-mono text-rose-400 bg-rose-500/10 border border-rose-500/30 px-2 py-0.5 rounded-full font-bold">0 ta chiqim</span>
+            </div>
           </div>
 
           <div class="overflow-x-auto max-h-[480px]">
@@ -1199,6 +1199,9 @@
           </tbody>
         </table>
       </div>
+    </div>
+  </div>
+
   <!-- Expense Input Modal Popup -->
   <div id="expense-modal" class="modal-wrapper fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
     <div class="modal-sheet-inner glass-panel w-full max-w-lg rounded-2xl p-6 relative border border-slate-700 shadow-2xl space-y-4">
@@ -1230,12 +1233,14 @@
           <div>
             <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Kategoriya</label>
             <select id="expense-category-input" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-semibold">
-              <option value="Maosh">Maosh / Ish haqi</option>
-              <option value="Kommunal">Kommunal / Elektr / Internet</option>
-              <option value="Xarid">Bar / Ombor Xaridi</option>
-              <option value="Ijara">Klub Ijarasi</option>
-              <option value="Transport">Transport / Dastavka</option>
-              <option value="Boshqa" selected>Boshqa Chiqimlar</option>
+              <option value="Elektr">Elektr</option>
+              <option value="WiFi">WiFi</option>
+              <option value="Ijara">Ijara</option>
+              <option value="Ta'mir">Ta'mir</option>
+              <option value="Preferiya">Preferiya</option>
+              <option value="Uy">Uy</option>
+              <option value="Taom">Taom</option>
+              <option value="Boshqa Chiqim" selected>Boshqa Chiqim</option>
             </select>
           </div>
         </div>

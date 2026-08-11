@@ -12,6 +12,21 @@ let searchQuery = '';
 let currentTab = 'grid';
 let activeInputMode = 'money';
 
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === (name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+
 
 // Web Audio API Synthesizer
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1810,11 +1825,15 @@ function renderFinanceDashboard(data) {
 
 async function handleCreateExpense(e) {
   if (e) e.preventDefault();
-  const amount = parseFloat(document.getElementById('expense-amount-input').value) || 0;
+  const amountInput = document.getElementById('expense-amount-input');
+  const recipientInput = document.getElementById('expense-recipient-input');
+  const descInput = document.getElementById('expense-description-input');
+
+  const amount = parseFloat(amountInput.value) || 0;
   const paymentMethod = document.getElementById('expense-payment-method').value || 'CASH';
-  const category = document.getElementById('expense-category-input').value || 'Boshqa';
-  const recipientName = document.getElementById('expense-recipient-input').value.trim();
-  const description = document.getElementById('expense-description-input').value.trim();
+  const category = document.getElementById('expense-category-input').value || 'Boshqa Chiqim';
+  const recipientName = recipientInput.value.trim();
+  const description = descInput.value.trim();
 
   if (amount <= 0) {
     alert("Iltimos, musbat summa kiriting!");
@@ -1824,7 +1843,10 @@ async function handleCreateExpense(e) {
   try {
     const res = await fetch('/api/expenses/', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCookie('csrftoken') || ''
+      },
       body: JSON.stringify({
         amount: amount,
         payment_method: paymentMethod,
@@ -1837,11 +1859,13 @@ async function handleCreateExpense(e) {
     if (res.ok) {
       playSound('add');
       closeExpenseModal();
-      document.getElementById('expense-amount-input').value = '';
-      document.getElementById('expense-recipient-input').value = '';
-      document.getElementById('expense-description-input').value = '';
+      amountInput.value = '';
+      recipientInput.value = '';
+      descInput.value = '';
       fetchFinanceData();
     } else {
+      const errData = await res.json().catch(() => ({}));
+      console.error("Create expense error response:", errData);
       alert("Chiqimni saqlashda xatolik yuz berdi!");
     }
   } catch (err) {
@@ -1854,7 +1878,10 @@ async function handleDeleteExpense(id) {
 
   try {
     const res = await fetch(`/api/expenses/${id}/`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers: {
+        'X-CSRFToken': getCookie('csrftoken') || ''
+      }
     });
     if (res.ok) {
       playSound('lock');

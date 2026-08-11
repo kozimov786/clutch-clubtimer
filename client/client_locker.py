@@ -123,9 +123,19 @@ class LockScreenWidget(QWidget):
         root.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         card = QFrame()
+        card.setObjectName("lockCard")
         card.setFixedWidth(500)
-        card.setStyleSheet("""QFrame { background: rgba(12,18,32,0.94);
-            border: 2px solid rgba(0,240,255,0.35); border-radius: 28px; }""")
+        card.setStyleSheet("""
+            QFrame#lockCard {
+                background: rgba(12,18,32,0.94);
+                border: 2px solid rgba(0,240,255,0.35);
+                border-radius: 28px;
+            }
+            QLabel {
+                border: none;
+                background: transparent;
+            }
+        """)
         sh = QGraphicsDropShadowEffect(card)
         sh.setBlurRadius(40); sh.setColor(QColor(0,240,255,110)); sh.setOffset(0,0)
         card.setGraphicsEffect(sh)
@@ -135,6 +145,7 @@ class LockScreenWidget(QWidget):
         cl.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         logo_lbl = QLabel()
+        logo_lbl.setStyleSheet("border: none; background: transparent;")
         logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "clutch_logo_full.png")
         if not os.path.exists(logo_path):
             logo_path = os.path.join(os.getcwd(), "client", "assets", "clutch_logo_full.png")
@@ -144,7 +155,7 @@ class LockScreenWidget(QWidget):
         else:
             logo_lbl.setText("CLUTCH ZONE")
             logo_lbl.setFont(QFont("Impact", 36, QFont.Weight.Bold))
-            logo_lbl.setStyleSheet("color: #00f0ff; letter-spacing: 4px;")
+            logo_lbl.setStyleSheet("border: none; background: transparent; color: #00f0ff; letter-spacing: 4px;")
         logo_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         glow = QGraphicsDropShadowEffect(logo_lbl)
         glow.setBlurRadius(30); glow.setColor(QColor(0,240,255,180)); glow.setOffset(0,0)
@@ -153,19 +164,19 @@ class LockScreenWidget(QWidget):
 
         s = QLabel("STATION LOCKED")
         s.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
-        s.setStyleSheet("color: #ef4444; letter-spacing: 3px;")
+        s.setStyleSheet("border: none; background: transparent; color: #ef4444; letter-spacing: 3px;")
         s.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cl.addWidget(s)
 
         pc = QLabel(self.pc_name)
         pc.setFont(QFont("Consolas", 34, QFont.Weight.Bold))
-        pc.setStyleSheet("color: #00f0ff; letter-spacing: 2px;")
+        pc.setStyleSheet("border: none; background: transparent; color: #00f0ff; letter-spacing: 2px;")
         pc.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cl.addWidget(pc)
 
         desc = QLabel("Seansni boshlash uchun administratorga murojaat qiling.")
         desc.setFont(QFont("Segoe UI", 12))
-        desc.setStyleSheet("color: #94a3b8;")
+        desc.setStyleSheet("border: none; background: transparent; color: #94a3b8;")
         desc.setWordWrap(True); desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cl.addWidget(desc)
         root.addWidget(card)

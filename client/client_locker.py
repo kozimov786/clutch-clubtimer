@@ -18,6 +18,21 @@ hide() / close() / ikkinchi QMainWindow — TO'LIQ OLIB TASHLANDI.
 
 import sys
 import os
+import ctypes
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  1. WINDOWS DPI AWARENESS OVERRIDE (Must run before QApplication creation)
+# ──────────────────────────────────────────────────────────────────────────────
+if sys.platform == 'win32':
+    try:
+        # Windows OS piksellarni buzmasligi uchun Per-Monitor DPI Awareness v2 yoqish
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
 import time
 import json
 import subprocess
@@ -97,6 +112,7 @@ class LockScreenWidget(QWidget):
     def __init__(self, pc_name="PC-01", parent=None):
         super().__init__(parent)
         self.pc_name = pc_name
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._build_ui()
 
     def _build_ui(self):
@@ -209,6 +225,7 @@ class GameLauncherWidget(QWidget):
         self.fallback_games = fallback_games or []; self.on_bar_click = on_bar_click
         self.games = []; self.current_category = None; self.search_query = ""
         self.pixmap_labels = {}
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.image_downloader = ImageCache()
         self.image_downloader.image_downloaded_signal.connect(self._on_image_downloaded)
         self._build_ui()
@@ -583,11 +600,6 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.pc_name = pc_name
 
-        # Window flags — bir marta, o'zgartirilmaydi
-        flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
-        if IS_WINDOWS:
-            flags |= Qt.WindowType.WindowDoesNotAcceptFocus
-        self.setWindowFlags(flags)
         self.setWindowTitle("Clutch Zone Client Locker")
 
         # Pages
@@ -599,33 +611,59 @@ class MainWindow(QMainWindow):
 
         # Stacked widget
         self.stacked = QStackedWidget()
+        self.stacked.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.stacked.addWidget(self.lock_page)      # index 0
         self.stacked.addWidget(self.launcher_page)  # index 1
         self.stacked.setCurrentIndex(self.PAGE_LOCK)
         self.setCentralWidget(self.stacked)
 
-        # Fullscreen — bir marta
-        screen = QGuiApplication.primaryScreen().geometry()
-        self.setGeometry(screen)
+        # Apply native win32 geometry & flags
+        self.apply_native_fullscreen()
         self.showFullScreen()
+
+    def apply_native_fullscreen(self):
+        if sys.platform == 'win32':
+            user32 = ctypes.windll.user32
+            user32.SetProcessDPIAware()
+            width = user32.GetSystemMetrics(0)  # SM_CXSCREEN
+            height = user32.GetSystemMetrics(1) # SM_CYSCREEN
+        else:
+            screen = QGuiApplication.primaryScreen().geometry()
+            width, height = screen.width(), screen.height()
+
+        flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
+        if IS_WINDOWS:
+            flags |= Qt.WindowType.WindowDoesNotAcceptFocus
+        self.setWindowFlags(flags)
+        self.setGeometry(0, 0, width, height)
+        self.setFixedSize(width, height)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.apply_native_fullscreen()
 
     def switch_to_lock(self):
         """LOCKED: LockScreen sahifasiga o'tish."""
+        self.apply_native_fullscreen()
         self.stacked.setCurrentIndex(self.PAGE_LOCK)
+        self.showFullScreen()
 
     def switch_to_launcher(self):
         """ACTIVE: GameLauncher sahifasiga o'tish."""
+        self.apply_native_fullscreen()
         self.stacked.setCurrentIndex(self.PAGE_LAUNCHER)
+        self.showFullScreen()
 
     def changeEvent(self, event):
         super().changeEvent(event)
         if event.type() == QEvent.Type.WindowStateChange:
+            self.apply_native_fullscreen()
             if self.windowState() & Qt.WindowState.WindowMinimized:
                 QTimer.singleShot(80, self._restore_fullscreen)
 
     def _restore_fullscreen(self):
-        screen = QGuiApplication.primaryScreen().geometry()
-        self.setGeometry(screen); self.showFullScreen()
+        self.apply_native_fullscreen()
+        self.showFullScreen()
         self.raise_(); self.activateWindow()
 
     def closeEvent(self, event): event.ignore()
@@ -801,6 +839,14 @@ class ClientLockerApp:
 #  ENTRY POINT
 # ──────────────────────────────────────────────────────────────────────────────
 def main():
+    if sys.platform == 'win32':
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        except Exception:
+            try:
+                ctypes.windll.user32.SetProcessDPIAware()
+            except Exception:
+                pass
     os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     app = QApplication(sys.argv)

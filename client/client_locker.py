@@ -384,9 +384,15 @@ class LockScreenWindow(FullscreenMixin, QWidget):
     def keyPressEvent(self, event): event.accept()
 
 
-class LockerWindow(FullscreenMixin, QMainWindow):
+class LockerWindow(QWidget):
     """
     LockerWindow — Kassa Serveridagi Web Launcher URL manzilidan LOCK panelini yuklaydi.
+
+    QWidget (QMainWindow emas) — bu widget hech qachon mustaqil top-level
+    oyna sifatida ko'rsatilmaydi, doim MainWindow'ning QStackedWidget'i
+    ichiga joylashtiriladi. QMainWindow'ni boshqa QMainWindow ichiga
+    ichma-ich joylashtirish Windows'da QWebEngineView bilan birga g'alati
+    render xatolariga (butun oyna shaffof ko'rinishi) olib kelishi mumkin.
     """
     def __init__(self, pc_name="PC-01", server_url="http://localhost:8001", parent=None):
         super().__init__(parent)
@@ -394,20 +400,21 @@ class LockerWindow(FullscreenMixin, QMainWindow):
         self.server_url = server_url.rstrip('/')
         self.url = f"{self.server_url}/launcher/?pc_name={pc_name}&mode=lock"
 
-        self.setWindowTitle(f"Clutch Zone Locker - {pc_name}")
-        self.setStyleSheet("QMainWindow { background-color: #060911; }")
+        self.setStyleSheet("background-color: #060911;")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(0, 0, 0, 0)
+        self._layout.setSpacing(0)
+
         self._init_web_engine()
-        # No force_native_fullscreen() here: this window is only ever
-        # embedded inside MainWindow's QStackedWidget, never shown top-level.
 
     def _init_web_engine(self):
         if HAS_WEBENGINE:
             self.browser = QWebEngineView(self)
             self.browser.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
             self.browser.setZoomFactor(1.0)
-            
+
             profile = QWebEngineProfile.defaultProfile()
             profile.setHttpCacheType(QWebEngineProfile.HttpCacheType.NoCache)
             profile.clearHttpCache()
@@ -425,10 +432,10 @@ class LockerWindow(FullscreenMixin, QMainWindow):
 
             timestamp_url = f"{self.url}&_t={int(time.time() * 1000)}"
             self.browser.setUrl(QUrl(timestamp_url))
-            self.setCentralWidget(self.browser)
+            self._layout.addWidget(self.browser)
         else:
             lock_widget = LockScreenWindow(pc_name=self.pc_name, parent=self)
-            self.setCentralWidget(lock_widget)
+            self._layout.addWidget(lock_widget)
 
     def _on_render_process_terminated(self, status, exit_code):
         print(f"[WebEngine] Chromium render process terminated! status={status} exit_code={exit_code} "
@@ -465,22 +472,15 @@ class LockerWindow(FullscreenMixin, QMainWindow):
         # Fullscreen state is owned by MainWindow (the top-level window);
         # switch_to_lock()/switch_to_launcher() already re-assert it there.
 
-    def changeEvent(self, event):
-        super().changeEvent(event)
-        if event.type() == QEvent.Type.WindowStateChange:
-            if self.windowState() & Qt.WindowState.WindowMinimized:
-                QTimer.singleShot(80, self.force_native_fullscreen)
-
-    def closeEvent(self, event): event.ignore()
-    def keyPressEvent(self, event): event.accept()
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  LAUNCHER WINDOW
 # ──────────────────────────────────────────────────────────────────────────────
-class LauncherWindow(FullscreenMixin, QMainWindow):
+class LauncherWindow(QWidget):
     """
     LauncherWindow — Kassa Serveridagi Web Launcher URL manzilidan O'yinlar va Bar panelini yuklaydi.
+
+    QWidget (QMainWindow emas) — sabab LockerWindow'dagi izohda tushuntirilgan.
     """
     game_launched_signal = pyqtSignal(dict)
 
@@ -493,20 +493,21 @@ class LauncherWindow(FullscreenMixin, QMainWindow):
         self.on_bar_click = on_bar_click
         self.url = f"{self.server_url}/launcher/?pc_name={pc_name}&mode=launcher"
 
-        self.setWindowTitle(f"Clutch Zone Game Launcher - {pc_name}")
-        self.setStyleSheet("QMainWindow { background-color: #060911; }")
+        self.setStyleSheet("background-color: #060911;")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(0, 0, 0, 0)
+        self._layout.setSpacing(0)
+
         self._init_web_engine()
-        # No force_native_fullscreen() here: this window is only ever
-        # embedded inside MainWindow's QStackedWidget, never shown top-level.
 
     def _init_web_engine(self):
         if HAS_WEBENGINE:
             self.browser = QWebEngineView(self)
             self.browser.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
             self.browser.setZoomFactor(1.0)
-            
+
             profile = QWebEngineProfile.defaultProfile()
             profile.setHttpCacheType(QWebEngineProfile.HttpCacheType.NoCache)
             profile.clearHttpCache()
@@ -530,10 +531,10 @@ class LauncherWindow(FullscreenMixin, QMainWindow):
 
             timestamp_url = f"{self.url}&_t={int(time.time() * 1000)}"
             self.browser.setUrl(QUrl(timestamp_url))
-            self.setCentralWidget(self.browser)
+            self._layout.addWidget(self.browser)
         else:
             grid = ResponsiveGameGrid(card_min_width=220, card_height=280, parent=self)
-            self.setCentralWidget(grid)
+            self._layout.addWidget(grid)
 
     def _on_render_process_terminated(self, status, exit_code):
         print(f"[WebEngine] Chromium render process terminated! status={status} exit_code={exit_code} "
@@ -595,14 +596,6 @@ class LauncherWindow(FullscreenMixin, QMainWindow):
         if HAS_WEBENGINE and hasattr(self, 'browser'):
             safe_name = name.replace("'", "\\'")
             self.browser.page().runJavaScript(f"console.log('Game launched: {safe_name}');")
-
-    def changeEvent(self, event):
-        super().changeEvent(event)
-        if event.type() == QEvent.Type.WindowStateChange:
-            if self.windowState() & Qt.WindowState.WindowMinimized:
-                QTimer.singleShot(80, self.force_native_fullscreen)
-
-    def closeEvent(self, event): event.ignore()
 
 
 # ──────────────────────────────────────────────────────────────────────────────

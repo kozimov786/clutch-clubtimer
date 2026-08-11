@@ -998,11 +998,35 @@ class MainWindow(FullscreenMixin, QMainWindow):
         o'tadi. Shu tarzda: o'yin ustida, launcher o'rtada (butun ekranni
         hamon egallab turibdi), Windows ish stoli esa hech qachon
         ko'rinmaydi. force_native_fullscreen() (F9/BAR yoki keyingi
-        lock-unlock o'tishida) uni yana eng tepaga qaytaradi."""
-        flags = self.windowFlags() & ~Qt.WindowType.WindowStaysOnTopHint
-        self.setWindowFlags(flags)
-        self.show()
-        self.lower()
+        lock-unlock o'tishida) uni yana eng tepaga qaytaradi.
+
+        Qt'ning setWindowFlags()/lower() orqali emas — to'g'ridan-to'g'ri
+        Windows'ning o'z SetWindowPos() API'si orqali amalga oshiriladi,
+        chunki bu ancha ishonchli ekani aniqlandi (avval Qt darajasidagi
+        yondashuv ishlamay qoldi)."""
+        if sys.platform == 'win32':
+            try:
+                SWP_NOMOVE = 0x0002
+                SWP_NOSIZE = 0x0001
+                SWP_NOACTIVATE = 0x0010
+                HWND_NOTOPMOST = -2
+                HWND_BOTTOM = 1
+                set_pos = ctypes.windll.user32.SetWindowPos
+                set_pos.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int,
+                                     ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_uint]
+                set_pos.restype = ctypes.c_bool
+                hwnd = int(self.winId())
+                flags = SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+                ok1 = set_pos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, flags)
+                ok2 = set_pos(hwnd, HWND_BOTTOM, 0, 0, 0, 0, flags)
+                print(f"[Window] yield_to_app: NOTOPMOST={ok1} BOTTOM={ok2}")
+            except Exception as e:
+                print(f"[Window] yield_to_app native SetWindowPos xatosi: {e}")
+        else:
+            flags = self.windowFlags() & ~Qt.WindowType.WindowStaysOnTopHint
+            self.setWindowFlags(flags)
+            self.show()
+            self.lower()
 
     def load_games(self):
         self.launcher_page.reload_games()
@@ -1030,7 +1054,11 @@ class MainWindow(FullscreenMixin, QMainWindow):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-#  KEYBOARD HOOK (Windows) — LOCKED holatda Alt+Tab/Win/Alt+F4/Alt+Esc bloklaydi
+#  KEYBOARD HOOK (Windows) — LOCKED holatda Alt+Tab/Win/Alt+F4/Alt+Esc bloklaydi.
+#  Global hotkeylar (favqulodda chiqish, F9) ESA endi past darajali hook orqali
+#  emas, balki Windows'ning shu maqsad uchun MO'LJALLANGAN RegisterHotKey()
+#  API'si orqali aniqlanadi — GetAsyncKeyState + 250ms polling'ga qaraganda
+#  ancha ishonchli va kechikishsiz (WM_HOTKEY xabari darhol yetkaziladi).
 # ──────────────────────────────────────────────────────────────────────────────
 IS_WINDOWS = platform.system() == 'Windows'
 
@@ -1043,7 +1071,7 @@ if IS_WINDOWS:
     kernel32 = ctypes.windll.kernel32
     WH_KEYBOARD_LL = 13
     VK_TAB = 0x09; VK_LWIN = 0x5B; VK_RWIN = 0x5C; VK_F4 = 0x73; VK_ESCAPE = 0x1B
-    VK_CONTROL = 0x11; VK_SHIFT = 0x10; VK_U = 0x55; VK_F9 = 0x78; VK_P = 0x50
+    VK_U = 0x55; VK_F9 = 0x78; VK_P = 0x50
 
     class KBDLLHOOKSTRUCT(ctypes.Structure):
         _fields_ = [
@@ -1055,21 +1083,11 @@ if IS_WINDOWS:
     hook_id = None; is_hook_enabled = False
 
     def low_level_keyboard_proc(nCode, wParam, lParam):
-        global is_hook_enabled, EMERGENCY_UNLOCK_REQUESTED, SHOW_LAUNCHER_REQUESTED
-        if nCode >= 0:
+        global is_hook_enabled
+        if nCode >= 0 and is_hook_enabled:
             kb = lParam.contents; vk = kb.vkCode; alt = (kb.flags & 0x20) != 0
-            ctrl_down = (user32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
-            shift_down = (user32.GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0
-            if ctrl_down and alt and shift_down and vk == VK_U:
-                EMERGENCY_UNLOCK_REQUESTED = True
-            elif ctrl_down and shift_down and vk == VK_P:
-                EMERGENCY_UNLOCK_REQUESTED = True
-            elif vk == VK_F9:
-                SHOW_LAUNCHER_REQUESTED = True
-            elif is_hook_enabled and (
-                (alt and vk == VK_TAB) or (vk in (VK_LWIN, VK_RWIN)) or
-                (alt and vk == VK_F4) or (alt and vk == VK_ESCAPE)
-            ):
+            if (alt and vk == VK_TAB) or (vk in (VK_LWIN, VK_RWIN)) or \
+               (alt and vk == VK_F4) or (alt and vk == VK_ESCAPE):
                 return 1
         return user32.CallNextHookEx(hook_id, nCode, wParam, lParam)
     pointer_proc = HOOKPROC(low_level_keyboard_proc)
@@ -1079,13 +1097,58 @@ if IS_WINDOWS:
         is_hook_enabled = True
         if not hook_id:
             hook_id = user32.SetWindowsHookExA(WH_KEYBOARD_LL, pointer_proc, kernel32.GetModuleHandleW(None), 0)
+            if not hook_id:
+                print(f"[Hook] OGOHLANTIRISH: SetWindowsHookExA muvaffaqiyatsiz! GetLastError={ctypes.get_last_error()}")
+            else:
+                print(f"[Hook] Klaviatura hook muvaffaqiyatli o'rnatildi (id={hook_id})")
 
     def uninstall_keyboard_hook():
         global is_hook_enabled
         is_hook_enabled = False
+
+    # ── Global hotkeylar: RegisterHotKey + native event filter ──
+    from PyQt6.QtCore import QAbstractNativeEventFilter
+
+    WM_HOTKEY = 0x0312
+    MOD_ALT = 0x0001; MOD_CONTROL = 0x0002; MOD_SHIFT = 0x0004
+    HOTKEY_EMERGENCY_1 = 1   # Ctrl+Alt+Shift+U
+    HOTKEY_EMERGENCY_2 = 2   # Ctrl+Shift+P
+    HOTKEY_SHOW_LAUNCHER = 3  # F9
+
+    class HotkeyEventFilter(QAbstractNativeEventFilter):
+        def nativeEventFilter(self, eventType, message):
+            global EMERGENCY_UNLOCK_REQUESTED, SHOW_LAUNCHER_REQUESTED
+            msg = wintypes.MSG.from_address(int(message))
+            if msg.message == WM_HOTKEY:
+                if msg.wParam in (HOTKEY_EMERGENCY_1, HOTKEY_EMERGENCY_2):
+                    print(f"[Hotkey] Favqulodda chiqish kombinatsiyasi aniqlandi (id={msg.wParam})")
+                    EMERGENCY_UNLOCK_REQUESTED = True
+                elif msg.wParam == HOTKEY_SHOW_LAUNCHER:
+                    print("[Hotkey] F9 aniqlandi")
+                    SHOW_LAUNCHER_REQUESTED = True
+            return False, 0
+
+    _hotkey_filter = None  # GC bo'lib ketmasligi uchun global reference saqlanadi
+
+    def register_global_hotkeys(app):
+        global _hotkey_filter
+        _hotkey_filter = HotkeyEventFilter()
+        app.installNativeEventFilter(_hotkey_filter)
+        results = [
+            user32.RegisterHotKey(None, HOTKEY_EMERGENCY_1, MOD_CONTROL | MOD_ALT | MOD_SHIFT, VK_U),
+            user32.RegisterHotKey(None, HOTKEY_EMERGENCY_2, MOD_CONTROL | MOD_SHIFT, VK_P),
+            user32.RegisterHotKey(None, HOTKEY_SHOW_LAUNCHER, 0, VK_F9),
+        ]
+        if all(results):
+            print("[Hotkey] Barcha global hotkeylar muvaffaqiyatli ro'yxatdan o'tkazildi "
+                  "(Ctrl+Alt+Shift+U, Ctrl+Shift+P, F9)")
+        else:
+            print(f"[Hotkey] OGOHLANTIRISH: ba'zi hotkeylar ro'yxatdan o'tmadi: {results} "
+                  f"GetLastError={ctypes.get_last_error()}")
 else:
     def install_keyboard_hook():   print("[Hook] enabled (sim)")
     def uninstall_keyboard_hook(): print("[Hook] disabled (sim)")
+    def register_global_hotkeys(app): pass
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1325,6 +1388,9 @@ def main():
             font-family: 'Segoe UI', 'Inter', 'SF Pro', -apple-system, sans-serif;
         }
     """)
+    if IS_WINDOWS:
+        register_global_hotkeys(app)
+
     _locker = ClientLockerApp("config.json")
     sys.exit(app.exec())
 

@@ -1,16 +1,16 @@
 """
-client_locker.py  —  Clutch Zone Client PC Locker (QWebEngineView Web-Based)
-==========================================================================
-ARXITEKTURA: QWebEngineView + Single/Multi Window Web-Panel Integratsiyasi
+client_locker.py  —  Clutch Zone Client PC Locker (Universal Cross-Platform Fullscreen)
+======================================================================================
+UNIVERSAL FULLSCREEN & DPI AWARENESS ARCHITECTURE:
 
-  1. Windows DPI Awareness: ctypes.windll.shcore.SetProcessDpiAwareness(2)
-  2. Windows user32 API: GetSystemMetrics(0), GetSystemMetrics(1) -> Monitor width, height
-  3. Native Fullscreen QWebEngineView (FramelessWindowHint | WindowStaysOnTopHint)
-  4. LockerWindow & LauncherWindow classes loading Web-Panel (http://<server_url>/launcher/)
-
-Oyna holatlari:
-  LOCK   -> LockerWindow (yoki stacked page 0 Web Locker)
-  UNLOCK -> LauncherWindow (yoki stacked page 1 Web Launcher)
+  1. REMOVE FIXED CONSTRAINTS: setSizePolicy(Expanding, Expanding) on all main containers
+  2. WINDOWS DPI AWARENESS v2: SetProcessDpiAwareness(2) + High DPI scale factor policy
+  3. DYNAMIC SCREEN RESIZE (showEvent):
+       screen = QGuiApplication.primaryScreen().geometry()
+       self.setGeometry(0, 0, screen.width(), screen.height())
+       self.setWindowState(Qt.WindowState.WindowFullScreen)
+       self.showFullScreen()
+  4. QWebEngineView 100% Responsive scaling (Web-based Game Launcher & Locker)
 """
 
 import sys
@@ -22,7 +22,7 @@ import ctypes
 # ──────────────────────────────────────────────────────────────────────────────
 if sys.platform == 'win32':
     try:
-        # Windows OS piksellarni buzmasligi uchun Per-Monitor DPI Awareness v2 yoqish
+        # Per-Monitor DPI Awareness v2 yoqish
         ctypes.windll.shcore.SetProcessDpiAwareness(2)
     except Exception:
         try:
@@ -61,11 +61,11 @@ except ImportError as err:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-#  3. WINDOWS USER32 RESOLUTION HELPER
+#  3. WINDOWS USER32 / QT SCREEN GEOMETRY HELPER
 # ──────────────────────────────────────────────────────────────────────────────
 def get_screen_resolution():
     """
-    Windows user32 API orqali monitor rezolyutsiyasini (width, height) olish.
+    Windows user32 API va PyQt QGuiApplication orqali monitor rezolyutsiyasini olish.
     """
     if sys.platform == 'win32':
         try:
@@ -77,7 +77,6 @@ def get_screen_resolution():
         except Exception as e:
             print(f"[user32 API Error] {e}")
 
-    # Fallback to PyQt QGuiApplication screen geometry
     screen = QGuiApplication.primaryScreen().geometry()
     return screen.width(), screen.height()
 
@@ -150,7 +149,7 @@ else:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-#  7. LOCKER WINDOW (Web-Based QWebEngineView Locker)
+#  7. LOCKER WINDOW (Universal Cross-Platform Fullscreen Locker)
 # ──────────────────────────────────────────────────────────────────────────────
 class LockerWindow(QMainWindow):
     """
@@ -166,22 +165,22 @@ class LockerWindow(QMainWindow):
         self.setWindowTitle(f"Clutch Zone Locker - {pc_name}")
         self.setStyleSheet("QMainWindow { background-color: #060911; }")
 
-        # 1. Native Windows Frameless & AlwaysOnTop
+        # 1. Dynamic Responsive Policy
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+        # 2. Window Flags
         flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
         if IS_WINDOWS:
             flags |= Qt.WindowType.WindowDoesNotAcceptFocus
         self.setWindowFlags(flags)
 
-        # 2. Windows user32 API orqali monitor rezolyutsiyasi (width, height)
-        width, height = get_screen_resolution()
-        self.setGeometry(0, 0, width, height)
-
-        # 3. QWebEngineView
+        # 3. QWebEngineView Setup
         self._init_web_engine()
 
     def _init_web_engine(self):
         if HAS_WEBENGINE:
             self.browser = QWebEngineView(self)
+            self.browser.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
             
             # Configure NO-CACHE WebEngine Settings
             profile = QWebEngineProfile.defaultProfile()
@@ -206,11 +205,11 @@ class LockerWindow(QMainWindow):
             self.browser.setUrl(QUrl(timestamp_url))
             self.setCentralWidget(self.browser)
         else:
-            # Fallback Widget if WebEngine missing
             lbl = QLabel(f"🔒 STATION LOCKED ({self.pc_name})\n\nWeb Engine faollashtirilmagan.\nURL: {self.url}")
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lbl.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
             lbl.setStyleSheet("color: #ef4444; background: #060911;")
+            lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
             self.setCentralWidget(lbl)
 
     def reload_page(self):
@@ -227,6 +226,10 @@ class LockerWindow(QMainWindow):
 
     def showEvent(self, event):
         super().showEvent(event)
+        screen = QGuiApplication.primaryScreen().geometry()
+        self.setGeometry(0, 0, screen.width(), screen.height())
+        self.setWindowState(Qt.WindowState.WindowFullScreen)
+        self.showFullScreen()
         self.reload_page()
 
     def changeEvent(self, event):
@@ -236,6 +239,9 @@ class LockerWindow(QMainWindow):
                 QTimer.singleShot(80, self._restore_fullscreen)
 
     def _restore_fullscreen(self):
+        screen = QGuiApplication.primaryScreen().geometry()
+        self.setGeometry(0, 0, screen.width(), screen.height())
+        self.setWindowState(Qt.WindowState.WindowFullScreen)
         self.showFullScreen()
         self.raise_()
         self.activateWindow()
@@ -248,7 +254,7 @@ class LockerWindow(QMainWindow):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-#  8. LAUNCHER WINDOW (Web-Based QWebEngineView Game Launcher)
+#  8. LAUNCHER WINDOW (Universal Cross-Platform Fullscreen Game Launcher)
 # ──────────────────────────────────────────────────────────────────────────────
 class LauncherWindow(QMainWindow):
     """
@@ -269,20 +275,20 @@ class LauncherWindow(QMainWindow):
         self.setWindowTitle(f"Clutch Zone Game Launcher - {pc_name}")
         self.setStyleSheet("QMainWindow { background-color: #060911; }")
 
-        # 1. Native Windows Frameless & AlwaysOnTop
+        # 1. Dynamic Responsive Policy
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+        # 2. Window Flags
         flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
         self.setWindowFlags(flags)
 
-        # 2. Windows user32 API orqali monitor rezolyutsiyasi (width, height)
-        width, height = get_screen_resolution()
-        self.setGeometry(0, 0, width, height)
-
-        # 3. QWebEngineView
+        # 3. QWebEngineView Setup
         self._init_web_engine()
 
     def _init_web_engine(self):
         if HAS_WEBENGINE:
             self.browser = QWebEngineView(self)
+            self.browser.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
             
             # Configure NO-CACHE WebEngine Settings
             profile = QWebEngineProfile.defaultProfile()
@@ -314,11 +320,11 @@ class LauncherWindow(QMainWindow):
             self.browser.setUrl(QUrl(timestamp_url))
             self.setCentralWidget(self.browser)
         else:
-            # Fallback Widget if WebEngine missing
             lbl = QLabel(f"🎮 CLUTCH ZONE GAME LAUNCHER ({self.pc_name})\n\nWeb Engine faollashtirilmagan.\nURL: {self.url}")
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lbl.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
             lbl.setStyleSheet("color: #00f0ff; background: #060911;")
+            lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
             self.setCentralWidget(lbl)
 
     def reload_page(self):
@@ -335,6 +341,10 @@ class LauncherWindow(QMainWindow):
 
     def showEvent(self, event):
         super().showEvent(event)
+        screen = QGuiApplication.primaryScreen().geometry()
+        self.setGeometry(0, 0, screen.width(), screen.height())
+        self.setWindowState(Qt.WindowState.WindowFullScreen)
+        self.showFullScreen()
         self.reload_page()
 
     def _on_bridge_game_launch(self, exe_path, game_name):
@@ -369,6 +379,9 @@ class LauncherWindow(QMainWindow):
                 QTimer.singleShot(80, self._restore_fullscreen)
 
     def _restore_fullscreen(self):
+        screen = QGuiApplication.primaryScreen().geometry()
+        self.setGeometry(0, 0, screen.width(), screen.height())
+        self.setWindowState(Qt.WindowState.WindowFullScreen)
         self.showFullScreen()
         self.raise_()
         self.activateWindow()
@@ -392,16 +405,13 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle(f"Clutch Zone Client Locker - {pc_name}")
         self.setStyleSheet("QMainWindow, QWidget { background-color: #060911; }")
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         # Windows Frameless & WindowStaysOnTop
         flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
         if IS_WINDOWS:
             flags |= Qt.WindowType.WindowDoesNotAcceptFocus
         self.setWindowFlags(flags)
-
-        # Windows user32 API width & height geometry
-        width, height = get_screen_resolution()
-        self.setGeometry(0, 0, width, height)
 
         # Sub-windows / Pages
         self.locker_win   = LockerWindow(pc_name=pc_name, server_url=server_url)
@@ -419,6 +429,11 @@ class MainWindow(QMainWindow):
         self.stacked.setCurrentIndex(self.PAGE_LOCK)
         self.setCentralWidget(self.stacked)
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        screen = QGuiApplication.primaryScreen().geometry()
+        self.setGeometry(0, 0, screen.width(), screen.height())
+        self.setWindowState(Qt.WindowState.WindowFullScreen)
         self.showFullScreen()
 
     def switch_to_lock(self):
@@ -438,6 +453,9 @@ class MainWindow(QMainWindow):
                 QTimer.singleShot(80, self._restore_fullscreen)
 
     def _restore_fullscreen(self):
+        screen = QGuiApplication.primaryScreen().geometry()
+        self.setGeometry(0, 0, screen.width(), screen.height())
+        self.setWindowState(Qt.WindowState.WindowFullScreen)
         self.showFullScreen()
         self.raise_()
         self.activateWindow()
@@ -667,7 +685,7 @@ class ClientLockerApp:
 def main():
     if sys.platform == 'win32':
         try:
-            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+            ctypes.windll.shcore.SetProcessDpiAwareness(2) # Per-Monitor DPI Aware v2
         except Exception:
             try:
                 ctypes.windll.user32.SetProcessDPIAware()

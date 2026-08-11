@@ -104,7 +104,7 @@ class ResponsiveGameGrid(QScrollArea):
     def _relayout(self):
         while self.grid_layout.count():
             item = self.grid_layout.takeAt(0)
-            if item.widget():
+            if item and item.widget():
                 item.widget().setParent(None)
         cols = self._columns_for_width(self.viewport().width())
         for index, widget in enumerate(self._items):

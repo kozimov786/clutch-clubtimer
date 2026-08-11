@@ -290,11 +290,11 @@ function updateStatsHeader() {
   const discountBanner = document.getElementById('daytime-discount-badge');
   if (discountBanner) {
     if (isDaytime) {
-      discountBanner.className = "flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-bold font-orbitron animate-pulse";
+      discountBanner.className = "hidden lg:flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-bold font-orbitron animate-pulse";
       discountBanner.innerHTML = `☀️ KUNDUZGI 50% CHEGIRMA (10:00 - 18:00)`;
     } else {
-      discountBanner.className = "flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 text-slate-400 border border-slate-800 text-xs font-semibold";
-      discountBanner.innerHTML = `🌙 TUNGITARIF (18:00 - 10:00)`;
+      discountBanner.className = "hidden";
+      discountBanner.innerHTML = "";
     }
   }
 }

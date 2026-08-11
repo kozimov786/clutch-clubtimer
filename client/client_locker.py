@@ -50,6 +50,14 @@ if sys.platform == 'win32':
     os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "0"
     os.environ["QT_SCALE_FACTOR"] = "1"
 
+    # Ba'zi Windows kompyuterlarda (eski/virtual videokarta drayveri) Chromium
+    # GPU-compositing bilan sahifani butunlay bo'sh (fon rangida, matnsiz)
+    # ko'rsatib qo'yishi mumkin. GPU'ni o'chirib qo'yish bu holatning oldini
+    # oladi — sodda HTML/CSS sahifa uchun ishlash tezligiga sezilarli ta'sir
+    # qilmaydi. setdefault — agar tizim darajasida allaqachon sozlangan
+    # bo'lsa, uni bosib qolmaslik uchun.
+    os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu")
+
 import time
 import json
 import socket
@@ -96,10 +104,12 @@ class FullscreenMixin:
         # switch_to_*) don't cause a flicker loop.
         w, h = get_screen_resolution()
 
+        # Qt.WindowType.Tool qasddan olib tashlangan: u oynani Alt+Tab
+        # ro'yxatidan yashiradi, bu esa o'yin ustidan launcher/bar
+        # menyusiga Alt+Tab orqali qaytishni imkonsiz qilardi.
         desired_flags = (
             Qt.WindowType.FramelessWindowHint |
-            Qt.WindowType.WindowStaysOnTopHint |
-            Qt.WindowType.Tool
+            Qt.WindowType.WindowStaysOnTopHint
         )
         if self.windowFlags() != desired_flags:
             self.setWindowFlags(desired_flags)
@@ -404,6 +414,7 @@ class LockerWindow(FullscreenMixin, QMainWindow):
                 pass
 
             self.browser.page().loadFinished.connect(self._apply_full_viewport_css)
+            self.browser.page().renderProcessTerminated.connect(self._on_render_process_terminated)
 
             timestamp_url = f"{self.url}&_t={int(time.time() * 1000)}"
             self.browser.setUrl(QUrl(timestamp_url))
@@ -412,7 +423,15 @@ class LockerWindow(FullscreenMixin, QMainWindow):
             lock_widget = LockScreenWindow(pc_name=self.pc_name, parent=self)
             self.setCentralWidget(lock_widget)
 
+    def _on_render_process_terminated(self, status, exit_code):
+        print(f"[WebEngine] Chromium render process terminated! status={status} exit_code={exit_code} "
+              f"— odatda GPU/videokarta drayveri muammosi, QTWEBENGINE_CHROMIUM_FLAGS=--disable-gpu bilan sinab ko'ring.")
+
     def _apply_full_viewport_css(self, ok):
+        if not ok:
+            url = self.browser.url().toString() if hasattr(self, 'browser') else '?'
+            print(f"[WebEngine] Sahifa yuklanmadi (loadFinished ok=False): {url}")
+            return
         if ok and HAS_WEBENGINE and hasattr(self, 'browser'):
             js_fix = """
             var meta = document.querySelector('meta[name="viewport"]');
@@ -500,6 +519,7 @@ class LauncherWindow(FullscreenMixin, QMainWindow):
             self.browser.page().setWebChannel(self.channel)
 
             self.browser.page().loadFinished.connect(self._apply_full_viewport_css)
+            self.browser.page().renderProcessTerminated.connect(self._on_render_process_terminated)
 
             timestamp_url = f"{self.url}&_t={int(time.time() * 1000)}"
             self.browser.setUrl(QUrl(timestamp_url))
@@ -508,7 +528,15 @@ class LauncherWindow(FullscreenMixin, QMainWindow):
             grid = ResponsiveGameGrid(card_min_width=220, card_height=280, parent=self)
             self.setCentralWidget(grid)
 
+    def _on_render_process_terminated(self, status, exit_code):
+        print(f"[WebEngine] Chromium render process terminated! status={status} exit_code={exit_code} "
+              f"— odatda GPU/videokarta drayveri muammosi, QTWEBENGINE_CHROMIUM_FLAGS=--disable-gpu bilan sinab ko'ring.")
+
     def _apply_full_viewport_css(self, ok):
+        if not ok:
+            url = self.browser.url().toString() if hasattr(self, 'browser') else '?'
+            print(f"[WebEngine] Sahifa yuklanmadi (loadFinished ok=False): {url}")
+            return
         if ok and HAS_WEBENGINE and hasattr(self, 'browser'):
             js_fix = """
             var meta = document.querySelector('meta[name="viewport"]');

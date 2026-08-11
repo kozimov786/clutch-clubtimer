@@ -1036,6 +1036,35 @@ else:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+#  FAVQULODDA CHIQISH TUGMASI — doim ko'rinadigan, mustaqil, kichik oyna.
+#  TimerOverlayWidget bilan bir xil (ishonchli ishlashi tasdiqlangan) naqsh:
+#  alohida, kichik, WindowStaysOnTopHint oyna — MainWindow qanday holatda
+#  bo'lishidan (hatto ko'rinmasa ham) qat'iy nazar doim bosish mumkin bo'ladi.
+# ──────────────────────────────────────────────────────────────────────────────
+class EmergencyExitWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.FramelessWindowHint | Qt.WindowType.SubWindow)
+        self.move(12, 12)
+
+        lo = QHBoxLayout(self)
+        lo.setContentsMargins(0, 0, 0, 0)
+        btn = QPushButton("🛑 CHIQISH")
+        btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        btn.setFixedSize(110, 34)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(239,68,68,0.85); color: #ffffff;
+                border: 1px solid rgba(255,255,255,0.4); border-radius: 8px;
+            }
+            QPushButton:hover { background: rgba(239,68,68,1.0); }
+        """)
+        btn.clicked.connect(lambda: os._exit(0))
+        lo.addWidget(btn)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 #  TIMER OVERLAY (o'yin ustidan doim ko'rinadigan HUD)
 # ──────────────────────────────────────────────────────────────────────────────
 class TimerOverlayWidget(QWidget):
@@ -1102,6 +1131,11 @@ class ClientLockerApp:
         self.launched_processes = []
         self.current_status = 'LOCKED'
         self.time_remaining = 0
+
+        # Hamma narsadan OLDIN ko'rsatiladi — MainWindow qanday ishlashidan
+        # qat'iy nazar doim mavjud, sichqoncha bilan bosiladigan chiqish yo'li.
+        self.emergency_exit = EmergencyExitWidget()
+        self.emergency_exit.show()
 
         self.main_window = MainWindow(
             pc_name=self.pc_name, server_url=self.server_url,

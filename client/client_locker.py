@@ -1218,7 +1218,16 @@ class ClientLockerApp:
         if os.path.exists(path):
             try:
                 with open(path, 'r') as f: cfg.update(json.load(f))
-            except Exception as e: print(f"[Config] {e}")
+            except json.JSONDecodeError as e:
+                print("=" * 70)
+                print(f"[Config] XATO: '{path}' JSON sifatida noto'g'ri yozilgan!")
+                print(f"[Config] {e.msg} — {e.lineno}-qator, {e.colno}-ustun atrofida.")
+                print("[Config] Standart qiymatlarga (server_url=localhost, pc_name=PC-01) "
+                      "qaytilmoqda — bu PC noto'g'ri nom bilan LOCKED holatda qolishiga sabab bo'ladi!")
+                print("[Config] config.json faylini tuzatib, dasturni qayta ishga tushiring.")
+                print("=" * 70)
+            except Exception as e:
+                print(f"[Config] {path}ni o'qishda xato: {e}")
         self.server_url = cfg["server_url"]
         self.ws_url = cfg["websocket_url"]
         self.pc_name = cfg["pc_name"]

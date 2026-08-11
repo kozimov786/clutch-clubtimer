@@ -50,13 +50,20 @@ if sys.platform == 'win32':
     os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "0"
     os.environ["QT_SCALE_FACTOR"] = "1"
 
-    # Ba'zi Windows kompyuterlarda (eski/virtual videokarta drayveri) Chromium
-    # GPU-compositing bilan sahifani butunlay bo'sh (fon rangida, matnsiz)
-    # ko'rsatib qo'yishi mumkin. GPU'ni o'chirib qo'yish bu holatning oldini
-    # oladi — sodda HTML/CSS sahifa uchun ishlash tezligiga sezilarli ta'sir
-    # qilmaydi. setdefault — agar tizim darajasida allaqachon sozlangan
-    # bo'lsa, uni bosib qolmaslik uchun.
-    os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu")
+    # Ba'zi Windows kompyuterlarda (eski/virtual videokarta drayveri, GPU
+    # passthrough'siz VM) Chromium GLES kontekstini yarata olmay, sahifani
+    # butunlay bo'sh (fon rangida, matnsiz) ko'rsatib qo'yadi — bitta
+    # "--disable-gpu" yetarli bo'lmasligi mumkin, chunki Chromium baribir
+    # GPU-orqali compositing'ga urinishda davom etadi. SwiftShader'ga
+    # (sof dasturiy OpenGL implementatsiyasi, hech qanday GPU drayveriga
+    # tayanmaydi) majburlash bu holatni butunlay chetlab o'tadi — sodda
+    # HTML/CSS sahifa uchun ishlash tezligiga sezilarli ta'sir qilmaydi.
+    # setdefault — agar tizim darajasida allaqachon QTWEBENGINE_CHROMIUM_FLAGS
+    # sozlangan bo'lsa (masalan qo'lda sinov uchun), uni bosib qolmaslik uchun.
+    os.environ.setdefault(
+        "QTWEBENGINE_CHROMIUM_FLAGS",
+        "--disable-gpu --disable-gpu-compositing --use-gl=swiftshader --disable-gpu-sandbox"
+    )
 
 import time
 import json

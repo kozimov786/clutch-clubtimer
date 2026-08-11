@@ -1157,7 +1157,14 @@ class ClientLockerApp:
         self.main_window.load_games()
         self.main_window.switch_to_launcher()
         self.main_window.force_native_fullscreen()
-        self.overlay.show()
+        # DIAGNOSTIKA: overlay.show() vaqtincha o'chirilgan — MainWindow bilan
+        # ikkinchi "har doim tepada" oyna orasida ziddiyat bor-yo'qligini
+        # tekshirish uchun. Agar shu holatda MainWindow to'g'ri ko'rinsa,
+        # muammo aynan shu ikki oyna orasidagi ziddiyatda ekan.
+        if os.environ.get("CLUTCH_SHOW_OVERLAY") == "1":
+            self.overlay.show()
+        else:
+            print("[Diag] overlay.show() o'tkazib yuborildi (CLUTCH_SHOW_OVERLAY=1 bilan yoqish mumkin)")
         self.current_status = 'ACTIVE'
 
     def _lock(self):
@@ -1279,6 +1286,17 @@ class ClientLockerApp:
 #  ENTRY POINT
 # ──────────────────────────────────────────────────────────────────────────────
 def main():
+    # PyQt6 ba'zan Qt slot/callback ichidagi Python xatosini konsolga chiqarmasdan
+    # yutib yuborishi mumkin — bu esa "sababsiz" shaffof/qotgan oyna kabi
+    # tashxis qo'yish qiyin bo'lgan holatlarga olib kelishi mumkin. Har qanday
+    # ushlanmagan xato albatta konsolga to'liq traceback bilan chiqishini
+    # kafolatlaymiz.
+    def _excepthook(exc_type, exc_value, exc_tb):
+        import traceback
+        print("[UNHANDLED EXCEPTION]")
+        traceback.print_exception(exc_type, exc_value, exc_tb)
+    sys.excepthook = _excepthook
+
     app = QApplication(sys.argv)
     app.setStyleSheet("""
         QWidget {

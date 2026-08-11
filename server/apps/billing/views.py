@@ -41,6 +41,11 @@ class DashboardView(View):
     def get(self, request):
         return render(request, 'billing/dashboard.html')
 
+class LauncherView(View):
+    def get(self, request):
+        return render(request, 'billing/launcher.html')
+
+
 class TariffViewSet(viewsets.ModelViewSet):
     queryset = Tariff.objects.all().order_by('id')
     serializer_class = TariffSerializer

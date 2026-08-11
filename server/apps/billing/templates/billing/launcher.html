@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clutch Zone — Web Game Launcher & Client Panel</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #060911;
+            --bg-secondary: #0b1220;
+            --bg-card: rgba(14, 21, 36, 0.95);
+            --bg-glass: rgba(15, 23, 42, 0.75);
+            --accent-cyan: #00f0ff;
+            --accent-cyan-glow: rgba(0, 240, 255, 0.35);
+            --accent-purple: #a855f7;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-light: rgba(255, 255, 255, 0.08);
+            --border-glow: rgba(0, 240, 255, 0.3);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg-primary);
+            color: var(--text-main);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+
+        /* ── LOCK OVERLAY SCREEN ── */
+        #lock-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: #04060c;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+
+        #lock-screen.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .lock-card {
+            background: rgba(12, 18, 32, 0.95);
+            border: 2px solid var(--accent-cyan-glow);
+            border-radius: 28px;
+            padding: 48px 40px;
+            width: 480px;
+            text-align: center;
+            box-shadow: 0 0 50px rgba(0, 240, 255, 0.25);
+            backdrop-filter: blur(16px);
+        }
+
+        .lock-logo {
+            font-size: 32px;
+            font-weight: 900;
+            color: var(--accent-cyan);
+            letter-spacing: 4px;
+            text-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
+            margin-bottom: 12px;
+        }
+
+        .lock-status {
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--accent-red);
+            letter-spacing: 3px;
+            margin-bottom: 16px;
+        }
+
+        .lock-pc-name {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 38px;
+            font-weight: 800;
+            color: #ffffff;
+            margin-bottom: 16px;
+        }
+
+        .lock-desc {
+            color: var(--text-muted);
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        /* ── MAIN LAUNCHER APP APP ── */
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* Top Header */
+        header {
+            height: 72px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-light);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 28px;
+        }
+
+        .brand-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-logo {
+            font-size: 24px;
+            font-weight: 800;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .brand-logo span {
+            color: var(--accent-cyan);
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 16px;
+        }
+
+        .nav-tab {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-weight: 700;
+            font-size: 13px;
+            padding: 12px 16px;
+            border-bottom: 2.5px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            letter-spacing: 1px;
+        }
+
+        .nav-tab.active {
+            color: #ffffff;
+            border-bottom-color: var(--accent-cyan);
+        }
+
+        .nav-tab:hover {
+            color: #ffffff;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .timer-box {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--accent-cyan);
+            text-align: right;
+        }
+
+        .pc-capsule {
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid var(--border-light);
+            border-radius: 20px;
+            padding: 6px 16px;
+            font-size: 13px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            box-shadow: 0 0 10px var(--accent-green);
+        }
+
+        /* Content Pages */
+        main {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .page {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            padding: 24px 28px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.25s ease;
+        }
+
+        .page.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* Filter Pills & Search */
+        .controls-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .cat-pills {
+            display: flex;
+            gap: 10px;
+        }
+
+        .pill-btn {
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid var(--border-light);
+            color: var(--text-muted);
+            border-radius: 20px;
+            padding: 8px 18px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .pill-btn.active, .pill-btn:hover {
+            background: var(--accent-cyan);
+            color: #030712;
+            border-color: var(--accent-cyan);
+            font-weight: 800;
+        }
+
+        .search-box {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--border-light);
+            border-radius: 12px;
+            padding: 8px 16px;
+            color: #fff;
+            font-size: 13px;
+            width: 280px;
+            outline: none;
+        }
+
+        .search-box:focus {
+            border-color: var(--accent-cyan);
+        }
+
+        /* Games Grid */
+        .games-scroll {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 6px;
+        }
+
+        .games-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 20px;
+        }
+
+        .game-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-light);
+            border-radius: 16px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .game-card:hover {
+            border-color: var(--accent-cyan);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 24px rgba(0, 240, 255, 0.15);
+        }
+
+        .game-cover {
+            height: 180px;
+            border-radius: 12px;
+            background: #0b1220;
+            object-fit: cover;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+        }
+
+        .game-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .game-title {
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .game-cat {
+            font-size: 10px;
+            font-weight: 800;
+            color: var(--text-muted);
+            background: rgba(255, 255, 255, 0.1);
+            padding: 3px 8px;
+            border-radius: 6px;
+        }
+
+        .btn-launch {
+            background: rgba(0, 240, 255, 0.15);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            border-radius: 10px;
+            padding: 10px;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+
+        .btn-launch:hover {
+            background: var(--accent-cyan);
+            color: #030712;
+        }
+
+        /* Bar Menu Page */
+        .bar-container {
+            display: flex;
+            gap: 24px;
+            height: 100%;
+        }
+
+        .bar-products-col {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            overflow: hidden;
+        }
+
+        .products-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+            gap: 16px;
+            overflow-y: auto;
+            flex: 1;
+            padding-right: 6px;
+        }
+
+        .product-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-light);
+            border-radius: 16px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .product-img {
+            height: 120px;
+            border-radius: 10px;
+            background: #0b1220;
+            object-fit: cover;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+        }
+
+        .product-name {
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .product-price {
+            font-size: 14px;
+            font-weight: 800;
+            color: var(--accent-cyan);
+        }
+
+        .btn-add-cart {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--accent-green);
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            border-radius: 8px;
+            padding: 8px;
+            font-weight: 700;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .btn-add-cart:hover {
+            background: var(--accent-green);
+            color: #fff;
+        }
+
+        /* Cart Panel */
+        .cart-panel {
+            width: 340px;
+            background: rgba(18, 25, 40, 0.95);
+            border: 1px solid var(--border-light);
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .cart-items {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .cart-item {
+            background: rgba(18, 27, 46, 0.6);
+            border: 1px solid var(--border-light);
+            border-radius: 10px;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .cart-total-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 18px;
+            font-weight: 800;
+        }
+
+        .btn-submit-order {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            padding: 14px;
+            font-size: 14px;
+            font-weight: 800;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        /* Footer */
+        footer {
+            height: 40px;
+            background: #050810;
+            border-top: 1px solid var(--border-light);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 28px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--accent-cyan);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- LOCK SCREEN OVERLAY -->
+    <div id="lock-screen">
+        <div class="lock-card">
+            <div class="lock-logo">CLUTCH ZONE</div>
+            <div class="lock-status">STATION LOCKED</div>
+            <div class="lock-pc-name" id="lock-pc-title">PC-01</div>
+            <div class="lock-desc">Seansni boshlash uchun administratorga murojaat qiling.</div>
+        </div>
+    </div>
+
+    <!-- MAIN APP CONTAINER -->
+    <div class="app-container">
+        <!-- HEADER -->
+        <header>
+            <div class="brand-section">
+                <div class="brand-logo">🎮 CLUTCH <span>ZONE</span></div>
+            </div>
+
+            <div class="nav-tabs">
+                <button class="nav-tab active" onclick="switchPage('games')">O'YINLAR</button>
+                <button class="nav-tab" onclick="switchPage('bar')">BAR MENYUSI</button>
+            </div>
+
+            <div class="header-right">
+                <div class="timer-box" id="header-clock">00:00</div>
+                <div class="pc-capsule">
+                    <div class="status-dot"></div>
+                    <span id="header-pc-name">PC-01</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- MAIN CONTENT PAGES -->
+        <main>
+            <!-- PAGE: GAMES -->
+            <div class="page active" id="page-games">
+                <div class="controls-row">
+                    <div class="cat-pills" id="game-cats">
+                        <button class="pill-btn active" onclick="filterGames('ALL')">🌐 BARCHASI</button>
+                        <button class="pill-btn" onclick="filterGames('FPS')">🎯 FPS / SHOOTER</button>
+                        <button class="pill-btn" onclick="filterGames('Action')">⚔️ ACTION / RPG</button>
+                        <button class="pill-btn" onclick="filterGames('Sports')">🏎️ SPORTS / RACING</button>
+                        <button class="pill-btn" onclick="filterGames('Strategy')">🧠 STRATEGY</button>
+                    </div>
+                    <input type="text" class="search-box" id="game-search" placeholder="🔍 O'yin qidirish..." oninput="onSearchGames(this.value)">
+                </div>
+
+                <div class="games-scroll">
+                    <div class="games-grid" id="games-grid-container">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- PAGE: BAR MENU -->
+            <div class="page" id="page-bar">
+                <div class="bar-container">
+                    <div class="bar-products-col">
+                        <div class="cat-pills" id="bar-cats">
+                            <!-- Loaded dynamically -->
+                        </div>
+                        <div class="products-grid" id="bar-products-container">
+                            <!-- Loaded dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Cart Panel -->
+                    <div class="cart-panel">
+                        <h3>🛒 BUYURTMA SAVATI</h3>
+                        <div class="cart-items" id="cart-items-container">
+                            <div style="text-align: center; color: var(--text-muted); margin-top: 40px;">Savat bo'sh</div>
+                        </div>
+                        <div class="cart-total-row">
+                            <span>Jami:</span>
+                            <span id="cart-total-val" style="color: var(--accent-green);">0 UZS</span>
+                        </div>
+                        <button class="btn-submit-order" onclick="submitOrder()">🛍️ Buyurtma Yuborish</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- FOOTER -->
+        <footer>
+            <div>Qoidalar &nbsp;&bull;&nbsp; Yordam</div>
+            <div>&copy; 2026 Clutch Zone Web Engine</div>
+        </footer>
+    </div>
+
+    <script>
+        // State
+        const urlParams = new URLSearchParams(window.location.search);
+        let pcName = urlParams.get('pc_name') || 'PC-01';
+        let allGames = [];
+        let allProducts = [];
+        let allCategories = [];
+        let cart = {};
+        let currentCat = 'ALL';
+        let searchQuery = '';
+
+        document.getElementById('lock-pc-title').innerText = pcName;
+        document.getElementById('header-pc-name').innerText = pcName + ' • ACTIVE';
+
+        // Realtime Clock
+        setInterval(() => {
+            const d = new Date();
+            document.getElementById('header-clock').innerText = d.toTimeString().substring(0, 5);
+        }, 1000);
+
+        // Page Switcher
+        function switchPage(pageName) {
+            document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+
+            if (pageName === 'games') {
+                document.querySelectorAll('.nav-tab')[0].classList.add('active');
+                document.getElementById('page-games').classList.add('active');
+            } else if (pageName === 'bar') {
+                document.querySelectorAll('.nav-tab')[1].classList.add('active');
+                document.getElementById('page-bar').classList.add('active');
+                loadBarData();
+            }
+        }
+
+        // Fetch Games
+        async function loadGames() {
+            try {
+                const res = await fetch('/api/games/');
+                if (res.ok) {
+                    allGames = await res.json();
+                }
+            } catch (e) {
+                console.error("Games fetch error:", e);
+                allGames = [
+                    { id: 1, name: 'Counter-Strike 2', category: 'FPS', executable_path: 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Counter-Strike Global Offensive\\game\\bin\\win64\\cs2.exe' },
+                    { id: 2, name: 'Dota 2', category: 'Strategy', executable_path: 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\dota 2 beta\\game\\bin\\win64\\dota2.exe' },
+                    { id: 3, name: 'GTA V', category: 'Action', executable_path: 'C:\\Program Files\\Rockstar Games\\Grand Theft Auto V\\GTA5.exe' }
+                ];
+            }
+            renderGames();
+        }
+
+        function filterGames(cat) {
+            currentCat = cat;
+            document.querySelectorAll('#game-cats .pill-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            renderGames();
+        }
+
+        function onSearchGames(q) {
+            searchQuery = q.toLowerCase();
+            renderGames();
+        }
+
+        function renderGames() {
+            const container = document.getElementById('games-grid-container');
+            container.innerHTML = '';
+
+            const filtered = allGames.filter(g => {
+                const matchCat = (currentCat === 'ALL' || g.category === currentCat);
+                const matchQ = (!searchQuery || g.name.toLowerCase().includes(searchQuery));
+                return matchCat && matchQ;
+            });
+
+            filtered.forEach(g => {
+                const card = document.createElement('div');
+                card.className = 'game-card';
+                card.innerHTML = `
+                    <div class="game-cover">🎮</div>
+                    <div class="game-info">
+                        <span class="game-title">${g.name}</span>
+                        <span class="game-cat">${(g.category || 'FPS').toUpperCase()}</span>
+                    </div>
+                    <button class="btn-launch" onclick="launchGame('${g.id}', '${encodeURIComponent(g.name)}', '${encodeURIComponent(g.executable_path || '')}')">▶ ISHGA TUSHIRISH</button>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function launchGame(id, name, path) {
+            const exe = decodeURIComponent(path);
+            const gName = decodeURIComponent(name);
+            console.log("Launching game:", gName, exe);
+
+            // PyQt Bridge or Custom Handler Integration
+            if (window.pyqt_bridge && window.pyqt_bridge.launchGame) {
+                window.pyqt_bridge.launchGame(exe, gName);
+            } else if (window.QtBridge) {
+                window.QtBridge.launchGame(exe, gName);
+            } else {
+                alert(`🚀 ${gName} ishga tushirilmoqda...`);
+            }
+        }
+
+        // Fetch Bar Data
+        async function loadBarData() {
+            try {
+                const [rCat, rProd] = await Promise.all([
+                    fetch('/api/categories/'),
+                    fetch('/api/products/')
+                ]);
+                if (rCat.ok) allCategories = await rCat.json();
+                if (rProd.ok) allProducts = await rProd.json();
+            } catch (e) {
+                console.error("Bar fetch error:", e);
+            }
+            renderBar();
+        }
+
+        function renderBar() {
+            const pGrid = document.getElementById('bar-products-container');
+            pGrid.innerHTML = '';
+
+            allProducts.forEach(p => {
+                const card = document.createElement('div');
+                card.className = 'product-card';
+                card.innerHTML = `
+                    <div class="product-img">🍿</div>
+                    <div class="product-name">${p.name}</div>
+                    <div class="product-price">${Number(p.price).toLocaleString()} UZS</div>
+                    <button class="btn-add-cart" onclick="addToCart(${p.id}, '${encodeURIComponent(p.name)}', ${p.price})">+ Savatga Qo'shish</button>
+                `;
+                pGrid.appendChild(card);
+            });
+        }
+
+        function addToCart(id, name, price) {
+            const decodedName = decodeURIComponent(name);
+            if (cart[id]) {
+                cart[id].qty++;
+            } else {
+                cart[id] = { id, name: decodedName, price, qty: 1 };
+            }
+            renderCart();
+        }
+
+        function renderCart() {
+            const container = document.getElementById('cart-items-container');
+            container.innerHTML = '';
+
+            let total = 0;
+            const items = Object.values(cart);
+
+            if (items.length === 0) {
+                container.innerHTML = `<div style="text-align: center; color: var(--text-muted); margin-top: 40px;">Savat bo'sh</div>`;
+                document.getElementById('cart-total-val').innerText = '0 UZS';
+                return;
+            }
+
+            items.forEach(item => {
+                const sub = item.price * item.qty;
+                total += sub;
+                const row = document.createElement('div');
+                row.className = 'cart-item';
+                row.innerHTML = `
+                    <div>
+                        <div style="font-weight: 700; font-size: 13px;">${item.name}</div>
+                        <div style="font-size: 11px; color: var(--text-muted);">${sub.toLocaleString()} UZS</div>
+                    </div>
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                        <button onclick="changeQty(${item.id}, -1)" style="padding: 2px 8px; cursor: pointer;">-</button>
+                        <span>${item.qty}</span>
+                        <button onclick="changeQty(${item.id}, 1)" style="padding: 2px 8px; cursor: pointer;">+</button>
+                    </div>
+                `;
+                container.appendChild(row);
+            });
+
+            document.getElementById('cart-total-val').innerText = `${total.toLocaleString()} UZS`;
+        }
+
+        function changeQty(id, delta) {
+            if (cart[id]) {
+                cart[id].qty += delta;
+                if (cart[id].qty <= 0) delete cart[id];
+                renderCart();
+            }
+        }
+
+        async function submitOrder() {
+            const items = Object.values(cart).map(i => ({ product_id: i.id, quantity: i.qty }));
+            if (items.length === 0) return alert("Savatingiz bo'sh!");
+
+            try {
+                const res = await fetch('/api/orders/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pc_name: pcName, items })
+                });
+                if (res.ok) {
+                    alert(" Buyurtmangiz yuborildi!");
+                    cart = {};
+                    renderCart();
+                } else {
+                    alert(" Buyurtma yuborishda xatolik!");
+                }
+            } catch (e) {
+                alert(" Serverga ulanib bo'lmadi!");
+            }
+        }
+
+        // Lock / Unlock control
+        function setLockState(locked) {
+            const lockEl = document.getElementById('lock-screen');
+            if (locked) {
+                lockEl.classList.remove('hidden');
+            } else {
+                lockEl.classList.add('hidden');
+            }
+        }
+
+        // Check station status via API
+        async function checkStatus() {
+            try {
+                const res = await fetch('/api/computers/heartbeat/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pc_name: pcName })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.status === 'ACTIVE' || data.status === 'WARNING') {
+                        setLockState(false);
+                    } else {
+                        setLockState(true);
+                    }
+                }
+            } catch (e) {
+                console.error("Status check failed:", e);
+            }
+        }
+
+        // Init
+        loadGames();
+        setInterval(checkStatus, 5000);
+    </script>
+</body>
+</html>

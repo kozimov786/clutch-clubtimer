@@ -70,7 +70,19 @@ class FullscreenMixin:
     def force_native_fullscreen(self):
         w, h = get_screen_resolution()
 
+        # MUHIM: Qt.WindowType.Window shu yerda ATAYLAB qo'shilgan. Ota-
+        # widget'siz (top-level) oyna uchun Qt buni windowFlags()'ga
+        # avtomatik qo'shib qo'yadi — agar biz uni desired_flags'da hisobga
+        # olmasak, solishtiruv HECH QACHON to'g'ri kelmaydi va
+        # setWindowFlags() har safar (hatto hech narsa o'zgarmagan bo'lsa
+        # ham) qayta chaqiriladi. Bu esa allaqachon ko'rsatilgan oynani
+        # yashiradi (Qt'ning hujjatlashtirilgan xatti-harakati), va agar
+        # shu payt isFullScreen() "eski" holatni True deb ko'rsatsa,
+        # showFullScreen() qayta chaqirilmaydi — oyna abadiy yashirin
+        # qolib ketadi. Aynan shu xato butun "shaffof oyna" muammosining
+        # haqiqiy ildizi edi.
         desired_flags = (
+            Qt.WindowType.Window |
             Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.WindowStaysOnTopHint
         )
@@ -82,7 +94,10 @@ class FullscreenMixin:
             self.setGeometry(0, 0, w, h)
             self.setFixedSize(w, h)
 
-        if not self.isFullScreen():
+        # isVisible() ham tekshiriladi — faqat isFullScreen()ga ishonish
+        # xavfli, chunki setWindowFlags() oynani yashirgandan keyin ham bu
+        # bayroq "eski" (True) holatda qolib ketishi mumkin.
+        if not self.isFullScreen() or not self.isVisible():
             self.showFullScreen()
 
         self.raise_()

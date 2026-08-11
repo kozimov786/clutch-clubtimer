@@ -213,7 +213,7 @@ class ImageCache(QObject):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-#  PAGE 1 — GAME LAUNCHER WIDGET
+#  PAGE 1 — GAME LAUNCHER WIDGET (1:1 CyberHub UI Design)
 # ──────────────────────────────────────────────────────────────────────────────
 class GameLauncherWidget(QWidget):
     game_launched_signal = pyqtSignal(dict)
@@ -221,177 +221,931 @@ class GameLauncherWidget(QWidget):
     def __init__(self, pc_name="PC-01", server_url="http://localhost:8000",
                  fallback_games=None, on_bar_click=None, parent=None):
         super().__init__(parent)
-        self.pc_name = pc_name; self.server_url = server_url
-        self.fallback_games = fallback_games or []; self.on_bar_click = on_bar_click
-        self.games = []; self.current_category = None; self.search_query = ""
+        self.pc_name = pc_name
+        self.server_url = server_url
+        self.fallback_games = fallback_games or []
+        self.on_bar_click = on_bar_click
+        self.games = []
+        self.products = []
+        self.categories = []
+        self.cart = {}
+        self.current_category = None
+        self.current_bar_category_id = None
+        self.search_query = ""
         self.pixmap_labels = {}
+        
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.image_downloader = ImageCache()
         self.image_downloader.image_downloaded_signal.connect(self._on_image_downloaded)
+        
         self._build_ui()
+        
+        # Real-time clock timer
+        self.clock_timer = QTimer(self)
+        self.clock_timer.timeout.connect(self._update_clock)
+        self.clock_timer.start(1000)
+        self._update_clock()
 
     def _build_ui(self):
         self.setStyleSheet("""
-            QWidget { background-color: #0a0e17; color: #e2e8f0;
-                font-family: 'Segoe UI','Inter',sans-serif; }
-            QScrollArea { border: none; background: transparent; }
-            QScrollBar:vertical { border:none; background:#0f172a; width:8px; border-radius:4px; }
-            QScrollBar::handle:vertical { background:#334155; border-radius:4px; }
-            QScrollBar::handle:vertical:hover { background:#00f0ff; }
-            QLineEdit { background:rgba(15,23,42,0.9); color:#f8fafc;
-                border:1px solid rgba(0,240,255,0.3); border-radius:12px; padding:8px 16px; font-size:14px; }
-            QLineEdit:focus { border:1px solid #00f0ff; }
+            QWidget {
+                background-color: #080d17;
+                color: #e2e8f0;
+                font-family: 'Segoe UI', 'Inter', 'SF Pro', -apple-system, sans-serif;
+            }
+            QScrollArea {
+                border: none;
+                background: transparent;
+            }
+            QScrollBar:vertical {
+                border: none;
+                background: #0f172a;
+                width: 6px;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:vertical {
+                background: #334155;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #00f0ff;
+            }
+            QLineEdit {
+                background: rgba(15, 23, 42, 0.8);
+                color: #f8fafc;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 12px;
+                padding: 8px 16px;
+                font-size: 13px;
+            }
+            QLineEdit:focus {
+                border: 1px solid #00f0ff;
+            }
         """)
-        main = QVBoxLayout(self)
-        main.setContentsMargins(36,28,36,28); main.setSpacing(20)
 
-        # Header
-        hdr = QHBoxLayout()
-        tb = QVBoxLayout()
-        t = QLabel("🎮 CLUTCH ZONE"); t.setFont(QFont("Segoe UI",24,QFont.Weight.Bold))
-        t.setStyleSheet("color:#00f0ff;letter-spacing:2px;")
-        sub = QLabel(f"GAME CATALOG LAUNCHER • {self.pc_name}")
-        sub.setFont(QFont("Segoe UI",10,QFont.Weight.Bold))
-        sub.setStyleSheet("color:#94a3b8;letter-spacing:1px;")
-        tb.addWidget(t); tb.addWidget(sub)
-        hdr.addLayout(tb); hdr.addStretch()
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # ── 1. GLOBAL TOP HEADER BAR ──
+        hdr = QFrame()
+        hdr.setFixedHeight(72)
+        hdr.setStyleSheet("QFrame { background: #0b1220; border-bottom: 1px solid rgba(255, 255, 255, 0.07); }")
+        hdr_layout = QHBoxLayout(hdr)
+        hdr_layout.setContentsMargins(28, 0, 28, 0)
+        hdr_layout.setSpacing(20)
+
+        # Brand / Logo
+        logo_box = QHBoxLayout()
+        logo_box.setSpacing(10)
+        
+        logo_img = QLabel()
+        sd = os.path.dirname(os.path.abspath(__file__))
+        logo_p = os.path.join(sd, "assets", "clutch_logo_mark.png")
+        if not os.path.exists(logo_p):
+            logo_p = os.path.join(sd, "assets", "clutch_logo_full.png")
+        if not os.path.exists(logo_p):
+            logo_p = os.path.join(os.getcwd(), "client", "assets", "clutch_logo_full.png")
+            
+        if os.path.exists(logo_p):
+            pix = QPixmap(logo_p).scaled(38, 38, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            logo_img.setPixmap(pix)
+            logo_box.addWidget(logo_img)
+        else:
+            badge = QLabel("🎮")
+            badge.setFont(QFont("Segoe UI", 16))
+            logo_box.addWidget(badge)
+
+        brand_lbl = QLabel("CLUTCH ZONE")
+        brand_lbl.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
+        brand_lbl.setStyleSheet("color: #ffffff; letter-spacing: 1.5px;")
+        logo_box.addWidget(brand_lbl)
+        hdr_layout.addLayout(logo_box)
+
+        hdr_layout.addSpacing(30)
+
+        # Nav Tabs (O'YINLAR | BAR MENYUSI | YUTUQLAR)
+        nav_box = QHBoxLayout()
+        nav_box.setSpacing(16)
+
+        self.tab_games = QPushButton("O'YINLAR")
+        self.tab_bar = QPushButton("BAR MENYUSI")
+        self.tab_rewards = QPushButton("YUTUQLAR")
+
+        for tab_btn in [self.tab_games, self.tab_bar, self.tab_rewards]:
+            tab_btn.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+            tab_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        self.tab_games.clicked.connect(self._show_games_page)
+        self.tab_bar.clicked.connect(self._show_bar_page)
+        
+        nav_box.addWidget(self.tab_games)
+        nav_box.addWidget(self.tab_bar)
+        nav_box.addWidget(self.tab_rewards)
+        hdr_layout.addLayout(nav_box)
+
+        hdr_layout.addStretch()
+
+        # Right Section: Clock & User Capsule
+        r_box = QHBoxLayout()
+        r_box.setSpacing(16)
+
+        self.clock_lbl = QLabel("22:45\nTASHKENT, UZ")
+        self.clock_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.clock_lbl.setStyleSheet("""
+            QLabel {
+                color: #00f0ff;
+                font-family: 'Consolas', monospace;
+                font-size: 15px;
+                font-weight: bold;
+                line-height: 1.1;
+            }
+        """)
+        r_box.addWidget(self.clock_lbl)
+
+        # Profile Capsule
+        prof = QFrame()
+        prof.setStyleSheet("""
+            QFrame {
+                background: rgba(30, 41, 59, 0.6);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 20px;
+                padding: 4px 12px;
+            }
+        """)
+        prof_l = QHBoxLayout(prof)
+        prof_l.setContentsMargins(10, 4, 10, 4)
+        prof_l.setSpacing(8)
+
+        prof_txt = QLabel(f"{self.pc_name}  •  ACTIVE")
+        prof_txt.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        prof_txt.setStyleSheet("color: #e2e8f0;")
+        prof_l.addWidget(prof_txt)
+
+        avatar = QLabel("👤")
+        avatar.setFont(QFont("Segoe UI", 12))
+        prof_l.addWidget(avatar)
+
+        r_box.addWidget(prof)
+        hdr_layout.addLayout(r_box)
+        main_layout.addWidget(hdr)
+
+        # ── 2. MAIN STACKED CONTENT ──
+        self.content_stack = QStackedWidget()
+        self.content_stack.setStyleSheet("QStackedWidget { background-color: #080d17; }")
+
+        # Page 0: Game Catalog View
+        self.page_games = QWidget()
+        self._build_games_page_ui()
+        self.content_stack.addWidget(self.page_games)
+
+        # Page 1: Bar Menu View
+        self.page_bar = QWidget()
+        self._build_bar_page_ui()
+        self.content_stack.addWidget(self.page_bar)
+
+        main_layout.addWidget(self.content_stack, stretch=1)
+
+        # ── 3. FOOTER BAR ──
+        ftr = QFrame()
+        ftr.setFixedHeight(44)
+        ftr.setStyleSheet("QFrame { background: #070b14; border-top: 1px solid rgba(255, 255, 255, 0.05); }")
+        ftr_l = QHBoxLayout(ftr)
+        ftr_l.setContentsMargins(28, 0, 28, 0)
+
+        f_left = QLabel("Qoidalar    Yordam")
+        f_left.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        f_left.setStyleSheet("color: #94a3b8;")
+        ftr_l.addWidget(f_left)
+
+        ftr_l.addStretch()
+
+        f_right = QLabel(f"© {time.strftime('%Y')} Clutch Zone Midnight Pulse Engine. Barcha huquqlar himoyalangan.")
+        f_right.setFont(QFont("Segoe UI", 9))
+        f_right.setStyleSheet("color: #64748b;")
+        ftr_l.addWidget(f_right)
+
+        main_layout.addWidget(ftr)
+
+        self._show_games_page()
+
+    def _update_clock(self):
+        t_str = time.strftime("%H:%M")
+        self.clock_lbl.setText(f"{t_str}\nTASHKENT, UZ")
+
+    def _set_active_tab_style(self, active_btn):
+        for btn in [self.tab_games, self.tab_bar, self.tab_rewards]:
+            if btn == active_btn:
+                btn.setStyleSheet("color: #ffffff; border-bottom: 2.5px solid #00f0ff; background: transparent; padding: 12px 10px;")
+            else:
+                btn.setStyleSheet("color: #94a3b8; border-bottom: 2.5px solid transparent; background: transparent; padding: 12px 10px;")
+
+    def _show_games_page(self):
+        self._set_active_tab_style(self.tab_games)
+        self.content_stack.setCurrentIndex(0)
+
+    def _show_bar_page(self):
+        self._set_active_tab_style(self.tab_bar)
+        self.content_stack.setCurrentIndex(1)
+        self.load_bar_data()
+
+    # ── GAME CATALOG VIEW UI ──
+    def _build_games_page_ui(self):
+        gl = QVBoxLayout(self.page_games)
+        gl.setContentsMargins(28, 20, 28, 16)
+        gl.setSpacing(16)
+
+        # Category Pills
+        cat_bar = QHBoxLayout()
+        cat_bar.setSpacing(10)
+        self.cat_buttons = {}
+        for code, label in [("ALL", "🌐 BARCHASI"), ("FPS", "🎯 FPS / SHOOTER"), ("Action", "⚔️ ACTION / RPG"), ("Sports", "🏎️ SPORTS / RACING"), ("Strategy", "🧠 STRATEGY / MOBA")]:
+            btn = QPushButton(label)
+            btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(self._game_cat_style(code == "ALL"))
+            btn.clicked.connect(lambda _, c=code: self._set_game_category(c))
+            cat_bar.addWidget(btn)
+            self.cat_buttons[code] = btn
+        cat_bar.addStretch()
+        gl.addLayout(cat_bar)
+
+        # Status & Search Bar
+        sb = QFrame()
+        sb.setStyleSheet("QFrame { background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; }")
+        sbl = QHBoxLayout(sb)
+        sbl.setContentsMargins(14, 8, 14, 8)
+
+        self.status_msg = QLabel("ⓘ O'yin tanlang va 'Ishga tushirish' tugmasini bosing")
+        self.status_msg.setFont(QFont("Segoe UI", 10))
+        self.status_msg.setStyleSheet("color: #94a3b8; background: transparent;")
+        sbl.addWidget(self.status_msg, stretch=1)
 
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("🔍 O'yin nomini qidirish...")
-        self.search_input.setFixedWidth(290)
+        self.search_input.setFixedWidth(280)
         self.search_input.textChanged.connect(self._on_search)
-        hdr.addWidget(self.search_input)
+        sbl.addWidget(self.search_input)
 
-        self.timer_label = QLabel("00:00:00")
-        self.timer_label.setFont(QFont("Consolas",16,QFont.Weight.Bold))
-        self.timer_label.setStyleSheet("color:#10b981;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);border-radius:12px;padding:8px 16px;")
-        hdr.addWidget(self.timer_label)
+        gl.addWidget(sb)
 
-        bar_btn = QPushButton("🍸 BAR MENU")
-        bar_btn.setFont(QFont("Segoe UI",11,QFont.Weight.Bold))
-        bar_btn.setStyleSheet("""QPushButton{background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #a855f7,stop:0.5 #d946ef,stop:1 #ec4899);color:#fff;border:1px solid rgba(255,255,255,0.4);border-radius:12px;padding:10px 20px;font-weight:bold;letter-spacing:1px;}
-            QPushButton:hover{background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #c084fc,stop:1 #f472b6);border:1px solid #00f0ff;}""")
-        if self.on_bar_click: bar_btn.clicked.connect(self.on_bar_click)
-        hdr.addWidget(bar_btn)
-        main.addLayout(hdr)
-
-        # Category bar
-        cat_bar = QHBoxLayout(); cat_bar.setSpacing(12)
-        self.cat_buttons = {}
-        for code, label in [("ALL","🌐 Barchasi"),("FPS","🎯 FPS / Shooter"),("Action","⚔️ Action / RPG"),("Sports","⚽ Sports / Racing"),("Strategy","🧠 Strategy / MOBA")]:
-            btn = QPushButton(label); btn.setFont(QFont("Segoe UI",10,QFont.Weight.Bold))
-            btn.setStyleSheet(self._cat_style(code=="ALL"))
-            btn.clicked.connect(lambda _,c=code: self._set_category(c))
-            cat_bar.addWidget(btn); self.cat_buttons[code] = btn
-        cat_bar.addStretch(); main.addLayout(cat_bar)
-
-        self.status_msg = QLabel("O'yin tanlang va 'Ishga tushirish' tugmasini bosing")
-        self.status_msg.setFont(QFont("Segoe UI",10))
-        self.status_msg.setStyleSheet("color:#94a3b8;background:rgba(15,23,42,0.7);border:1px solid rgba(255,255,255,0.05);border-radius:8px;padding:8px 14px;")
-        main.addWidget(self.status_msg)
-
-        self.scroll_area = QScrollArea(); self.scroll_area.setWidgetResizable(True)
+        # Games Grid Scroll Area
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
         self.grid_widget = QWidget()
+        self.grid_widget.setStyleSheet("background: transparent;")
         self.grid_layout = QGridLayout(self.grid_widget)
-        self.grid_layout.setSpacing(24); self.grid_layout.setContentsMargins(0,0,0,0)
+        self.grid_layout.setSpacing(20)
+        self.grid_layout.setContentsMargins(0, 0, 0, 0)
         self.grid_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        
         self.scroll_area.setWidget(self.grid_widget)
-        main.addWidget(self.scroll_area, stretch=1)
+        gl.addWidget(self.scroll_area, stretch=1)
 
-    def _cat_style(self, active):
-        if active: return "QPushButton{background:rgba(0,240,255,0.25);color:#00f0ff;border:1px solid #00f0ff;border-radius:12px;padding:8px 18px;}"
-        return "QPushButton{background:rgba(30,41,59,0.5);color:#94a3b8;border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:8px 18px;}QPushButton:hover{background:rgba(51,65,85,0.8);color:#e2e8f0;}"
+    def _game_cat_style(self, active):
+        if active:
+            return """
+                QPushButton {
+                    background: #00e5ff;
+                    color: #030712;
+                    border: none;
+                    border-radius: 18px;
+                    padding: 8px 18px;
+                    font-size: 12px;
+                    font-weight: bold;
+                }
+            """
+        return """
+            QPushButton {
+                background: rgba(30, 41, 59, 0.5);
+                color: #94a3b8;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 18px;
+                padding: 8px 18px;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: rgba(51, 65, 85, 0.8);
+                color: #e2e8f0;
+                border-color: rgba(0, 240, 255, 0.3);
+            }
+        """
 
-    def _set_category(self, code):
-        self.current_category = None if code=="ALL" else code
-        for c,btn in self.cat_buttons.items(): btn.setStyleSheet(self._cat_style(c==code))
+    def _set_game_category(self, code):
+        self.current_category = None if code == "ALL" else code
+        for c, btn in self.cat_buttons.items():
+            btn.setStyleSheet(self._game_cat_style(c == code))
         self._render_games()
 
     def _on_search(self, text):
-        self.search_query = text.strip().lower(); self._render_games()
+        self.search_query = text.strip().lower()
+        self._render_games()
 
     def update_timer(self, seconds):
-        if seconds<=0: self.timer_label.setText("00:00:00"); return
-        self.timer_label.setText(f"{seconds//3600:02d}:{(seconds%3600)//60:02d}:{seconds%60:02d}")
+        if seconds <= 0:
+            return
 
     def load_games(self):
         try:
             res = requests.get(f"{self.server_url}/api/games/", timeout=4)
-            self.games = res.json() if res.status_code==200 else self.fallback_games
+            self.games = res.json() if res.status_code == 200 else self.fallback_games
         except Exception as e:
-            print(f"[GameLauncher] {e}"); self.games = self.fallback_games
+            print(f"[GameLauncher] {e}")
+            self.games = self.fallback_games
         self._render_games()
 
     def _on_image_downloaded(self, url, pixmap):
         if url in self.pixmap_labels:
-            for lbl in self.pixmap_labels[url]: lbl.setPixmap(pixmap)
+            for lbl in self.pixmap_labels[url]:
+                lbl.setPixmap(pixmap)
 
     def _render_games(self):
         for i in reversed(range(self.grid_layout.count())):
             w = self.grid_layout.itemAt(i).widget()
-            if w: w.setParent(None)
+            if w:
+                w.setParent(None)
         self.pixmap_labels.clear()
 
-        filtered = [g for g in self.games
-            if (not self.current_category or g.get('category')==self.current_category)
-            and (not self.search_query or self.search_query in g.get('name','').lower())]
+        filtered = [
+            g for g in self.games
+            if (not self.current_category or g.get('category') == self.current_category)
+            and (not self.search_query or self.search_query in g.get('name', '').lower())
+        ]
 
-        col_count=4
-        for c in range(col_count): self.grid_layout.setColumnStretch(c,1)
+        col_count = 4
+        for c in range(col_count):
+            self.grid_layout.setColumnStretch(c, 1)
         sd = os.path.dirname(os.path.abspath(__file__))
 
         for idx, game in enumerate(filtered):
-            card = QFrame(); card.setFixedHeight(290)
-            card.setStyleSheet("QFrame{background:rgba(14,21,36,0.92);border:1.5px solid rgba(0,240,255,0.25);border-radius:18px;}QFrame:hover{border:1.5px solid #00f0ff;background:rgba(20,32,56,0.96);}")
+            card = QFrame()
+            card.setFixedHeight(340)
+            card.setStyleSheet("""
+                QFrame {
+                    background: rgba(14, 21, 36, 0.95);
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    border-radius: 16px;
+                }
+                QFrame:hover {
+                    border: 1.5px solid #00f0ff;
+                    background: rgba(20, 32, 56, 0.98);
+                }
+            """)
             shadow = QGraphicsDropShadowEffect(card)
-            shadow.setBlurRadius(20); shadow.setColor(QColor(0,240,255,75)); shadow.setOffset(0,0)
+            shadow.setBlurRadius(20)
+            shadow.setColor(QColor(0, 240, 255, 60))
+            shadow.setOffset(0, 0)
             card.setGraphicsEffect(shadow)
-            cl = QVBoxLayout(card); cl.setContentsMargins(12,12,12,12); cl.setSpacing(10)
 
-            cover = QLabel(); cover.setFixedHeight(158); cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            cover.setStyleSheet("background:linear-gradient(135deg,#0d1527 0%,#1e293b 100%);border-radius:12px;")
-            url = game.get('cover_path','')
-            pix = ImageCache.get_cached(url,300,158)
+            cl = QVBoxLayout(card)
+            cl.setContentsMargins(12, 12, 12, 12)
+            cl.setSpacing(10)
+
+            # Game Cover Poster
+            cover = QLabel()
+            cover.setFixedHeight(210)
+            cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            cover.setStyleSheet("background: #0b1220; border-radius: 12px;")
+            
+            url = game.get('cover_path', '')
+            pix = ImageCache.get_cached(url, 320, 210)
             if pix:
                 cover.setPixmap(pix)
             else:
-                fl = os.path.join(sd,"assets","clutch_logo_full.png")
-                if not os.path.exists(fl): fl = os.path.join(os.getcwd(),"client","assets","clutch_logo_full.png")
+                fl = os.path.join(sd, "assets", "clutch_logo_full.png")
+                if not os.path.exists(fl):
+                    fl = os.path.join(os.getcwd(), "client", "assets", "clutch_logo_full.png")
                 if os.path.exists(fl):
-                    cover.setPixmap(QPixmap(fl).scaled(240,130,Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation))
+                    cover.setPixmap(QPixmap(fl).scaled(260, 160, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
                 else:
-                    cover.setText(f"🎮\n{game.get('name')}"); cover.setFont(QFont("Segoe UI",12,QFont.Weight.Bold))
-                    cover.setStyleSheet("color:#00f0ff;background:rgba(0,240,255,0.1);border-radius:12px;")
+                    cover.setText(f"🎮\n{game.get('name')}")
+                    cover.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+                    cover.setStyleSheet("color: #00f0ff; background: rgba(0, 240, 255, 0.1); border-radius: 12px;")
                 if url and (url.startswith("http://") or url.startswith("https://")):
-                    self.pixmap_labels.setdefault(url,[]).append(cover)
-                    self.image_downloader.fetch_image(url,300,158)
+                    self.pixmap_labels.setdefault(url, []).append(cover)
+                    self.image_downloader.fetch_image(url, 320, 210)
             cl.addWidget(cover)
 
+            # Info Row
             ir = QHBoxLayout()
-            nm = QLabel(game.get('name','Unknown Game')); nm.setFont(QFont("Segoe UI",11,QFont.Weight.Bold))
-            nm.setStyleSheet("color:#ffffff;"); nm.setWordWrap(True); ir.addWidget(nm,stretch=1)
-            cp = QLabel(game.get('category','FPS')); cp.setFont(QFont("Segoe UI",8,QFont.Weight.Bold))
-            cp.setStyleSheet("color:#38bdf8;background:rgba(56,189,248,0.15);border-radius:6px;padding:3px 8px;"); ir.addWidget(cp)
+            nm = QLabel(game.get('name', 'Unknown Game'))
+            nm.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+            nm.setStyleSheet("color: #ffffff;")
+            nm.setWordWrap(True)
+            ir.addWidget(nm, stretch=1)
+
+            cat_tag = QLabel(game.get('category', 'FPS').upper())
+            cat_tag.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+            cat_tag.setStyleSheet("color: #94a3b8; background: rgba(255, 255, 255, 0.1); border-radius: 5px; padding: 3px 7px;")
+            ir.addWidget(cat_tag)
             cl.addLayout(ir)
 
-            pb = QPushButton("▶ ISHGA TUSHIRISH"); pb.setFont(QFont("Segoe UI",10,QFont.Weight.Bold))
-            pb.setStyleSheet("""QPushButton{background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #00f0ff,stop:1 #10b981);color:#030712;border:none;border-radius:10px;padding:9px;font-weight:bold;letter-spacing:1px;}
-                QPushButton:hover{background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #10b981,stop:1 #00f0ff);color:#fff;border:1px solid #00f0ff;}""")
-            pb.clicked.connect(lambda _,g=game: self._launch_game(g)); cl.addWidget(pb)
-            self.grid_layout.addWidget(card, idx//col_count, idx%col_count)
+            # Launch Button
+            pb = QPushButton("▶ ISHGA TUSHIRISH")
+            pb.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+            pb.setCursor(Qt.CursorShape.PointingHandCursor)
+            pb.setFixedHeight(38)
+            pb.setStyleSheet("""
+                QPushButton {
+                    background: rgba(0, 240, 255, 0.15);
+                    color: #00f0ff;
+                    border: 1px solid rgba(0, 240, 255, 0.3);
+                    border-radius: 10px;
+                    font-weight: bold;
+                    letter-spacing: 0.5px;
+                }
+                QPushButton:hover {
+                    background: #00f0ff;
+                    color: #030712;
+                    border: 1px solid #00f0ff;
+                }
+            """)
+            pb.clicked.connect(lambda _, g=game: self._launch_game(g))
+            cl.addWidget(pb)
+
+            self.grid_layout.addWidget(card, idx // col_count, idx % col_count)
 
     def _launch_game(self, game):
         self.status_msg.setText(f"⏳ {game.get('name','Game')} tekshirilmoqda...")
-        self.status_msg.setStyleSheet("color:#00f0ff;background:rgba(0,240,255,0.15);border:1px solid rgba(0,240,255,0.3);border-radius:8px;padding:8px 14px;")
+        self.status_msg.setStyleSheet("color: #00f0ff; background: transparent;")
         self.game_launched_signal.emit(game)
 
     def show_launch_error(self, msg="O'yin fayli topilmadi"):
         self.status_msg.setText(f"❌ {msg}")
-        self.status_msg.setStyleSheet("color:#ef4444;background:rgba(239,68,68,0.18);border:1px solid rgba(239,68,68,0.4);border-radius:8px;padding:8px 14px;font-weight:bold;")
+        self.status_msg.setStyleSheet("color: #ef4444; background: transparent; font-weight: bold;")
 
     def show_launch_success(self, name):
         self.status_msg.setText(f"🚀 {name} ishga tushirildi!")
-        self.status_msg.setStyleSheet("color:#10b981;background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);border-radius:8px;padding:8px 14px;font-weight:bold;")
+        self.status_msg.setStyleSheet("color: #10b981; background: transparent; font-weight: bold;")
+
+    # ── BAR MENU VIEW UI (1:1 with Image 2) ──
+    def _build_bar_page_ui(self):
+        bl = QVBoxLayout(self.page_bar)
+        bl.setContentsMargins(28, 20, 28, 16)
+        bl.setSpacing(14)
+
+        # Title Header
+        title = QLabel("🍸 CLUTCH ZONE BAR & REFRESHMENTS")
+        title.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
+        title.setStyleSheet("color: #ffffff; letter-spacing: 1px;")
+        bl.addWidget(title)
+
+        # Category Pills Row
+        self.bar_cat_layout = QHBoxLayout()
+        self.bar_cat_layout.setSpacing(10)
+        self.bar_cat_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        bl.addLayout(self.bar_cat_layout)
+
+        # Main Body (Products Grid + Cart Side Panel)
+        body = QHBoxLayout()
+        body.setSpacing(20)
+
+        # Products Scroll Grid
+        self.bar_scroll = QScrollArea()
+        self.bar_scroll.setWidgetResizable(True)
+        self.bar_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
+        self.bar_grid_widget = QWidget()
+        self.bar_grid_widget.setStyleSheet("background: transparent;")
+        self.bar_grid_layout = QGridLayout(self.bar_grid_widget)
+        self.bar_grid_layout.setSpacing(16)
+        self.bar_grid_layout.setContentsMargins(0, 0, 0, 0)
+        self.bar_grid_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        self.bar_scroll.setWidget(self.bar_grid_widget)
+        
+        body.addWidget(self.bar_scroll, stretch=2)
+
+        # Right Cart Panel (BUYURTMA SAVATI)
+        cf = QFrame()
+        cf.setFixedWidth(340)
+        cf.setStyleSheet("""
+            QFrame {
+                background: rgba(18, 25, 40, 0.95);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 16px;
+            }
+        """)
+        cfl = QVBoxLayout(cf)
+        cfl.setContentsMargins(18, 18, 18, 18)
+        cfl.setSpacing(12)
+
+        ct = QLabel("🛒 BUYURTMA SAVATI")
+        ct.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        ct.setStyleSheet("color: #ffffff; letter-spacing: 0.5px;")
+        cfl.addWidget(ct)
+
+        self.cart_scroll = QScrollArea()
+        self.cart_scroll.setWidgetResizable(True)
+        self.cart_scroll.viewport().setStyleSheet("background: transparent;")
+        self.cart_container = QWidget()
+        self.cart_container.setStyleSheet("background: transparent;")
+        self.cart_items_layout = QVBoxLayout(self.cart_container)
+        self.cart_items_layout.setContentsMargins(0, 0, 0, 0)
+        self.cart_items_layout.setSpacing(8)
+        self.cart_items_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.cart_scroll.setWidget(self.cart_container)
+        cfl.addWidget(self.cart_scroll, stretch=1)
+
+        self.status_banner = QLabel("")
+        self.status_banner.setWordWrap(True)
+        self.status_banner.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        self.status_banner.setStyleSheet("color: #f59e0b; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 8px;")
+        self.status_banner.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_banner.hide()
+        cfl.addWidget(self.status_banner)
+
+        tot_row = QHBoxLayout()
+        t_title = QLabel("Jami:")
+        t_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        t_title.setStyleSheet("color: #94a3b8;")
+        tot_row.addWidget(t_title)
+
+        self.total_label = QLabel("0 UZS")
+        self.total_label.setFont(QFont("Segoe UI", 15, QFont.Weight.Bold))
+        self.total_label.setStyleSheet("color: #10b981;")
+        self.total_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        tot_row.addWidget(self.total_label)
+        cfl.addLayout(tot_row)
+
+        self.send_order_btn = QPushButton("🛍️ Buyurtma Yuborish")
+        self.send_order_btn.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        self.send_order_btn.setFixedHeight(48)
+        self.send_order_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.send_order_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 255, 255, 0.12);
+                color: #e2e8f0;
+                border: none;
+                border-radius: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: #00f0ff;
+                color: #030712;
+            }
+        """)
+        self.send_order_btn.clicked.connect(self._submit_order)
+        cfl.addWidget(self.send_order_btn)
+
+        body.addWidget(cf, stretch=1)
+        bl.addLayout(body, stretch=1)
+
+    def load_bar_data(self):
+        try:
+            rc = requests.get(f"{self.server_url}/api/categories/", timeout=4)
+            rp = requests.get(f"{self.server_url}/api/products/", timeout=4)
+            if rc.status_code == 200:
+                self.categories = rc.json()
+            if rp.status_code == 200:
+                self.products = rp.json()
+            self._render_bar_categories()
+            self._render_bar_products()
+        except Exception as e:
+            print(f"[BarMenu] {e}")
+
+    def _bar_cat_btn_style(self, active):
+        if active:
+            return """
+                QPushButton {
+                    background: rgba(0, 240, 255, 0.12);
+                    color: #00f0ff;
+                    border: 1.5px solid #00f0ff;
+                    border-radius: 18px;
+                    padding: 8px 18px;
+                    font-size: 12px;
+                    font-weight: bold;
+                }
+            """
+        return """
+            QPushButton {
+                background: rgba(30, 41, 59, 0.5);
+                color: #94a3b8;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 18px;
+                padding: 8px 18px;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: rgba(51, 65, 85, 0.8);
+                color: #e2e8f0;
+            }
+        """
+
+    def _render_bar_categories(self):
+        for i in reversed(range(self.bar_cat_layout.count())):
+            w = self.bar_cat_layout.itemAt(i).widget()
+            if w:
+                w.setParent(None)
+
+        ab = QPushButton("🌐 Barchasi")
+        ab.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        ab.setCursor(Qt.CursorShape.PointingHandCursor)
+        ab.setStyleSheet(self._bar_cat_btn_style(self.current_bar_category_id is None))
+        ab.clicked.connect(lambda: self._set_bar_category(None))
+        self.bar_cat_layout.addWidget(ab)
+
+        for cat in self.categories:
+            icon = cat.get('icon', '🍿') or '🍿'
+            btn = QPushButton(f"{icon} {cat['name']}")
+            btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            is_act = (self.current_bar_category_id == cat['id'])
+            btn.setStyleSheet(self._bar_cat_btn_style(is_act))
+            cid = cat['id']
+            btn.clicked.connect(lambda _, c=cid: self._set_bar_category(c))
+            self.bar_cat_layout.addWidget(btn)
+
+    def _set_bar_category(self, cat_id):
+        self.current_bar_category_id = cat_id
+        self._render_bar_categories()
+        self._render_bar_products()
+
+    def _render_bar_products(self):
+        for i in reversed(range(self.bar_grid_layout.count())):
+            w = self.bar_grid_layout.itemAt(i).widget()
+            if w:
+                w.setParent(None)
+
+        filtered = [
+            p for p in self.products
+            if (self.current_bar_category_id is None or p.get('category') == self.current_bar_category_id)
+            and p.get('stock', 0) > 0
+        ]
+
+        if not filtered:
+            empty_lbl = QLabel("Hozircha mahsulotlar mavjud emas")
+            empty_lbl.setFont(QFont("Segoe UI", 11))
+            empty_lbl.setStyleSheet("color: #64748b; padding: 40px;")
+            empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.bar_grid_layout.addWidget(empty_lbl, 0, 0, 1, 3)
+            return
+
+        col_count = 3
+        for c in range(col_count):
+            self.bar_grid_layout.setColumnStretch(c, 1)
+
+        sd = os.path.dirname(os.path.abspath(__file__))
+
+        for idx, p in enumerate(filtered):
+            card = QFrame()
+            card.setFixedHeight(310)
+            card.setStyleSheet("""
+                QFrame {
+                    background: rgba(20, 27, 44, 0.9);
+                    border: 1px solid rgba(255, 255, 255, 0.06);
+                    border-radius: 16px;
+                }
+                QFrame:hover {
+                    border: 1.5px solid #00f0ff;
+                    background: rgba(26, 36, 58, 0.95);
+                }
+            """)
+            
+            c = QVBoxLayout(card)
+            c.setContentsMargins(12, 12, 12, 12)
+            c.setSpacing(8)
+
+            # Cover Image Area
+            cover = QLabel()
+            cover.setFixedHeight(160)
+            cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            cover.setStyleSheet("background: #0b1220; border-radius: 12px;")
+            
+            url = p.get('image', '')
+            pix = ImageCache.get_cached(url, 260, 160)
+            if pix:
+                cover.setPixmap(pix)
+            else:
+                fl = os.path.join(sd, "assets", "clutch_logo_full.png")
+                if os.path.exists(fl):
+                    cover.setPixmap(QPixmap(fl).scaled(180, 100, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+                else:
+                    cover.setText(f"🍿\n{p['name']}")
+                    cover.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+                    cover.setStyleSheet("color: #00f0ff; background: rgba(0, 240, 255, 0.1); border-radius: 12px;")
+            c.addWidget(cover)
+
+            # Name
+            n = QLabel(p['name'])
+            n.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+            n.setStyleSheet("color: #ffffff;")
+            n.setWordWrap(True)
+            c.addWidget(n, stretch=1)
+
+            # Price
+            info = QLabel(f"{float(p['price']):,.0f} UZS")
+            info.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+            info.setStyleSheet("color: #ffffff;")
+            c.addWidget(info)
+
+            # Add to Cart Button
+            ab = QPushButton("+ Savatga Qo'shish")
+            ab.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+            ab.setFixedHeight(36)
+            ab.setCursor(Qt.CursorShape.PointingHandCursor)
+            ab.setStyleSheet("""
+                QPushButton {
+                    background: rgba(16, 185, 129, 0.2);
+                    color: #10b981;
+                    border: 1px solid rgba(16, 185, 129, 0.4);
+                    border-radius: 10px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background: #10b981;
+                    color: #ffffff;
+                }
+            """)
+            ab.clicked.connect(lambda _, prod=p: self._add_to_cart(prod))
+            c.addWidget(ab)
+
+            self.bar_grid_layout.addWidget(card, idx // col_count, idx % col_count)
+
+    def _add_to_cart(self, prod):
+        pid = prod['id']
+        stock_limit = prod.get('stock', 999)
+        if pid in self.cart:
+            if self.cart[pid]['quantity'] < stock_limit:
+                self.cart[pid]['quantity'] += 1
+        else:
+            self.cart[pid] = {
+                'id': pid,
+                'name': prod['name'],
+                'price': float(prod['price']),
+                'quantity': 1,
+                'stock': stock_limit
+            }
+        self._render_cart()
+
+    def _render_cart(self):
+        for i in reversed(range(self.cart_items_layout.count())):
+            w = self.cart_items_layout.itemAt(i).widget()
+            if w:
+                w.setParent(None)
+
+        total = 0
+        if not self.cart:
+            empty_box = QVBoxLayout()
+            empty_box.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            empty_box.setSpacing(6)
+
+            ic = QLabel("🛒")
+            ic.setFont(QFont("Segoe UI", 36))
+            ic.setStyleSheet("color: #334155;")
+            ic.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            
+            t1 = QLabel("Savat bo'sh")
+            t1.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+            t1.setStyleSheet("color: #94a3b8;")
+            t1.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            t2 = QLabel("Mahsulot tanlang")
+            t2.setFont(QFont("Segoe UI", 9))
+            t2.setStyleSheet("color: #64748b;")
+            t2.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            w_empty = QWidget()
+            w_empty.setLayout(empty_box)
+            empty_box.addWidget(ic)
+            empty_box.addWidget(t1)
+            empty_box.addWidget(t2)
+            
+            self.cart_items_layout.addWidget(w_empty)
+            self.total_label.setText("0 UZS")
+            self.send_order_btn.setStyleSheet("""
+                QPushButton {
+                    background: rgba(255, 255, 255, 0.12);
+                    color: #e2e8f0;
+                    border: none;
+                    border-radius: 12px;
+                    font-weight: bold;
+                }
+            """)
+            return
+
+        self.send_order_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #10b981, stop:1 #059669);
+                color: #ffffff;
+                border: none;
+                border-radius: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: #10b981;
+            }
+        """)
+
+        for pid, item in list(self.cart.items()):
+            sub = item['price'] * item['quantity']
+            total += sub
+            
+            iw = QFrame()
+            iw.setStyleSheet("""
+                QFrame {
+                    background: rgba(18, 27, 46, 0.6);
+                    border: 1px solid rgba(255, 255, 255, 0.05);
+                    border-radius: 10px;
+                }
+            """)
+            il = QHBoxLayout(iw)
+            il.setContentsMargins(10, 8, 10, 8)
+            il.setSpacing(6)
+
+            lbl = QLabel(f"{item['name']}\n{sub:,.0f} UZS")
+            lbl.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+            lbl.setStyleSheet("color: #f8fafc;")
+            lbl.setWordWrap(True)
+            il.addWidget(lbl, stretch=1)
+
+            bm = QPushButton("-")
+            bm.setFixedSize(24, 24)
+            bm.setCursor(Qt.CursorShape.PointingHandCursor)
+            bm.setStyleSheet("background: #1e293b; color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; font-weight: bold;")
+            bm.clicked.connect(lambda _, p=pid: self._update_qty(p, -1))
+            il.addWidget(bm)
+
+            ql = QLabel(str(item['quantity']))
+            ql.setFont(QFont("Consolas", 10, QFont.Weight.Bold))
+            ql.setStyleSheet("color: #00f0ff; min-width: 16px;")
+            ql.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            il.addWidget(ql)
+
+            bp = QPushButton("+")
+            bp.setFixedSize(24, 24)
+            bp.setCursor(Qt.CursorShape.PointingHandCursor)
+            bp.setStyleSheet("background: #1e293b; color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 6px; font-weight: bold;")
+            bp.clicked.connect(lambda _, p=pid: self._update_qty(p, 1))
+            il.addWidget(bp)
+
+            del_btn = QPushButton("✕")
+            del_btn.setFixedSize(22, 22)
+            del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            del_btn.setStyleSheet("background: transparent; color: #64748b; border: none; font-size: 11px;")
+            del_btn.clicked.connect(lambda _, p=pid: self._remove_from_cart(p))
+            il.addWidget(del_btn)
+
+            self.cart_items_layout.addWidget(iw)
+
+        self.total_label.setText(f"{total:,.0f} UZS")
+
+    def _remove_from_cart(self, pid):
+        if pid in self.cart:
+            del self.cart[pid]
+            self._render_cart()
+
+    def _update_qty(self, pid, change):
+        if pid in self.cart:
+            stock_limit = self.cart[pid].get('stock', 999)
+            new_qty = self.cart[pid]['quantity'] + change
+            if new_qty > stock_limit:
+                return
+            if new_qty <= 0:
+                del self.cart[pid]
+            else:
+                self.cart[pid]['quantity'] = new_qty
+            self._render_cart()
+
+    def _submit_order(self):
+        if not self.cart:
+            self._banner("⚠️ Savatingiz bo'sh!", "#f59e0b")
+            return
+        payload = {
+            "pc_name": self.pc_name,
+            "items": [{"product_id": pid, "quantity": v['quantity']} for pid, v in self.cart.items()]
+        }
+        try:
+            res = requests.post(f"{self.server_url}/api/orders/", json=payload, timeout=5)
+            if res.status_code == 201:
+                self.cart = {}
+                self._render_cart()
+                self._banner("⏳ Buyurtmangiz yuborildi! Admin tasdiqlashini kuting.", "#f59e0b")
+            else:
+                self._banner(f"❌ {res.json().get('error', 'Xatolik!')}", "#ef4444")
+        except Exception as e:
+            self._banner("❌ Serverga ulanib bo'lmadi!", "#ef4444")
+
+    def _banner(self, text, color):
+        self.status_banner.setText(text)
+        self.status_banner.setStyleSheet(
+            f"color: {color}; background: rgba(15, 23, 42, 0.9); border: 1px solid {color}; border-radius: 8px; padding: 8px;"
+        )
+        self.status_banner.show()
+
+    def update_order_status(self, data):
+        s = data.get('status')
+        m = {
+            'PENDING': (f"⏳ Buyurtma #{data.get('id')} kutilmoqda...", "#f59e0b"),
+            'APPROVED': (f"👍 Buyurtma #{data.get('id')} tasdiqlandi!", "#00f0ff"),
+            'DELIVERED': (f"🚚 Buyurtma #{data.get('id')} topshirildi!", "#10b981"),
+            'CANCELLED': (f"❌ Buyurtma #{data.get('id')} bekor qilindi.", "#ef4444"),
+        }
+        if s in m:
+            self._banner(*m[s])
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -416,16 +1170,19 @@ class BarMenuWindow(QWidget):
 
     def _build_ui(self):
         self.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFixedSize(940, 610)
         sg = QApplication.primaryScreen().geometry()
         self.move((sg.width() - 940) // 2, (sg.height() - 610) // 2)
         self.setStyleSheet("""
-            QWidget {
-                background-color: #080d18;
-                color: #e2e8f0;
-                font-family: 'Segoe UI', 'Inter', sans-serif;
+            BarMenuWindow {
+                background: transparent;
             }
-            QScrollArea {
+            QWidget {
+                color: #e2e8f0;
+                font-family: 'Segoe UI', 'Inter', 'SF Pro', sans-serif;
+            }
+            QScrollArea, QScrollArea > QWidget > QWidget {
                 border: none;
                 background: transparent;
             }
@@ -462,7 +1219,7 @@ class BarMenuWindow(QWidget):
         con = QFrame()
         con.setStyleSheet("""
             QFrame {
-                background: rgba(13, 20, 36, 0.98);
+                background-color: #0d1424;
                 border: 2px solid rgba(0, 240, 255, 0.4);
                 border-radius: 20px;
             }
@@ -481,7 +1238,7 @@ class BarMenuWindow(QWidget):
         hdr = QHBoxLayout()
         ht = QLabel("🍸 CLUTCH ZONE BAR & REFRESHMENTS")
         ht.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
-        ht.setStyleSheet("color: #00f0ff; letter-spacing: 1.5px;")
+        ht.setStyleSheet("color: #00f0ff; letter-spacing: 1.5px; background: transparent;")
         
         xb = QPushButton("✕")
         xb.setFixedSize(34, 34)
@@ -520,8 +1277,10 @@ class BarMenuWindow(QWidget):
         self.cat_scroll.setWidgetResizable(True)
         self.cat_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.cat_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.cat_scroll.viewport().setStyleSheet("background: transparent;")
         
         self.cat_widget = QWidget()
+        self.cat_widget.setStyleSheet("background: transparent;")
         self.cat_layout = QHBoxLayout(self.cat_widget)
         self.cat_layout.setContentsMargins(2, 2, 2, 2)
         self.cat_layout.setSpacing(8)
@@ -533,8 +1292,10 @@ class BarMenuWindow(QWidget):
         self.product_scroll = QScrollArea()
         self.product_scroll.setWidgetResizable(True)
         self.product_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.product_scroll.viewport().setStyleSheet("background: transparent;")
         
         self.product_grid_widget = QWidget()
+        self.product_grid_widget.setStyleSheet("background: transparent;")
         self.product_grid_layout = QGridLayout(self.product_grid_widget)
         self.product_grid_layout.setSpacing(12)
         self.product_grid_layout.setContentsMargins(2, 2, 2, 2)
@@ -560,12 +1321,14 @@ class BarMenuWindow(QWidget):
 
         ct = QLabel("🛒 BUYURTMA SAVATI")
         ct.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
-        ct.setStyleSheet("color: #c084fc; letter-spacing: 0.5px;")
+        ct.setStyleSheet("color: #c084fc; letter-spacing: 0.5px; background: transparent;")
         cfl.addWidget(ct)
 
         self.cart_scroll = QScrollArea()
         self.cart_scroll.setWidgetResizable(True)
+        self.cart_scroll.viewport().setStyleSheet("background: transparent;")
         self.cart_container = QWidget()
+        self.cart_container.setStyleSheet("background: transparent;")
         self.cart_items_layout = QVBoxLayout(self.cart_container)
         self.cart_items_layout.setContentsMargins(0, 0, 0, 0)
         self.cart_items_layout.setSpacing(8)
@@ -987,6 +1750,7 @@ class MainWindow(QMainWindow):
         self.pc_name = pc_name
 
         self.setWindowTitle("Clutch Zone Client Locker")
+        self.setStyleSheet("QMainWindow, QWidget { background-color: #060911; }")
 
         # Pages
         self.lock_page     = LockScreenWidget(pc_name=pc_name)
@@ -997,60 +1761,49 @@ class MainWindow(QMainWindow):
 
         # Stacked widget
         self.stacked = QStackedWidget()
+        self.stacked.setStyleSheet("QStackedWidget { background-color: #060911; }")
         self.stacked.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.stacked.addWidget(self.lock_page)      # index 0
         self.stacked.addWidget(self.launcher_page)  # index 1
         self.stacked.setCurrentIndex(self.PAGE_LOCK)
         self.setCentralWidget(self.stacked)
 
-        # Apply native win32 geometry & flags
-        self.apply_native_fullscreen()
-        self.showFullScreen()
-
-    def apply_native_fullscreen(self):
-        if sys.platform == 'win32':
-            user32 = ctypes.windll.user32
-            user32.SetProcessDPIAware()
-            width = user32.GetSystemMetrics(0)  # SM_CXSCREEN
-            height = user32.GetSystemMetrics(1) # SM_CYSCREEN
-        else:
-            screen = QGuiApplication.primaryScreen().geometry()
-            width, height = screen.width(), screen.height()
-
+        # Window Flags — ONLY set once in __init__
         flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
         if IS_WINDOWS:
             flags |= Qt.WindowType.WindowDoesNotAcceptFocus
         self.setWindowFlags(flags)
-        self.setGeometry(0, 0, width, height)
-        self.setFixedSize(width, height)
+
+        self.apply_native_fullscreen()
+        self.showFullScreen()
+
+    def apply_native_fullscreen(self):
+        screen = QGuiApplication.primaryScreen().geometry()
+        self.setGeometry(screen)
 
     def showEvent(self, event):
         super().showEvent(event)
-        self.apply_native_fullscreen()
 
     def switch_to_lock(self):
         """LOCKED: LockScreen sahifasiga o'tish."""
-        self.apply_native_fullscreen()
         self.stacked.setCurrentIndex(self.PAGE_LOCK)
         self.showFullScreen()
 
     def switch_to_launcher(self):
         """ACTIVE: GameLauncher sahifasiga o'tish."""
-        self.apply_native_fullscreen()
         self.stacked.setCurrentIndex(self.PAGE_LAUNCHER)
         self.showFullScreen()
 
     def changeEvent(self, event):
         super().changeEvent(event)
         if event.type() == QEvent.Type.WindowStateChange:
-            self.apply_native_fullscreen()
             if self.windowState() & Qt.WindowState.WindowMinimized:
                 QTimer.singleShot(80, self._restore_fullscreen)
 
     def _restore_fullscreen(self):
-        self.apply_native_fullscreen()
         self.showFullScreen()
-        self.raise_(); self.activateWindow()
+        self.raise_()
+        self.activateWindow()
 
     def closeEvent(self, event): event.ignore()
 
@@ -1236,6 +1989,13 @@ def main():
     os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     app = QApplication(sys.argv)
+    app.setStyleSheet("""
+        QWidget {
+            background-color: #060911;
+            color: #e2e8f0;
+            font-family: 'Segoe UI', 'Inter', 'SF Pro', -apple-system, sans-serif;
+        }
+    """)
     _locker = ClientLockerApp("config.json")
     sys.exit(app.exec())
 

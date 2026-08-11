@@ -820,6 +820,38 @@ class ExpenseViewSet(viewsets.ModelViewSet):
 
         expense_serializer = ExpenseSerializer(expenses_qs, many=True)
 
+        recent_sales = []
+        for s in sessions_qs.filter(is_active=False).order_by('-end_time')[:15]:
+            recent_sales.append({
+                'id': f"session_{s.id}",
+                'type': 'SESSION',
+                'type_display': '🎮 Seans',
+                'client_name': s.computer.name if s.computer else 'PC',
+                'amount': float(s.total_price),
+                'payment_method': s.payment_method,
+                'payment_method_display': '💵 Naqd' if s.payment_method == 'CASH' else '💳 Plastik' if s.payment_method == 'CARD' else '🔀 Aralash',
+                'created_at': (s.end_time or s.start_time).strftime('%Y-%m-%d %H:%M:%S'),
+                'details': f"{s.tariff.name if s.tariff else 'Tarif'} ({s.duration_minutes} min)"
+            })
+
+        for o in orders_qs.order_by('-created_at')[:15]:
+            items_str = ", ".join([f"{item.quantity}x {item.product.name}" for item in o.items.all()])
+            pc_name = o.computer.name if o.computer else 'Tekzor Bar'
+            recent_sales.append({
+                'id': f"order_{o.id}",
+                'type': 'BAR',
+                'type_display': '🍸 Bar',
+                'client_name': pc_name,
+                'amount': float(o.total_price),
+                'payment_method': o.payment_method,
+                'payment_method_display': '💵 Naqd' if o.payment_method == 'CASH' else '💳 Plastik' if o.payment_method == 'CARD' else '🔀 Aralash',
+                'created_at': o.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                'details': items_str or 'Bar xaridi'
+            })
+
+        recent_sales.sort(key=lambda x: x['created_at'], reverse=True)
+        recent_sales = recent_sales[:20]
+
         return Response({
             'period': period,
             'start_date': start_dt.strftime('%Y-%m-%d %H:%M:%S'),
@@ -840,7 +872,8 @@ class ExpenseViewSet(viewsets.ModelViewSet):
             'card_balance': card_balance,
             'total_balance': total_balance,
             'total_revenue': total_revenue,
-            'expenses': expense_serializer.data
+            'expenses': expense_serializer.data,
+            'recent_sales': recent_sales
         }, status=status.HTTP_200_OK)
 
 

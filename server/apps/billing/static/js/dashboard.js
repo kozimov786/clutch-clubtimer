@@ -1612,16 +1612,26 @@ async function restockProduct(productId, qty) {
 // Kassa & Cashflow Accounting Logic
 let currentFinancePeriod = 'daily';
 
+function openExpenseModal() {
+  const modal = document.getElementById('expense-modal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeExpenseModal() {
+  const modal = document.getElementById('expense-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
 function setFinancePeriod(period) {
   currentFinancePeriod = period;
 
   document.querySelectorAll('.finance-period-btn').forEach(btn => {
-    btn.className = 'finance-period-btn px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 text-slate-400 hover:text-white border border-slate-800 transition-all';
+    btn.className = 'finance-period-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-900 text-slate-400 hover:text-white border border-slate-800 transition-all';
   });
 
   const activeBtn = document.getElementById(`btn-period-${period}`);
   if (activeBtn) {
-    activeBtn.className = 'finance-period-btn px-4 py-2 rounded-xl text-xs font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 transition-all';
+    activeBtn.className = 'finance-period-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 transition-all';
   }
 
   fetchFinanceData();
@@ -1662,39 +1672,39 @@ function renderFinanceDashboard(data) {
   if (cashBalEl) {
     if (cashBal > 0) {
       cashBalEl.textContent = `+${formatMoney(cashBal)}`;
-      cashBalEl.className = "text-2xl font-black font-orbitron text-emerald-400 mt-2";
+      cashBalEl.className = "text-base font-black font-orbitron text-emerald-400 mt-1 truncate";
     } else if (cashBal < 0) {
       cashBalEl.textContent = `-${formatMoney(Math.abs(cashBal))}`;
-      cashBalEl.className = "text-2xl font-black font-orbitron text-rose-400 mt-2";
+      cashBalEl.className = "text-base font-black font-orbitron text-rose-400 mt-1 truncate";
     } else {
       cashBalEl.textContent = `0 UZS`;
-      cashBalEl.className = "text-2xl font-black font-orbitron text-slate-400 mt-2";
+      cashBalEl.className = "text-base font-black font-orbitron text-slate-400 mt-1 truncate";
     }
   }
 
   if (cardBalEl) {
     if (cardBal > 0) {
       cardBalEl.textContent = `+${formatMoney(cardBal)}`;
-      cardBalEl.className = "text-2xl font-black font-orbitron text-cyan-400 mt-2";
+      cardBalEl.className = "text-base font-black font-orbitron text-cyan-400 mt-1 truncate";
     } else if (cardBal < 0) {
       cardBalEl.textContent = `-${formatMoney(Math.abs(cardBal))}`;
-      cardBalEl.className = "text-2xl font-black font-orbitron text-rose-400 mt-2";
+      cardBalEl.className = "text-base font-black font-orbitron text-rose-400 mt-1 truncate";
     } else {
       cardBalEl.textContent = `0 UZS`;
-      cardBalEl.className = "text-2xl font-black font-orbitron text-slate-400 mt-2";
+      cardBalEl.className = "text-base font-black font-orbitron text-slate-400 mt-1 truncate";
     }
   }
 
   if (totalBalEl) {
     if (totalBal > 0) {
       totalBalEl.textContent = `+${formatMoney(totalBal)}`;
-      totalBalEl.className = "text-2xl font-black font-orbitron text-purple-400 mt-2";
+      totalBalEl.className = "text-base font-black font-orbitron text-purple-400 mt-1 truncate";
     } else if (totalBal < 0) {
       totalBalEl.textContent = `-${formatMoney(Math.abs(totalBal))}`;
-      totalBalEl.className = "text-2xl font-black font-orbitron text-rose-400 mt-2";
+      totalBalEl.className = "text-base font-black font-orbitron text-rose-400 mt-1 truncate";
     } else {
       totalBalEl.textContent = `0 UZS`;
-      totalBalEl.className = "text-2xl font-black font-orbitron text-slate-400 mt-2";
+      totalBalEl.className = "text-base font-black font-orbitron text-slate-400 mt-1 truncate";
     }
   }
 
@@ -1715,7 +1725,7 @@ function renderFinanceDashboard(data) {
   if (barRevEl) barRevEl.textContent = (data.total_bar > 0 ? '+' : '') + formatMoney(data.total_bar || 0);
   if (barCogsEl) barCogsEl.textContent = (data.bar_cogs > 0 ? '-' : '') + formatMoney(data.bar_cogs || 0);
   if (barMarginEl) barMarginEl.textContent = (data.bar_margin > 0 ? '+' : data.bar_margin < 0 ? '-' : '') + formatMoney(Math.abs(data.bar_margin || 0));
-  if (barMarginPctEl) barMarginPctEl.textContent = `${data.bar_margin_percent || 0}% Margin`;
+  if (barMarginPctEl) barMarginPctEl.textContent = `${data.bar_margin_percent || 0}%`;
 
   const sessCashEl = document.getElementById('breakdown-session-cash');
   const sessCardEl = document.getElementById('breakdown-session-card');
@@ -1727,40 +1737,75 @@ function renderFinanceDashboard(data) {
   if (barCashEl) barCashEl.textContent = (data.bar_cash > 0 ? '+' : '') + formatMoney(data.bar_cash || 0);
   if (barCardEl) barCardEl.textContent = (data.bar_card > 0 ? '+' : '') + formatMoney(data.bar_card || 0);
 
-  const countBadge = document.getElementById('expenses-count-badge');
-  const tbody = document.getElementById('expenses-table-body');
-  if (!tbody) return;
+  // Render Recent Sales Table
+  const salesTbody = document.getElementById('sales-table-body');
+  const recentSales = data.recent_sales || [];
 
-  const expenses = data.expenses || [];
-  if (countBadge) countBadge.textContent = `${expenses.length} ta chiqim`;
-
-  if (expenses.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-xs text-slate-500">Ushbu davrda chiqimlar mavjud emas</td></tr>`;
-    return;
+  if (salesTbody) {
+    if (recentSales.length === 0) {
+      salesTbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-xs text-slate-500">Ushbu davrda savdolar mavjud emas</td></tr>`;
+    } else {
+      salesTbody.innerHTML = recentSales.map(s => {
+        const pmBadge = s.payment_method === 'CASH'
+          ? `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">💵 Naqd</span>`
+          : `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">💳 Plastik</span>`;
+        const typeBadge = s.type === 'SESSION'
+          ? `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">🎮 Seans</span>`
+          : `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">🍸 Bar</span>`;
+        
+        return `
+          <tr class="border-b border-slate-800/60 hover:bg-slate-900/50 transition-all text-xs">
+            <td class="py-2.5 px-3 font-bold text-white font-orbitron whitespace-nowrap">${s.client_name}</td>
+            <td class="py-2.5 px-3 whitespace-nowrap">${typeBadge}</td>
+            <td class="py-2.5 px-3 whitespace-nowrap">${pmBadge}</td>
+            <td class="py-2.5 px-3 font-bold text-emerald-400 font-orbitron whitespace-nowrap">+${formatMoney(s.amount)}</td>
+            <td class="py-2.5 px-3 text-slate-400 whitespace-nowrap">
+              <div class="font-mono text-[11px] text-slate-300">${s.created_at}</div>
+              <div class="text-[10px] text-slate-500 truncate max-w-[160px]">${s.details}</div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
   }
 
-  tbody.innerHTML = expenses.map(e => {
-    const formattedDate = new Date(e.created_at).toLocaleString();
-    return `
-      <tr class="border-b border-slate-800/60 hover:bg-slate-900/50 transition-all text-xs">
-        <td class="py-3 px-3 font-mono text-slate-400 whitespace-nowrap">${formattedDate}</td>
-        <td class="py-3 px-3 font-semibold text-cyan-300 whitespace-nowrap">${e.category || 'Boshqa'}</td>
-        <td class="py-3 px-3 text-slate-200 font-medium whitespace-nowrap">${e.recipient_name || '-'}</td>
-        <td class="py-3 px-3 whitespace-nowrap">
-          <span class="px-2 py-0.5 rounded text-[10px] font-bold ${e.payment_method === 'CASH' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'}">
-            ${e.payment_method_display || e.payment_method}
-          </span>
-        </td>
-        <td class="py-3 px-3 font-bold text-rose-400 font-orbitron whitespace-nowrap">-${formatMoney(Math.abs(parseFloat(e.amount || 0)))}</td>
-        <td class="py-3 px-3 text-slate-400 max-w-[200px] truncate" title="${e.description || ''}">${e.description || '-'}</td>
-        <td class="py-3 px-3 text-right whitespace-nowrap">
-          <button onclick="deleteExpense(${e.id})" class="text-rose-400 hover:text-rose-300 p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 transition-all">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-          </button>
-        </td>
-      </tr>
-    `;
-  }).join('');
+  // Render Expenses Table
+  const countBadge = document.getElementById('expenses-count-badge');
+  const expTbody = document.getElementById('expenses-table-body');
+  const expenses = data.expenses || [];
+
+  if (countBadge) countBadge.textContent = `${expenses.length} ta chiqim`;
+
+  if (expTbody) {
+    if (expenses.length === 0) {
+      expTbody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-xs text-slate-500">Ushbu davrda chiqimlar mavjud emas</td></tr>`;
+    } else {
+      expTbody.innerHTML = expenses.map(e => {
+        const formattedDate = new Date(e.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+        return `
+          <tr class="border-b border-slate-800/60 hover:bg-slate-900/50 transition-all text-xs">
+            <td class="py-2.5 px-2.5 font-mono text-slate-400 whitespace-nowrap">${formattedDate}</td>
+            <td class="py-2.5 px-2.5 whitespace-nowrap">
+              <div class="font-bold text-cyan-300 text-xs">${e.category || 'Boshqa'}</div>
+              <div class="text-[10px] text-slate-400">${e.recipient_name || '-'}</div>
+            </td>
+            <td class="py-2.5 px-2.5 whitespace-nowrap">
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${e.payment_method === 'CASH' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'}">
+                ${e.payment_method_display || e.payment_method}
+              </span>
+            </td>
+            <td class="py-2.5 px-2.5 font-bold text-rose-400 font-orbitron whitespace-nowrap">-${formatMoney(Math.abs(parseFloat(e.amount || 0)))}</td>
+            <td class="py-2.5 px-2.5 text-slate-400 max-w-[150px] truncate" title="${e.description || ''}">${e.description || '-'}</td>
+            <td class="py-2.5 px-2.5 text-right whitespace-nowrap">
+              <button onclick="handleDeleteExpense(${e.id})" class="text-rose-400 hover:text-rose-300 p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 transition-all">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+  }
 }
 
 async function handleCreateExpense(e) {
@@ -1791,6 +1836,7 @@ async function handleCreateExpense(e) {
 
     if (res.ok) {
       playSound('add');
+      closeExpenseModal();
       document.getElementById('expense-amount-input').value = '';
       document.getElementById('expense-recipient-input').value = '';
       document.getElementById('expense-description-input').value = '';

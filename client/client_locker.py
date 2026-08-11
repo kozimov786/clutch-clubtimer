@@ -60,9 +60,13 @@ if sys.platform == 'win32':
     # HTML/CSS sahifa uchun ishlash tezligiga sezilarli ta'sir qilmaydi.
     # setdefault — agar tizim darajasida allaqachon QTWEBENGINE_CHROMIUM_FLAGS
     # sozlangan bo'lsa (masalan qo'lda sinov uchun), uni bosib qolmaslik uchun.
+    # --disable-gpu va --use-gl=swiftshader birga qo'llanilsa, Chromium
+    # ziddiyat deb hisoblab darhol chiqib ketishi mumkin ("Expect
+    # troubles!" / "is not supported") — shuning uchun --disable-gpu
+    # QO'YILMAYDI, faqat GL backend'ni swiftshader'ga majburlaymiz.
     os.environ.setdefault(
         "QTWEBENGINE_CHROMIUM_FLAGS",
-        "--disable-gpu --disable-gpu-compositing --use-gl=swiftshader --disable-gpu-sandbox"
+        "--use-gl=swiftshader --disable-gpu-compositing"
     )
 
 import time

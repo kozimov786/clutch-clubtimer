@@ -7,7 +7,7 @@ client_locker.py  —  Clutch Zone Client PC Locker (Windows Native Win32 API & 
    ratio scaling) both scale the same geometry, shrinking the window into a
    corner of the screen at 125%/150% display scale.
 2. Win32 Native GetSystemMetrics(SM_CXSCREEN / SM_CYSCREEN) geometry calculation with force_native_fullscreen().
-3. ShowEvent override for LockScreenWindow, LockerWindow, LauncherWindow & MainWindow.
+3. ShowEvent override for MainWindow (the sole top-level window).
 4. Expanding setSizePolicy on root containers and centered responsive card / launcher grid.
 """
 
@@ -378,129 +378,45 @@ class LockScreenWindow(FullscreenMixin, QWidget):
         container_layout.addWidget(card)
         main_layout.addWidget(main_container)
         # No force_native_fullscreen() here: this widget is only ever used
-        # embedded (as LockerWindow's central widget), never shown top-level.
-        # Only MainWindow (the real top-level window) owns fullscreen state.
+        # embedded (as MainWindow's no-WebEngine fallback page), never shown
+        # top-level. Only MainWindow (the real top-level window) owns
+        # fullscreen state.
 
     def keyPressEvent(self, event): event.accept()
 
 
-class LockerWindow(QWidget):
-    """
-    LockerWindow — Kassa Serveridagi Web Launcher URL manzilidan LOCK panelini yuklaydi.
-
-    QWidget (QMainWindow emas) — bu widget hech qachon mustaqil top-level
-    oyna sifatida ko'rsatilmaydi, doim MainWindow'ning QStackedWidget'i
-    ichiga joylashtiriladi. QMainWindow'ni boshqa QMainWindow ichiga
-    ichma-ich joylashtirish Windows'da QWebEngineView bilan birga g'alati
-    render xatolariga (butun oyna shaffof ko'rinishi) olib kelishi mumkin.
-    """
-    def __init__(self, pc_name="PC-01", server_url="http://localhost:8001", parent=None):
-        super().__init__(parent)
-        self.pc_name = pc_name
-        self.server_url = server_url.rstrip('/')
-        self.url = f"{self.server_url}/launcher/?pc_name={pc_name}&mode=lock"
-
-        self.setStyleSheet("background-color: #060911;")
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-
-        self._layout = QVBoxLayout(self)
-        self._layout.setContentsMargins(0, 0, 0, 0)
-        self._layout.setSpacing(0)
-
-        self._init_web_engine()
-
-    def _init_web_engine(self):
-        if HAS_WEBENGINE:
-            self.browser = QWebEngineView(self)
-            self.browser.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-            self.browser.setZoomFactor(1.0)
-
-            profile = QWebEngineProfile.defaultProfile()
-            profile.setHttpCacheType(QWebEngineProfile.HttpCacheType.NoCache)
-            profile.clearHttpCache()
-
-            settings = profile.settings()
-            _configure_webengine_settings(settings)
-
-            try:
-                QWebEngineSettings.globalSettings().setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, False)
-            except Exception:
-                pass
-
-            self.browser.page().loadFinished.connect(self._apply_full_viewport_css)
-            self.browser.page().renderProcessTerminated.connect(self._on_render_process_terminated)
-
-            timestamp_url = f"{self.url}&_t={int(time.time() * 1000)}"
-            self.browser.setUrl(QUrl(timestamp_url))
-            self._layout.addWidget(self.browser)
-        else:
-            lock_widget = LockScreenWindow(pc_name=self.pc_name, parent=self)
-            self._layout.addWidget(lock_widget)
-
-    def _on_render_process_terminated(self, status, exit_code):
-        print(f"[WebEngine] Chromium render process terminated! status={status} exit_code={exit_code} "
-              f"— odatda GPU/videokarta drayveri muammosi, QTWEBENGINE_CHROMIUM_FLAGS=--disable-gpu bilan sinab ko'ring.")
-
-    def _apply_full_viewport_css(self, ok):
-        if not ok:
-            url = self.browser.url().toString() if hasattr(self, 'browser') else '?'
-            print(f"[WebEngine] Sahifa yuklanmadi (loadFinished ok=False): {url}")
-            return
-        if ok and HAS_WEBENGINE and hasattr(self, 'browser'):
-            js_fix = """
-            var meta = document.querySelector('meta[name="viewport"]');
-            if (!meta) {
-                meta = document.createElement('meta');
-                meta.name = 'viewport';
-                document.getElementsByTagName('head')[0].appendChild(meta);
-            }
-            meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
-            document.body.style.width = '100vw';
-            document.body.style.height = '100vh';
-            document.body.style.overflow = 'hidden';
-            """
-            self.browser.page().runJavaScript(js_fix)
-
-    def reload_page(self):
-        if HAS_WEBENGINE and hasattr(self, 'browser'):
-            timestamp_url = f"{self.url}&_t={int(time.time() * 1000)}"
-            self.browser.setUrl(QUrl(timestamp_url))
-            self.browser.reload()
-
-    def show_locker(self):
-        self.reload_page()
-        # Fullscreen state is owned by MainWindow (the top-level window);
-        # switch_to_lock()/switch_to_launcher() already re-assert it there.
-
-
 # ──────────────────────────────────────────────────────────────────────────────
-#  LAUNCHER WINDOW
+#  MAIN WINDOW
 # ──────────────────────────────────────────────────────────────────────────────
-class LauncherWindow(QWidget):
+class MainWindow(FullscreenMixin, QMainWindow):
     """
-    LauncherWindow — Kassa Serveridagi Web Launcher URL manzilidan O'yinlar va Bar panelini yuklaydi.
-
-    QWidget (QMainWindow emas) — sabab LockerWindow'dagi izohda tushuntirilgan.
+    Bitta QWebEngineView'ni to'g'ridan-to'g'ri MainWindow markaziy widget'i
+    sifatida ishlatadi (QStackedWidget ichiga ikkita alohida WebEngineView
+    joylashtirish o'rniga) — lock/launcher rejimlari orasida shunchaki URL
+    (mode=lock <-> mode=launcher) almashtiriladi. Sabab: QStackedWidget
+    ichida bir nechta QWebEngineView bo'lishi ba'zi Windows kompyuterlarda
+    butun oynani shaffof/render qilinmaydigan holatga olib kelishi aniqlandi
+    (WebEngine'siz oddiy oyna va yakka WebEngineView alohida sinovlarda
+    to'g'ri ishlagan, lekin shu stacked-widget tuzilmasi ishlamagan).
     """
     game_launched_signal = pyqtSignal(dict)
 
     def __init__(self, pc_name="PC-01", server_url="http://localhost:8001",
-                 fallback_games=None, on_bar_click=None, parent=None):
-        super().__init__(parent)
+                 fallback_games=None, on_bar_click=None):
+        super().__init__()
         self.pc_name = pc_name
         self.server_url = server_url.rstrip('/')
         self.fallback_games = fallback_games or []
         self.on_bar_click = on_bar_click
-        self.url = f"{self.server_url}/launcher/?pc_name={pc_name}&mode=launcher"
+        self.lock_url = f"{self.server_url}/launcher/?pc_name={pc_name}&mode=lock"
+        self.launcher_url = f"{self.server_url}/launcher/?pc_name={pc_name}&mode=launcher"
 
-        self.setStyleSheet("background-color: #060911;")
+        self.setWindowTitle(f"Clutch Zone Client Locker - {pc_name}")
+        self.setStyleSheet("QMainWindow, QWidget { background-color: #060911; }")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
-        self._layout = QVBoxLayout(self)
-        self._layout.setContentsMargins(0, 0, 0, 0)
-        self._layout.setSpacing(0)
-
         self._init_web_engine()
+        self.force_native_fullscreen()
 
     def _init_web_engine(self):
         if HAS_WEBENGINE:
@@ -529,12 +445,22 @@ class LauncherWindow(QWidget):
             self.browser.page().loadFinished.connect(self._apply_full_viewport_css)
             self.browser.page().renderProcessTerminated.connect(self._on_render_process_terminated)
 
-            timestamp_url = f"{self.url}&_t={int(time.time() * 1000)}"
-            self.browser.setUrl(QUrl(timestamp_url))
-            self._layout.addWidget(self.browser)
+            self._navigate(self.lock_url)
+            self.setCentralWidget(self.browser)
         else:
-            grid = ResponsiveGameGrid(card_min_width=220, card_height=280, parent=self)
-            self._layout.addWidget(grid)
+            self.stacked = QStackedWidget()
+            self.stacked.setStyleSheet("QStackedWidget { background-color: #060911; }")
+            self.stacked.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+            self.lock_widget = LockScreenWindow(pc_name=self.pc_name, parent=self)
+            self.grid_widget = ResponsiveGameGrid(card_min_width=220, card_height=280, parent=self)
+            self.stacked.addWidget(self.lock_widget)   # PAGE_LOCK
+            self.stacked.addWidget(self.grid_widget)   # PAGE_LAUNCHER
+            self.stacked.setCurrentIndex(0)
+            self.setCentralWidget(self.stacked)
+
+    def _navigate(self, url):
+        timestamp_url = f"{url}&_t={int(time.time() * 1000)}"
+        self.browser.setUrl(QUrl(timestamp_url))
 
     def _on_render_process_terminated(self, status, exit_code):
         print(f"[WebEngine] Chromium render process terminated! status={status} exit_code={exit_code} "
@@ -545,7 +471,7 @@ class LauncherWindow(QWidget):
             url = self.browser.url().toString() if hasattr(self, 'browser') else '?'
             print(f"[WebEngine] Sahifa yuklanmadi (loadFinished ok=False): {url}")
             return
-        if ok and HAS_WEBENGINE and hasattr(self, 'browser'):
+        if HAS_WEBENGINE and hasattr(self, 'browser'):
             js_fix = """
             var meta = document.querySelector('meta[name="viewport"]');
             if (!meta) {
@@ -560,16 +486,19 @@ class LauncherWindow(QWidget):
             """
             self.browser.page().runJavaScript(js_fix)
 
-    def reload_page(self):
-        if HAS_WEBENGINE and hasattr(self, 'browser'):
-            timestamp_url = f"{self.url}&_t={int(time.time() * 1000)}"
-            self.browser.setUrl(QUrl(timestamp_url))
-            self.browser.reload()
+    def switch_to_lock(self):
+        if HAS_WEBENGINE:
+            self._navigate(self.lock_url)
+        else:
+            self.stacked.setCurrentIndex(0)
+        self.force_native_fullscreen()
 
-    def show_launcher(self):
-        self.reload_page()
-        # Fullscreen state is owned by MainWindow (the top-level window);
-        # switch_to_lock()/switch_to_launcher() already re-assert it there.
+    def switch_to_launcher(self):
+        if HAS_WEBENGINE:
+            self._navigate(self.launcher_url)
+        else:
+            self.stacked.setCurrentIndex(1)
+        self.force_native_fullscreen()
 
     def _on_bridge_game_launch(self, exe_path, game_name, working_directory):
         self.game_launched_signal.emit({
@@ -597,49 +526,6 @@ class LauncherWindow(QWidget):
             safe_name = name.replace("'", "\\'")
             self.browser.page().runJavaScript(f"console.log('Game launched: {safe_name}');")
 
-
-# ──────────────────────────────────────────────────────────────────────────────
-#  MAIN WINDOW
-# ──────────────────────────────────────────────────────────────────────────────
-class MainWindow(FullscreenMixin, QMainWindow):
-    PAGE_LOCK     = 0
-    PAGE_LAUNCHER = 1
-
-    def __init__(self, pc_name="PC-01", server_url="http://localhost:8001",
-                 fallback_games=None, on_bar_click=None):
-        super().__init__()
-        self.pc_name = pc_name
-        self.server_url = server_url
-
-        self.setWindowTitle(f"Clutch Zone Client Locker - {pc_name}")
-        self.setStyleSheet("QMainWindow, QWidget { background-color: #060911; }")
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-
-        self.locker_win   = LockerWindow(pc_name=pc_name, server_url=server_url)
-        self.launcher_win = LauncherWindow(
-            pc_name=pc_name, server_url=server_url,
-            fallback_games=fallback_games or [], on_bar_click=on_bar_click
-        )
-
-        self.stacked = QStackedWidget()
-        self.stacked.setStyleSheet("QStackedWidget { background-color: #060911; }")
-        self.stacked.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.stacked.addWidget(self.locker_win)      # Page 0
-        self.stacked.addWidget(self.launcher_win)    # Page 1
-        self.stacked.setCurrentIndex(self.PAGE_LOCK)
-        self.setCentralWidget(self.stacked)
-        self.force_native_fullscreen()
-
-    def switch_to_lock(self):
-        self.locker_win.show_locker()
-        self.stacked.setCurrentIndex(self.PAGE_LOCK)
-        self.force_native_fullscreen()
-
-    def switch_to_launcher(self):
-        self.launcher_win.show_launcher()
-        self.stacked.setCurrentIndex(self.PAGE_LAUNCHER)
-        self.force_native_fullscreen()
-
     def changeEvent(self, event):
         super().changeEvent(event)
         if event.type() == QEvent.Type.WindowStateChange:
@@ -647,13 +533,6 @@ class MainWindow(FullscreenMixin, QMainWindow):
                 QTimer.singleShot(80, self.force_native_fullscreen)
 
     def closeEvent(self, event): event.ignore()
-
-    @property
-    def game_launched_signal(self): return self.launcher_win.game_launched_signal
-    def update_timer(self, s): self.launcher_win.update_timer(s)
-    def load_games(self): self.launcher_win.load_games()
-    def show_launch_error(self, msg): self.launcher_win.show_launch_error(msg)
-    def show_launch_success(self, name): self.launcher_win.show_launch_success(name)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -757,8 +636,10 @@ class ClientLockerApp:
     def _show_launcher_over_game(self):
         # F9 yoki overlay'dagi BAR tugmasi bilan chaqiriladi: o'yinni
         # o'chirmasdan, launcher/bar menyusini uning ustiga qaytaradi.
+        # ACTIVE/WARNING holatida browser allaqachon launcher sahifasida
+        # turadi (_unlock() shuni ta'minlagan) — shuning uchun qayta
+        # navigate qilish shart emas, faqat oynani oldinga chiqarish kifoya.
         if self.current_status in ('ACTIVE', 'WARNING'):
-            self.main_window.stacked.setCurrentIndex(self.main_window.PAGE_LAUNCHER)
             self.main_window.force_native_fullscreen()
 
     def _load_config(self, path):

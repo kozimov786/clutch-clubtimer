@@ -1,12 +1,11 @@
 """
 client_locker.py  —  Clutch Zone Client PC Locker (4-Layer Universal Fullscreen Patch)
 ====================================================================================
-4-QATLAMLI CROSS-PLATFORM FULLSCREEN ARCHITECTURE:
-
-  QATLAM 1: DPI AWARENESS (QApplication yaratilishidan OLDIN)
-  QATLAM 2: UNIVERSAL FULLSCREEN MIXIN (FullscreenMixin)
-  QATLAM 3: BARCHA FIXED SIZE CHEKLOVLARINI OLIB TASHLASH (Expanding Policies)
-  QATLAM 4: RESPONSIVE GAME GRID (ResponsiveGameGrid)
+FULLSCREEN PATCH INTEGRATION:
+  1. DPI Awareness (SetProcessDpiAwareness v2 before QApplication)
+  2. FullscreenMixin applied to LockScreenWindow, LockerWindow, LauncherWindow & MainWindow
+  3. Completely removed all setFixedSize, setMaximumSize & setFixedWidth constraints
+  4. ResponsiveGameGrid (QScrollArea) for dynamic screen resolution scaling
 """
 
 import sys

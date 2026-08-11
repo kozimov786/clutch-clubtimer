@@ -89,16 +89,29 @@ def get_screen_resolution():
 # ──────────────────────────────────────────────────────────────────────────────
 class FullscreenMixin:
     def force_native_fullscreen(self):
+        # setWindowFlags() destroys and recreates the native Win32 window
+        # handle on an already-shown window, which flashes visibly on
+        # screen. Skip each step when the window is already in the
+        # desired state so repeated/cascading calls (init, showEvent,
+        # switch_to_*) don't cause a flicker loop.
         w, h = get_screen_resolution()
 
-        self.setWindowFlags(
+        desired_flags = (
             Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.WindowStaysOnTopHint |
             Qt.WindowType.Tool
         )
-        self.setGeometry(0, 0, w, h)
-        self.setFixedSize(w, h)
-        self.showFullScreen()
+        if self.windowFlags() != desired_flags:
+            self.setWindowFlags(desired_flags)
+
+        geo = self.geometry()
+        if geo.x() != 0 or geo.y() != 0 or geo.width() != w or geo.height() != h:
+            self.setGeometry(0, 0, w, h)
+            self.setFixedSize(w, h)
+
+        if not self.isFullScreen():
+            self.showFullScreen()
+
         self.raise_()
         self.activateWindow()
 
@@ -319,8 +332,9 @@ class LockScreenWindow(FullscreenMixin, QWidget):
 
         container_layout.addWidget(card)
         main_layout.addWidget(main_container)
-
-        self.force_native_fullscreen()
+        # No force_native_fullscreen() here: this widget is only ever used
+        # embedded (as LockerWindow's central widget), never shown top-level.
+        # Only MainWindow (the real top-level window) owns fullscreen state.
 
     def keyPressEvent(self, event): event.accept()
 
@@ -340,7 +354,8 @@ class LockerWindow(FullscreenMixin, QMainWindow):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         self._init_web_engine()
-        self.force_native_fullscreen()
+        # No force_native_fullscreen() here: this window is only ever
+        # embedded inside MainWindow's QStackedWidget, never shown top-level.
 
     def _init_web_engine(self):
         if HAS_WEBENGINE:
@@ -393,7 +408,8 @@ class LockerWindow(FullscreenMixin, QMainWindow):
 
     def show_locker(self):
         self.reload_page()
-        self.force_native_fullscreen()
+        # Fullscreen state is owned by MainWindow (the top-level window);
+        # switch_to_lock()/switch_to_launcher() already re-assert it there.
 
     def changeEvent(self, event):
         super().changeEvent(event)
@@ -428,7 +444,8 @@ class LauncherWindow(FullscreenMixin, QMainWindow):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         self._init_web_engine()
-        self.force_native_fullscreen()
+        # No force_native_fullscreen() here: this window is only ever
+        # embedded inside MainWindow's QStackedWidget, never shown top-level.
 
     def _init_web_engine(self):
         if HAS_WEBENGINE:
@@ -487,7 +504,8 @@ class LauncherWindow(FullscreenMixin, QMainWindow):
 
     def show_launcher(self):
         self.reload_page()
-        self.force_native_fullscreen()
+        # Fullscreen state is owned by MainWindow (the top-level window);
+        # switch_to_lock()/switch_to_launcher() already re-assert it there.
 
     def _on_bridge_game_launch(self, exe_path, game_name, working_directory):
         self.game_launched_signal.emit({

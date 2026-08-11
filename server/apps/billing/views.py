@@ -92,7 +92,7 @@ class ComputerViewSet(viewsets.ModelViewSet):
             pc.is_open_time = False
             if amount and float(amount) > 0:
                 total_price = float(amount)
-                minutes = int(round(total_price / price_per_minute))
+                minutes = round(total_price / price_per_minute)
             else:
                 minutes = int(minutes) if minutes else 60
                 total_price = price_per_minute * minutes
@@ -179,7 +179,7 @@ class ComputerViewSet(viewsets.ModelViewSet):
 
         if pc.is_open_time and start_time:
             elapsed_seconds = max(0, (now - start_time).total_seconds())
-            duration_minutes = int(round(elapsed_seconds / 60.0))
+            duration_minutes = round(elapsed_seconds / 60.0)
             price_per_min = (tariff.get_effective_price_per_hour() / 60.0) if tariff else 200.0
             time_price = round(price_per_min * duration_minutes)
         elif active_session and active_session.duration_minutes > 0:
@@ -187,9 +187,9 @@ class ComputerViewSet(viewsets.ModelViewSet):
             time_price = float(active_session.total_price)
         elif start_time:
             if pc.session_end_time:
-                duration_minutes = int(round(max(0, (pc.session_end_time - start_time).total_seconds()) / 60.0))
+                duration_minutes = round(max(0, (pc.session_end_time - start_time).total_seconds()) / 60.0)
             else:
-                duration_minutes = int(round(max(0, (now - start_time).total_seconds()) / 60.0))
+                duration_minutes = round(max(0, (now - start_time).total_seconds()) / 60.0)
             price_per_min = (tariff.get_effective_price_per_hour() / 60.0) if tariff else 200.0
             time_price = round(price_per_min * duration_minutes)
 
@@ -263,7 +263,7 @@ class ComputerViewSet(viewsets.ModelViewSet):
 
         if pc.is_open_time and start_time:
             elapsed_seconds = max(0, (now - start_time).total_seconds())
-            duration_minutes = int(round(elapsed_seconds / 60.0))
+            duration_minutes = round(elapsed_seconds / 60.0)
             price_per_min = (tariff.get_effective_price_per_hour() / 60.0) if tariff else 200.0
             time_price = round(price_per_min * duration_minutes)
         elif active_session and active_session.duration_minutes > 0:
@@ -271,9 +271,9 @@ class ComputerViewSet(viewsets.ModelViewSet):
             time_price = float(active_session.total_price)
         elif start_time:
             if pc.session_end_time:
-                duration_minutes = int(round(max(0, (pc.session_end_time - start_time).total_seconds()) / 60.0))
+                duration_minutes = round(max(0, (pc.session_end_time - start_time).total_seconds()) / 60.0)
             else:
-                duration_minutes = int(round(max(0, (now - start_time).total_seconds()) / 60.0))
+                duration_minutes = round(max(0, (now - start_time).total_seconds()) / 60.0)
             price_per_min = (tariff.get_effective_price_per_hour() / 60.0) if tariff else 200.0
             time_price = round(price_per_min * duration_minutes)
 
@@ -678,7 +678,7 @@ class StockSupplyViewSet(viewsets.ModelViewSet):
         payment_method = request.data.get('payment_method', 'CASH')
         supplier_note = request.data.get('supplier_note', '').strip()
 
-        total_cost = float(quantity * cost_price)
+        total_cost = quantity * cost_price
 
         product = None
         if product_id:

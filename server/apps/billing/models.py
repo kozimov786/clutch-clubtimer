@@ -3,6 +3,8 @@ from django.utils import timezone
 import math
 
 class Tariff(models.Model):
+    objects = models.Manager()
+
     name = models.CharField(max_length=100)
     price_per_hour = models.DecimalField(max_digits=12, decimal_places=2, default=12000.00)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -19,6 +21,8 @@ class Tariff(models.Model):
         return f"{self.name} - {self.price_per_hour:,.0f} UZS/h"
 
 class Computer(models.Model):
+    objects = models.Manager()
+
     STATUS_CHOICES = [
         ('LOCKED', 'Locked'),
         ('ACTIVE', 'Active'),
@@ -79,6 +83,8 @@ PAYMENT_METHOD_CHOICES = [
 ]
 
 class Session(models.Model):
+    objects = models.Manager()
+
     computer = models.ForeignKey(Computer, on_delete=models.CASCADE, related_name='sessions')
     tariff = models.ForeignKey(Tariff, on_delete=models.SET_NULL, null=True, blank=True)
     is_open_time = models.BooleanField(default=False)
@@ -95,6 +101,8 @@ class Session(models.Model):
         return f"Session for {self.computer.name} ({self.payment_method}) - {self.duration_minutes} mins"
 
 class Category(models.Model):
+    objects = models.Manager()
+
     name = models.CharField(max_length=100)
     icon = models.CharField(max_length=50, default='🍿')
 
@@ -102,6 +110,8 @@ class Category(models.Model):
         return self.name
 
 class Product(models.Model):
+    objects = models.Manager()
+
     name = models.CharField(max_length=100)
     cost_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, help_text="Tannarx / Olish narxi")
     price = models.DecimalField(max_digits=12, decimal_places=2, help_text="Sotish narxi")
@@ -115,6 +125,8 @@ class Product(models.Model):
         return f"{self.name} - Sotish: {self.price:,.0f} UZS | Tannarx: {self.cost_price:,.0f} UZS (Stock: {self.stock})"
 
 class StockSupply(models.Model):
+    objects = models.Manager()
+
     product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True, blank=True, related_name='stock_supplies')
     product_name = models.CharField(max_length=150)
     quantity = models.IntegerField(default=1)
@@ -129,6 +141,8 @@ class StockSupply(models.Model):
         return f"Kirim: {self.quantity}x {self.product_name} @ {self.cost_price:,.0f} UZS ({self.get_payment_method_display()}) - Jami: {self.total_cost:,.0f} UZS"
 
 class Order(models.Model):
+    objects = models.Manager()
+
     STATUS_CHOICES = [
         ('PENDING', 'Pending'),
         ('APPROVED', 'Approved'),
@@ -150,6 +164,8 @@ class Order(models.Model):
         return f"Order #{self.id} ({pc_str}) [{self.payment_method}] - {self.status} - {self.total_price:,.0f} UZS"
 
 class OrderItem(models.Model):
+    objects = models.Manager()
+
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='order_items')
     quantity = models.IntegerField(default=1)
@@ -159,6 +175,8 @@ class OrderItem(models.Model):
         return f"{self.quantity}x {self.product.name} @ Order #{self.order.id}"
 
 class Expense(models.Model):
+    objects = models.Manager()
+
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     payment_method = models.CharField(max_length=10, choices=PAYMENT_METHOD_CHOICES, default='CASH')
     category = models.CharField(max_length=100, default='Boshqa')
@@ -177,6 +195,8 @@ GAME_CATEGORY_CHOICES = [
 ]
 
 class Game(models.Model):
+    objects = models.Manager()
+
     name = models.CharField(max_length=150)
     cover_path = models.CharField(max_length=500, help_text="Cover banner image URL or local file path")
     executable_path = models.CharField(max_length=500, help_text="Executable file path or launch command")

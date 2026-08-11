@@ -1301,6 +1301,11 @@ class ClientLockerApp:
                 self.launched_processes.append(proc)
                 print(f"[Launcher] PID: {proc.pid}")
                 self.main_window.show_launch_success(name)
+                # Launcher har doim "tepada" turgani uchun, endi ishga
+                # tushgan o'yin/dastur oynasi orqada qolib ketmasligi
+                # uchun launcherni kichraytiramiz. F9 yoki HUD'dagi BAR
+                # tugmasi orqali istalgan payt qaytarib chiqarish mumkin.
+                self.main_window.showMinimized()
             except Exception as e:
                 print(f"[Launcher] Error: {e}")
                 self.main_window.show_launch_error(f"Xatolik: {e}")

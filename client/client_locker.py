@@ -183,18 +183,27 @@ class LockerWindow(QMainWindow):
         if HAS_WEBENGINE:
             self.browser = QWebEngineView(self)
             
-            # Configure WebEngine Settings
+            # Configure NO-CACHE WebEngine Settings
             profile = QWebEngineProfile.defaultProfile()
+            profile.setHttpCacheType(QWebEngineProfile.HttpCacheType.NoCache)
+            profile.clearHttpCache()
+
             settings = profile.settings()
             settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)
+            settings.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, False)
             settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
             settings.setAttribute(QWebEngineSettings.WebAttribute.AllowRunningInsecureContent, True)
             settings.setAttribute(QWebEngineSettings.WebAttribute.ScrollAnimatorEnabled, True)
             settings.setAttribute(QWebEngineSettings.WebAttribute.Accelerated2DCanvasEnabled, True)
             settings.setAttribute(QWebEngineSettings.WebAttribute.WebGLEnabled, True)
 
-            self.browser.setUrl(QUrl(self.url))
+            try:
+                QWebEngineSettings.globalSettings().setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, False)
+            except Exception:
+                pass
+
+            timestamp_url = f"{self.url}&_t={int(time.time() * 1000)}"
+            self.browser.setUrl(QUrl(timestamp_url))
             self.setCentralWidget(self.browser)
         else:
             # Fallback Widget if WebEngine missing
@@ -203,6 +212,22 @@ class LockerWindow(QMainWindow):
             lbl.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
             lbl.setStyleSheet("color: #ef4444; background: #060911;")
             self.setCentralWidget(lbl)
+
+    def reload_page(self):
+        if HAS_WEBENGINE and hasattr(self, 'browser'):
+            timestamp_url = f"{self.url}&_t={int(time.time() * 1000)}"
+            self.browser.setUrl(QUrl(timestamp_url))
+            self.browser.reload()
+
+    def show_locker(self):
+        self.reload_page()
+        self.showFullScreen()
+        self.raise_()
+        self.activateWindow()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.reload_page()
 
     def changeEvent(self, event):
         super().changeEvent(event)
@@ -259,16 +284,24 @@ class LauncherWindow(QMainWindow):
         if HAS_WEBENGINE:
             self.browser = QWebEngineView(self)
             
-            # Configure WebEngine Settings
+            # Configure NO-CACHE WebEngine Settings
             profile = QWebEngineProfile.defaultProfile()
+            profile.setHttpCacheType(QWebEngineProfile.HttpCacheType.NoCache)
+            profile.clearHttpCache()
+
             settings = profile.settings()
             settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)
+            settings.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, False)
             settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
             settings.setAttribute(QWebEngineSettings.WebAttribute.AllowRunningInsecureContent, True)
             settings.setAttribute(QWebEngineSettings.WebAttribute.ScrollAnimatorEnabled, True)
             settings.setAttribute(QWebEngineSettings.WebAttribute.Accelerated2DCanvasEnabled, True)
             settings.setAttribute(QWebEngineSettings.WebAttribute.WebGLEnabled, True)
+
+            try:
+                QWebEngineSettings.globalSettings().setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, False)
+            except Exception:
+                pass
 
             # WebChannel setup for JS-Python communication
             self.channel = QWebChannel()
@@ -277,7 +310,8 @@ class LauncherWindow(QMainWindow):
             self.channel.registerObject("pyqt_bridge", self.bridge)
             self.browser.page().setWebChannel(self.channel)
 
-            self.browser.setUrl(QUrl(self.url))
+            timestamp_url = f"{self.url}&_t={int(time.time() * 1000)}"
+            self.browser.setUrl(QUrl(timestamp_url))
             self.setCentralWidget(self.browser)
         else:
             # Fallback Widget if WebEngine missing
@@ -286,6 +320,22 @@ class LauncherWindow(QMainWindow):
             lbl.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
             lbl.setStyleSheet("color: #00f0ff; background: #060911;")
             self.setCentralWidget(lbl)
+
+    def reload_page(self):
+        if HAS_WEBENGINE and hasattr(self, 'browser'):
+            timestamp_url = f"{self.url}&_t={int(time.time() * 1000)}"
+            self.browser.setUrl(QUrl(timestamp_url))
+            self.browser.reload()
+
+    def show_launcher(self):
+        self.reload_page()
+        self.showFullScreen()
+        self.raise_()
+        self.activateWindow()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.reload_page()
 
     def _on_bridge_game_launch(self, exe_path, game_name):
         self.game_launched_signal.emit({
@@ -372,10 +422,12 @@ class MainWindow(QMainWindow):
         self.showFullScreen()
 
     def switch_to_lock(self):
+        self.locker_win.show_locker()
         self.stacked.setCurrentIndex(self.PAGE_LOCK)
         self.showFullScreen()
 
     def switch_to_launcher(self):
+        self.launcher_win.show_launcher()
         self.stacked.setCurrentIndex(self.PAGE_LAUNCHER)
         self.showFullScreen()
 

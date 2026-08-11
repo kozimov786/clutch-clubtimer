@@ -922,6 +922,16 @@ def main():
     # DPI awareness va Qt HiDPI scaling o'chirish fayl boshida (QApplication
     # yaratilishidan oldin, hatto PyQt6 import qilinishidan oldin) allaqachon
     # bajarilgan — bu yerda takrorlash shart emas.
+
+    # QWebEngineView ishlatuvchi har qanday PyQt6 dasturi uchun MAJBURIY:
+    # QApplication yaratilishidan oldin o'rnatilishi shart. Bu yo'q bo'lsa,
+    # WebEngineView qo'shilgan zahoti butun oyna (frameless+topmost host
+    # window) chizilmay, shaffof/ko'rinmas bo'lib qolishi mumkin — aynan
+    # PC-12'da kuzatilgan holat (test_window.py WebEngine'siz to'g'ri
+    # chiqdi, lekin haqiqiy ilova ko'rinmay qoldi).
+    if HAS_WEBENGINE:
+        QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts, True)
+
     app = QApplication(sys.argv)
     app.setStyleSheet("""
         QWidget {

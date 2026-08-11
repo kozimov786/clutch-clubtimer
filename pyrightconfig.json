@@ -1,0 +1,10 @@
+{
+  "venvPath": ".",
+  "venv": "venv",
+  "pythonVersion": "3.12",
+  "extraPaths": [
+    "server",
+    "client",
+    "venv/lib/python3.12/site-packages"
+  ]
+}

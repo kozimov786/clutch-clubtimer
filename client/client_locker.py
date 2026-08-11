@@ -401,154 +401,540 @@ class BarMenuWindow(QWidget):
     closed_signal = pyqtSignal()
 
     def __init__(self, pc_name="PC-01", server_url="http://localhost:8000"):
-        super().__init__(); self.pc_name=pc_name; self.server_url=server_url
-        self.cart={}; self.products=[]; self.categories=[]; self.current_category_id=None
+        super().__init__()
+        self.pc_name = pc_name
+        self.server_url = server_url
+        self.cart = {}
+        self.products = []
+        self.categories = []
+        self.current_category_id = None
         self._build_ui()
 
-    def hideEvent(self, e): self.closed_signal.emit(); super().hideEvent(e)
+    def hideEvent(self, e):
+        self.closed_signal.emit()
+        super().hideEvent(e)
 
     def _build_ui(self):
-        self.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint|Qt.WindowType.FramelessWindowHint|Qt.WindowType.Tool)
-        self.setFixedSize(850,560)
+        self.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
+        self.setFixedSize(940, 610)
         sg = QApplication.primaryScreen().geometry()
-        self.move((sg.width()-850)//2,(sg.height()-560)//2)
-        self.setStyleSheet("QWidget{background-color:#090d16;color:#e2e8f0;font-family:'Segoe UI','Inter',sans-serif;}QScrollArea{border:none;background:transparent;}QScrollBar:vertical{border:none;background:#0f172a;width:6px;border-radius:3px;}QScrollBar::handle:vertical{background:#334155;border-radius:3px;}")
+        self.move((sg.width() - 940) // 2, (sg.height() - 610) // 2)
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #080d18;
+                color: #e2e8f0;
+                font-family: 'Segoe UI', 'Inter', sans-serif;
+            }
+            QScrollArea {
+                border: none;
+                background: transparent;
+            }
+            QScrollBar:vertical {
+                border: none;
+                background: #0f172a;
+                width: 6px;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:vertical {
+                background: #334155;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #00f0ff;
+            }
+            QScrollBar:horizontal {
+                border: none;
+                background: #0f172a;
+                height: 6px;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:horizontal {
+                background: #334155;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background: #00f0ff;
+            }
+        """)
 
-        ml = QVBoxLayout(self); ml.setContentsMargins(0,0,0,0)
-        con = QFrame(); con.setStyleSheet("QFrame{background:rgba(15,23,42,0.98);border:2px solid rgba(0,240,255,0.4);border-radius:22px;}")
-        cs = QGraphicsDropShadowEffect(con); cs.setBlurRadius(30); cs.setColor(QColor(0,240,255,120)); cs.setOffset(0,0)
-        con.setGraphicsEffect(cs); cl = QVBoxLayout(con); cl.setContentsMargins(20,16,20,20)
+        ml = QVBoxLayout(self)
+        ml.setContentsMargins(0, 0, 0, 0)
+        con = QFrame()
+        con.setStyleSheet("""
+            QFrame {
+                background: rgba(13, 20, 36, 0.98);
+                border: 2px solid rgba(0, 240, 255, 0.4);
+                border-radius: 20px;
+            }
+        """)
+        cs = QGraphicsDropShadowEffect(con)
+        cs.setBlurRadius(35)
+        cs.setColor(QColor(0, 240, 255, 130))
+        cs.setOffset(0, 0)
+        con.setGraphicsEffect(cs)
+        
+        cl = QVBoxLayout(con)
+        cl.setContentsMargins(22, 18, 22, 22)
+        cl.setSpacing(14)
 
+        # Header
         hdr = QHBoxLayout()
-        ht = QLabel("🍸 CLUTCH ZONE BAR & REFRESHMENTS"); ht.setFont(QFont("Segoe UI",16,QFont.Weight.Bold)); ht.setStyleSheet("color:#00f0ff;letter-spacing:1px;")
-        xb = QPushButton("✕"); xb.setFixedSize(32,32); xb.setFont(QFont("Segoe UI",14,QFont.Weight.Bold))
-        xb.setStyleSheet("QPushButton{background:rgba(239,68,68,0.2);color:#ef4444;border:1px solid rgba(239,68,68,0.4);border-radius:16px;}QPushButton:hover{background:rgba(239,68,68,0.4);color:#fff;}")
-        xb.clicked.connect(self.hide); hdr.addWidget(ht); hdr.addStretch(); hdr.addWidget(xb); cl.addLayout(hdr)
+        ht = QLabel("🍸 CLUTCH ZONE BAR & REFRESHMENTS")
+        ht.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
+        ht.setStyleSheet("color: #00f0ff; letter-spacing: 1.5px;")
+        
+        xb = QPushButton("✕")
+        xb.setFixedSize(34, 34)
+        xb.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        xb.setStyleSheet("""
+            QPushButton {
+                background: rgba(239, 68, 68, 0.18);
+                color: #ef4444;
+                border: 1px solid rgba(239, 68, 68, 0.4);
+                border-radius: 17px;
+            }
+            QPushButton:hover {
+                background: rgba(239, 68, 68, 0.8);
+                color: #ffffff;
+                border: 1px solid #ef4444;
+            }
+        """)
+        xb.clicked.connect(self.hide)
+        hdr.addWidget(ht)
+        hdr.addStretch()
+        hdr.addWidget(xb)
+        cl.addLayout(hdr)
 
-        body = QHBoxLayout(); body.setContentsMargins(0,10,0,0)
-        cat_v = QVBoxLayout()
-        self.cat_widget = QWidget(); self.cat_layout = QHBoxLayout(self.cat_widget)
-        self.cat_layout.setContentsMargins(0,0,0,0); self.cat_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        cat_v.addWidget(self.cat_widget)
-        self.product_scroll = QScrollArea(); self.product_scroll.setWidgetResizable(True)
-        self.product_grid_widget = QWidget(); self.product_grid_layout = QGridLayout(self.product_grid_widget)
-        self.product_grid_layout.setSpacing(12); self.product_grid_layout.setAlignment(Qt.AlignmentFlag.AlignTop|Qt.AlignmentFlag.AlignLeft)
-        self.product_scroll.setWidget(self.product_grid_widget); cat_v.addWidget(self.product_scroll)
-        body.addLayout(cat_v, stretch=2)
+        # Main Body Layout
+        body = QHBoxLayout()
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(16)
 
-        cf = QFrame(); cf.setFixedWidth(290); cf.setStyleSheet("QFrame{background:rgba(10,15,29,0.9);border:1px solid rgba(255,255,255,0.08);border-radius:16px;}")
-        cfl = QVBoxLayout(cf); cfl.setContentsMargins(14,14,14,14)
-        ct = QLabel("🛒 BUYURTMA SAVATI"); ct.setFont(QFont("Segoe UI",12,QFont.Weight.Bold)); ct.setStyleSheet("color:#c084fc;"); cfl.addWidget(ct)
-        self.cart_scroll = QScrollArea(); self.cart_scroll.setWidgetResizable(True)
-        self.cart_container = QWidget(); self.cart_items_layout = QVBoxLayout(self.cart_container)
-        self.cart_items_layout.setContentsMargins(0,0,0,0); self.cart_items_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.cart_scroll.setWidget(self.cart_container); cfl.addWidget(self.cart_scroll)
-        self.status_banner = QLabel(""); self.status_banner.setWordWrap(True)
-        self.status_banner.setFont(QFont("Segoe UI",9,QFont.Weight.Bold))
-        self.status_banner.setStyleSheet("color:#f59e0b;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:6px;")
-        self.status_banner.setAlignment(Qt.AlignmentFlag.AlignCenter); self.status_banner.hide(); cfl.addWidget(self.status_banner)
-        self.total_label = QLabel("Jami: 0 UZS"); self.total_label.setFont(QFont("Segoe UI",14,QFont.Weight.Bold))
-        self.total_label.setStyleSheet("color:#10b981;"); self.total_label.setAlignment(Qt.AlignmentFlag.AlignRight); cfl.addWidget(self.total_label)
-        self.send_order_btn = QPushButton("🛍️ BUYURTMA YUBORISH"); self.send_order_btn.setFont(QFont("Segoe UI",11,QFont.Weight.Bold))
-        self.send_order_btn.setStyleSheet("QPushButton{background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #00f0ff,stop:1 #0284c7);color:#030712;border:none;border-radius:12px;padding:12px;}QPushButton:hover{background:#00f0ff;}")
-        self.send_order_btn.clicked.connect(self._submit_order); cfl.addWidget(self.send_order_btn)
-        body.addWidget(cf, stretch=1); cl.addLayout(body); ml.addWidget(con)
+        # Left Column (Categories + Products)
+        left_v = QVBoxLayout()
+        left_v.setSpacing(12)
+
+        # Horizontal Scroll Area for Categories
+        self.cat_scroll = QScrollArea()
+        self.cat_scroll.setFixedHeight(50)
+        self.cat_scroll.setWidgetResizable(True)
+        self.cat_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.cat_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
+        self.cat_widget = QWidget()
+        self.cat_layout = QHBoxLayout(self.cat_widget)
+        self.cat_layout.setContentsMargins(2, 2, 2, 2)
+        self.cat_layout.setSpacing(8)
+        self.cat_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.cat_scroll.setWidget(self.cat_widget)
+        left_v.addWidget(self.cat_scroll)
+
+        # Products Grid Scroll Area
+        self.product_scroll = QScrollArea()
+        self.product_scroll.setWidgetResizable(True)
+        self.product_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
+        self.product_grid_widget = QWidget()
+        self.product_grid_layout = QGridLayout(self.product_grid_widget)
+        self.product_grid_layout.setSpacing(12)
+        self.product_grid_layout.setContentsMargins(2, 2, 2, 2)
+        self.product_grid_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        self.product_scroll.setWidget(self.product_grid_widget)
+        left_v.addWidget(self.product_scroll, stretch=1)
+
+        body.addLayout(left_v, stretch=2)
+
+        # Right Column (Cart Panel)
+        cf = QFrame()
+        cf.setFixedWidth(310)
+        cf.setStyleSheet("""
+            QFrame {
+                background: rgba(10, 15, 28, 0.95);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 16px;
+            }
+        """)
+        cfl = QVBoxLayout(cf)
+        cfl.setContentsMargins(14, 14, 14, 14)
+        cfl.setSpacing(10)
+
+        ct = QLabel("🛒 BUYURTMA SAVATI")
+        ct.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        ct.setStyleSheet("color: #c084fc; letter-spacing: 0.5px;")
+        cfl.addWidget(ct)
+
+        self.cart_scroll = QScrollArea()
+        self.cart_scroll.setWidgetResizable(True)
+        self.cart_container = QWidget()
+        self.cart_items_layout = QVBoxLayout(self.cart_container)
+        self.cart_items_layout.setContentsMargins(0, 0, 0, 0)
+        self.cart_items_layout.setSpacing(8)
+        self.cart_items_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.cart_scroll.setWidget(self.cart_container)
+        cfl.addWidget(self.cart_scroll, stretch=1)
+
+        self.status_banner = QLabel("")
+        self.status_banner.setWordWrap(True)
+        self.status_banner.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        self.status_banner.setStyleSheet("color: #f59e0b; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 8px;")
+        self.status_banner.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_banner.hide()
+        cfl.addWidget(self.status_banner)
+
+        self.total_label = QLabel("Jami: 0 UZS")
+        self.total_label.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        self.total_label.setStyleSheet("color: #10b981;")
+        self.total_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        cfl.addWidget(self.total_label)
+
+        self.send_order_btn = QPushButton("🛍️ BUYURTMA YUBORISH")
+        self.send_order_btn.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        self.send_order_btn.setFixedHeight(46)
+        self.send_order_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.send_order_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #00f0ff, stop:0.5 #0284c7, stop:1 #2563eb);
+                color: #ffffff;
+                border: none;
+                border-radius: 12px;
+                font-weight: bold;
+                letter-spacing: 1px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #38bdf8, stop:1 #0284c7);
+                border: 1px solid #00f0ff;
+            }
+            QPushButton:disabled {
+                background: rgba(30, 41, 59, 0.6);
+                color: #64748b;
+                border: none;
+            }
+        """)
+        self.send_order_btn.clicked.connect(self._submit_order)
+        cfl.addWidget(self.send_order_btn)
+
+        body.addWidget(cf, stretch=1)
+        cl.addLayout(body)
+        ml.addWidget(con)
 
     def load_data(self):
         try:
-            rc = requests.get(f"{self.server_url}/api/categories/",timeout=4)
-            rp = requests.get(f"{self.server_url}/api/products/",timeout=4)
-            if rc.status_code==200: self.categories=rc.json()
-            if rp.status_code==200: self.products=rp.json()
-            self._render_categories(); self._render_products()
-        except Exception as e: print(f"[BarMenu] {e}")
+            rc = requests.get(f"{self.server_url}/api/categories/", timeout=4)
+            rp = requests.get(f"{self.server_url}/api/products/", timeout=4)
+            if rc.status_code == 200:
+                self.categories = rc.json()
+            if rp.status_code == 200:
+                self.products = rp.json()
+            self._render_categories()
+            self._render_products()
+        except Exception as e:
+            print(f"[BarMenu] {e}")
+
+    def _cat_btn_style(self, active):
+        if active:
+            return """
+                QPushButton {
+                    background: rgba(0, 240, 255, 0.25);
+                    color: #00f0ff;
+                    border: 1.5px solid #00f0ff;
+                    border-radius: 12px;
+                    padding: 6px 14px;
+                    font-size: 13px;
+                    font-weight: bold;
+                }
+            """
+        return """
+            QPushButton {
+                background: rgba(30, 41, 59, 0.5);
+                color: #94a3b8;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 12px;
+                padding: 6px 14px;
+                font-size: 13px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: rgba(51, 65, 85, 0.8);
+                color: #e2e8f0;
+                border-color: rgba(0, 240, 255, 0.3);
+            }
+        """
 
     def _render_categories(self):
         for i in reversed(range(self.cat_layout.count())):
-            w=self.cat_layout.itemAt(i).widget()
-            if w: w.setParent(None)
-        ab=QPushButton("Barchasi"); ab.setFont(QFont("Segoe UI",9,QFont.Weight.Bold))
-        ab.setStyleSheet("background:rgba(0,240,255,0.2);color:#00f0ff;border:1px solid #00f0ff;border-radius:10px;padding:6px 12px;")
-        ab.clicked.connect(lambda: self._set_category(None)); self.cat_layout.addWidget(ab)
-        for cat in self.categories:
-            btn=QPushButton(f"{cat.get('icon','🍿')} {cat['name']}"); btn.setFont(QFont("Segoe UI",9,QFont.Weight.Bold))
-            btn.setStyleSheet("background:rgba(30,41,59,0.6);color:#94a3b8;border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:6px 12px;")
-            cid=cat['id']; btn.clicked.connect(lambda _,c=cid: self._set_category(c)); self.cat_layout.addWidget(btn)
+            w = self.cat_layout.itemAt(i).widget()
+            if w:
+                w.setParent(None)
+        
+        ab = QPushButton("🌐 Barchasi")
+        ab.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        ab.setMinimumHeight(34)
+        ab.setCursor(Qt.CursorShape.PointingHandCursor)
+        ab.setStyleSheet(self._cat_btn_style(self.current_category_id is None))
+        ab.clicked.connect(lambda: self._set_category(None))
+        self.cat_layout.addWidget(ab)
 
-    def _set_category(self,cat_id): self.current_category_id=cat_id; self._render_products()
+        for cat in self.categories:
+            icon = cat.get('icon', '🍿') or '🍿'
+            btn = QPushButton(f"{icon} {cat['name']}")
+            btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+            btn.setMinimumHeight(34)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            is_act = (self.current_category_id == cat['id'])
+            btn.setStyleSheet(self._cat_btn_style(is_act))
+            cid = cat['id']
+            btn.clicked.connect(lambda _, c=cid: self._set_category(c))
+            self.cat_layout.addWidget(btn)
+
+    def _set_category(self, cat_id):
+        self.current_category_id = cat_id
+        self._render_categories()
+        self._render_products()
 
     def _render_products(self):
         for i in reversed(range(self.product_grid_layout.count())):
-            w=self.product_grid_layout.itemAt(i).widget()
-            if w: w.setParent(None)
-        filtered=[p for p in self.products if self.current_category_id is None or p.get('category')==self.current_category_id]
-        for idx,p in enumerate(filtered):
-            card=QFrame(); card.setFixedSize(240,130)
-            card.setStyleSheet("QFrame{background:rgba(18,27,46,0.85);border:1px solid rgba(255,255,255,0.08);border-radius:14px;}")
-            c=QVBoxLayout(card); c.setContentsMargins(12,10,12,10)
-            n=QLabel(p['name']); n.setFont(QFont("Segoe UI",10,QFont.Weight.Bold)); n.setStyleSheet("color:#fff;"); n.setWordWrap(True); c.addWidget(n)
-            info=QLabel(f"{float(p['price']):,.0f} UZS | Stock: {p['stock']}"); info.setFont(QFont("Consolas",9)); info.setStyleSheet("color:#38bdf8;"); c.addWidget(info)
-            ab=QPushButton("➕ Savatga Qo'shish"); ab.setFont(QFont("Segoe UI",9,QFont.Weight.Bold)); ab.setEnabled(p['stock']>0)
-            ab.setStyleSheet("QPushButton{background:rgba(16,185,129,0.2);color:#10b981;border:1px solid rgba(16,185,129,0.4);border-radius:8px;padding:5px;}QPushButton:hover{background:rgba(16,185,129,0.4);color:#fff;}QPushButton:disabled{background:rgba(100,116,139,0.2);color:#64748b;border:none;}")
-            ab.clicked.connect(lambda _,prod=p: self._add_to_cart(prod)); c.addWidget(ab)
-            self.product_grid_layout.addWidget(card,idx//2,idx%2)
+            w = self.product_grid_layout.itemAt(i).widget()
+            if w:
+                w.setParent(None)
 
-    def _add_to_cart(self,prod):
-        pid=prod['id']
+        # STOK TUGAGAN BO'LSA HARIDORGA CHIQARMA (stock > 0)
+        filtered = [
+            p for p in self.products
+            if (self.current_category_id is None or p.get('category') == self.current_category_id)
+            and p.get('stock', 0) > 0
+        ]
+
+        if not filtered:
+            empty_lbl = QLabel("Hozircha mahsulotlar mavjud emas")
+            empty_lbl.setFont(QFont("Segoe UI", 11))
+            empty_lbl.setStyleSheet("color: #64748b; padding: 40px;")
+            empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.product_grid_layout.addWidget(empty_lbl, 0, 0, 1, 2)
+            return
+
+        for idx, p in enumerate(filtered):
+            card = QFrame()
+            card.setFixedSize(260, 135)
+            card.setStyleSheet("""
+                QFrame {
+                    background: rgba(18, 27, 46, 0.85);
+                    border: 1px solid rgba(0, 240, 255, 0.15);
+                    border-radius: 14px;
+                }
+                QFrame:hover {
+                    border: 1.5px solid #00f0ff;
+                    background: rgba(24, 36, 62, 0.95);
+                }
+            """)
+            
+            c = QVBoxLayout(card)
+            c.setContentsMargins(14, 12, 14, 12)
+            c.setSpacing(6)
+
+            n = QLabel(p['name'])
+            n.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+            n.setStyleSheet("color: #ffffff;")
+            n.setWordWrap(True)
+            c.addWidget(n, stretch=1)
+
+            # PRICE ONLY — STOCK SHOWING REMOVED FOR CUSTOMER
+            info = QLabel(f"{float(p['price']):,.0f} UZS")
+            info.setFont(QFont("Consolas", 11, QFont.Weight.Bold))
+            info.setStyleSheet("color: #00f0ff;")
+            c.addWidget(info)
+
+            ab = QPushButton("➕ Savatga Qo'shish")
+            ab.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+            ab.setFixedHeight(32)
+            ab.setCursor(Qt.CursorShape.PointingHandCursor)
+            ab.setStyleSheet("""
+                QPushButton {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #10b981, stop:1 #059669);
+                    color: #ffffff;
+                    border: none;
+                    border-radius: 8px;
+                    padding: 5px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #34d399, stop:1 #10b981);
+                }
+            """)
+            ab.clicked.connect(lambda _, prod=p: self._add_to_cart(prod))
+            c.addWidget(ab)
+
+            self.product_grid_layout.addWidget(card, idx // 2, idx % 2)
+
+    def _add_to_cart(self, prod):
+        pid = prod['id']
+        stock_limit = prod.get('stock', 999)
         if pid in self.cart:
-            if self.cart[pid]['quantity']<prod['stock']: self.cart[pid]['quantity']+=1
+            if self.cart[pid]['quantity'] < stock_limit:
+                self.cart[pid]['quantity'] += 1
         else:
-            self.cart[pid]={'id':pid,'name':prod['name'],'price':float(prod['price']),'quantity':1}
+            self.cart[pid] = {
+                'id': pid,
+                'name': prod['name'],
+                'price': float(prod['price']),
+                'quantity': 1,
+                'stock': stock_limit
+            }
         self._render_cart()
 
     def _render_cart(self):
         for i in reversed(range(self.cart_items_layout.count())):
-            w=self.cart_items_layout.itemAt(i).widget()
-            if w: w.setParent(None)
-        total=0
-        for pid,item in self.cart.items():
-            sub=item['price']*item['quantity']; total+=sub
-            iw=QWidget(); il=QHBoxLayout(iw); il.setContentsMargins(0,4,0,4)
-            lbl=QLabel(f"{item['name']}\n{sub:,.0f} UZS"); lbl.setFont(QFont("Segoe UI",9)); lbl.setStyleSheet("color:#e2e8f0;"); il.addWidget(lbl,stretch=2)
-            bm=QPushButton("-"); bm.setFixedSize(22,22); bm.setStyleSheet("background:#1e293b;color:#fff;border-radius:4px;")
-            bm.clicked.connect(lambda _,p=pid: self._update_qty(p,-1)); il.addWidget(bm)
-            ql=QLabel(str(item['quantity'])); ql.setFont(QFont("Consolas",10,QFont.Weight.Bold)); ql.setStyleSheet("color:#00f0ff;"); il.addWidget(ql)
-            bp=QPushButton("+"); bp.setFixedSize(22,22); bp.setStyleSheet("background:#1e293b;color:#fff;border-radius:4px;")
-            bp.clicked.connect(lambda _,p=pid: self._update_qty(p,1)); il.addWidget(bp)
+            w = self.cart_items_layout.itemAt(i).widget()
+            if w:
+                w.setParent(None)
+
+        total = 0
+        if not self.cart:
+            empty_cart = QLabel("Savat bo'sh\nMahsulot tanlang")
+            empty_cart.setFont(QFont("Segoe UI", 9))
+            empty_cart.setStyleSheet("color: #64748b; padding: 20px;")
+            empty_cart.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.cart_items_layout.addWidget(empty_cart)
+            self.total_label.setText("Jami: 0 UZS")
+            return
+
+        for pid, item in list(self.cart.items()):
+            sub = item['price'] * item['quantity']
+            total += sub
+            
+            iw = QFrame()
+            iw.setStyleSheet("""
+                QFrame {
+                    background: rgba(18, 27, 46, 0.6);
+                    border: 1px solid rgba(255, 255, 255, 0.05);
+                    border-radius: 10px;
+                }
+            """)
+            il = QHBoxLayout(iw)
+            il.setContentsMargins(10, 8, 10, 8)
+            il.setSpacing(6)
+
+            lbl = QLabel(f"{item['name']}\n{sub:,.0f} UZS")
+            lbl.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+            lbl.setStyleSheet("color: #f8fafc;")
+            lbl.setWordWrap(True)
+            il.addWidget(lbl, stretch=1)
+
+            bm = QPushButton("-")
+            bm.setFixedSize(24, 24)
+            bm.setCursor(Qt.CursorShape.PointingHandCursor)
+            bm.setStyleSheet("""
+                QPushButton {
+                    background: #1e293b;
+                    color: #ef4444;
+                    border: 1px solid rgba(239, 68, 68, 0.3);
+                    border-radius: 6px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background: rgba(239, 68, 68, 0.3);
+                }
+            """)
+            bm.clicked.connect(lambda _, p=pid: self._update_qty(p, -1))
+            il.addWidget(bm)
+
+            ql = QLabel(str(item['quantity']))
+            ql.setFont(QFont("Consolas", 10, QFont.Weight.Bold))
+            ql.setStyleSheet("color: #00f0ff; min-width: 16px;")
+            ql.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            il.addWidget(ql)
+
+            bp = QPushButton("+")
+            bp.setFixedSize(24, 24)
+            bp.setCursor(Qt.CursorShape.PointingHandCursor)
+            bp.setStyleSheet("""
+                QPushButton {
+                    background: #1e293b;
+                    color: #10b981;
+                    border: 1px solid rgba(16, 185, 129, 0.3);
+                    border-radius: 6px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background: rgba(16, 185, 129, 0.3);
+                }
+            """)
+            bp.clicked.connect(lambda _, p=pid: self._update_qty(p, 1))
+            il.addWidget(bp)
+
+            del_btn = QPushButton("✕")
+            del_btn.setFixedSize(22, 22)
+            del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            del_btn.setStyleSheet("""
+                QPushButton {
+                    background: transparent;
+                    color: #64748b;
+                    border: none;
+                    font-size: 11px;
+                }
+                QPushButton:hover {
+                    color: #ef4444;
+                }
+            """)
+            del_btn.clicked.connect(lambda _, p=pid: self._remove_from_cart(p))
+            il.addWidget(del_btn)
+
             self.cart_items_layout.addWidget(iw)
+
         self.total_label.setText(f"Jami: {total:,.0f} UZS")
 
-    def _update_qty(self,pid,change):
+    def _remove_from_cart(self, pid):
         if pid in self.cart:
-            self.cart[pid]['quantity']+=change
-            if self.cart[pid]['quantity']<=0: del self.cart[pid]
+            del self.cart[pid]
+            self._render_cart()
+
+    def _update_qty(self, pid, change):
+        if pid in self.cart:
+            stock_limit = self.cart[pid].get('stock', 999)
+            new_qty = self.cart[pid]['quantity'] + change
+            if new_qty > stock_limit:
+                return
+            if new_qty <= 0:
+                del self.cart[pid]
+            else:
+                self.cart[pid]['quantity'] = new_qty
             self._render_cart()
 
     def _submit_order(self):
-        if not self.cart: return
-        payload={"pc_name":self.pc_name,"items":[{"product_id":pid,"quantity":v['quantity']} for pid,v in self.cart.items()]}
+        if not self.cart:
+            self._banner("⚠️ Savatingiz bo'sh!", "#f59e0b")
+            return
+        payload = {
+            "pc_name": self.pc_name,
+            "items": [{"product_id": pid, "quantity": v['quantity']} for pid, v in self.cart.items()]
+        }
         try:
-            res=requests.post(f"{self.server_url}/api/orders/",json=payload,timeout=5)
-            if res.status_code==201:
-                self.cart={}; self._render_cart()
-                self._banner("⏳ Buyurtmangiz yuborildi! Admin tasdiqlashini kuting.","#f59e0b")
+            res = requests.post(f"{self.server_url}/api/orders/", json=payload, timeout=5)
+            if res.status_code == 201:
+                self.cart = {}
+                self._render_cart()
+                self._banner("⏳ Buyurtmangiz yuborildi! Admin tasdiqlashini kuting.", "#f59e0b")
             else:
-                self._banner(f"❌ {res.json().get('error','Xatolik!')}","#ef4444")
-        except: self._banner("❌ Serverga ulanib bo'lmadi!","#ef4444")
+                self._banner(f"❌ {res.json().get('error', 'Xatolik!')}", "#ef4444")
+        except Exception as e:
+            self._banner("❌ Serverga ulanib bo'lmadi!", "#ef4444")
 
-    def _banner(self,text,color):
+    def _banner(self, text, color):
         self.status_banner.setText(text)
-        self.status_banner.setStyleSheet(f"color:{color};background:rgba(100,100,100,0.15);border:1px solid rgba(100,100,100,0.3);border-radius:8px;padding:6px;")
+        self.status_banner.setStyleSheet(
+            f"color: {color}; background: rgba(15, 23, 42, 0.9); border: 1px solid {color}; border-radius: 8px; padding: 8px;"
+        )
         self.status_banner.show()
 
-    def update_order_status(self,data):
-        s=data.get('status'); m={
-            'PENDING': (f"⏳ Buyurtma #{data.get('id')} kutilmoqda...","#f59e0b"),
-            'APPROVED':(f"👍 Buyurtma #{data.get('id')} tasdiqlandi!","#00f0ff"),
-            'DELIVERED':(f"🚚 Buyurtma #{data.get('id')} topshirildi!","#10b981"),
-            'CANCELLED':(f"❌ Buyurtma #{data.get('id')} bekor qilindi.","#ef4444"),
+    def update_order_status(self, data):
+        s = data.get('status')
+        m = {
+            'PENDING': (f"⏳ Buyurtma #{data.get('id')} kutilmoqda...", "#f59e0b"),
+            'APPROVED': (f"👍 Buyurtma #{data.get('id')} tasdiqlandi!", "#00f0ff"),
+            'DELIVERED': (f"🚚 Buyurtma #{data.get('id')} topshirildi!", "#10b981"),
+            'CANCELLED': (f"❌ Buyurtma #{data.get('id')} bekor qilindi.", "#ef4444"),
         }
-        if s in m: self._banner(*m[s])
+        if s in m:
+            self._banner(*m[s])
 
 
 # ──────────────────────────────────────────────────────────────────────────────

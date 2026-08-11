@@ -75,6 +75,7 @@ class Computer(models.Model):
 PAYMENT_METHOD_CHOICES = [
     ('CASH', 'Naqd'),
     ('CARD', 'Plastik'),
+    ('SPLIT', 'Aralash (Naqd + Card)'),
 ]
 
 class Session(models.Model):
@@ -85,6 +86,8 @@ class Session(models.Model):
     end_time = models.DateTimeField(null=True, blank=True)
     duration_minutes = models.IntegerField(default=0)
     total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    cash_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    card_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     payment_method = models.CharField(max_length=10, choices=PAYMENT_METHOD_CHOICES, default='CASH')
     is_active = models.BooleanField(default=True)
 
@@ -135,6 +138,8 @@ class Order(models.Model):
 
     computer = models.ForeignKey(Computer, on_delete=models.CASCADE, related_name='bar_orders', null=True, blank=True)
     total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    cash_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    card_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     payment_method = models.CharField(max_length=10, choices=PAYMENT_METHOD_CHOICES, default='CASH')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     created_at = models.DateTimeField(auto_now_add=True)

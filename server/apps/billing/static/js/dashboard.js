@@ -777,8 +777,9 @@ async function openFinishSessionModal(pcId) {
       container.innerHTML = `<div class="text-slate-500 italic text-center py-2">Ushbu seansda bar buyurtmalari yo'q (0 UZS)</div>`;
     }
 
+    currentFinishGrandTotal = Math.round(data.grand_total || 0);
     document.getElementById('finish-bar-price').innerText = `${Math.round(data.bar_total_price).toLocaleString()} UZS`;
-    document.getElementById('finish-grand-total').innerText = `${Math.round(data.grand_total).toLocaleString()} UZS`;
+    document.getElementById('finish-grand-total').innerText = `${currentFinishGrandTotal.toLocaleString()} UZS`;
 
     setFinishPaymentMethod(data.payment_method || 'CASH');
 
@@ -792,18 +793,68 @@ async function openFinishSessionModal(pcId) {
   }
 }
 
+let currentFinishGrandTotal = 0;
+
 function setFinishPaymentMethod(method) {
   const input = document.getElementById('finish-payment-method');
   const btnCash = document.getElementById('finish-pm-btn-cash');
   const btnCard = document.getElementById('finish-pm-btn-card');
+  const btnSplit = document.getElementById('finish-pm-btn-split');
+  const splitContainer = document.getElementById('finish-split-container');
+  const cashInput = document.getElementById('finish-split-cash');
+  const cardInput = document.getElementById('finish-split-card');
+
   if (input) input.value = method;
 
   if (method === 'CASH') {
-    if (btnCash) btnCash.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 bg-emerald-500/20 text-emerald-400 border-emerald-500/50 shadow-md";
-    if (btnCard) btnCard.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 bg-slate-900 text-slate-400 border-slate-800";
-  } else {
-    if (btnCash) btnCash.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 bg-slate-900 text-slate-400 border-slate-800";
-    if (btnCard) btnCard.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 bg-sky-500/20 text-sky-400 border-sky-500/50 shadow-md";
+    if (btnCash) btnCash.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-emerald-500/20 text-emerald-400 border-emerald-500/50 shadow-md";
+    if (btnCard) btnCard.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-slate-900 text-slate-400 border-slate-800";
+    if (btnSplit) btnSplit.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-slate-900 text-slate-400 border-slate-800";
+    if (splitContainer) splitContainer.classList.add('hidden');
+  } else if (method === 'CARD') {
+    if (btnCash) btnCash.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-slate-900 text-slate-400 border-slate-800";
+    if (btnCard) btnCard.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-sky-500/20 text-sky-400 border-sky-500/50 shadow-md";
+    if (btnSplit) btnSplit.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-slate-900 text-slate-400 border-slate-800";
+    if (splitContainer) splitContainer.classList.add('hidden');
+  } else if (method === 'SPLIT') {
+    if (btnCash) btnCash.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-slate-900 text-slate-400 border-slate-800";
+    if (btnCard) btnCard.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-slate-900 text-slate-400 border-slate-800";
+    if (btnSplit) btnSplit.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-purple-500/20 text-purple-400 border-purple-500/50 shadow-md";
+    if (splitContainer) splitContainer.classList.remove('hidden');
+
+    const halfCash = Math.round(currentFinishGrandTotal / 2);
+    if (cashInput) cashInput.value = halfCash;
+    if (cardInput) cardInput.value = currentFinishGrandTotal - halfCash;
+    updateFinishSplitCalc('cash');
+  }
+}
+
+function updateFinishSplitCalc(changedSide = 'cash') {
+  const cashInput = document.getElementById('finish-split-cash');
+  const cardInput = document.getElementById('finish-split-card');
+  const statusEl = document.getElementById('finish-split-status');
+
+  let cashVal = parseFloat(cashInput?.value) || 0;
+  let cardVal = parseFloat(cardInput?.value) || 0;
+
+  if (changedSide === 'cash') {
+    cardVal = Math.max(0, currentFinishGrandTotal - cashVal);
+    if (cardInput) cardInput.value = cardVal;
+  } else if (changedSide === 'card') {
+    cashVal = Math.max(0, currentFinishGrandTotal - cardVal);
+    if (cashInput) cashInput.value = cashVal;
+  }
+
+  const sum = cashVal + cardVal;
+  if (statusEl) {
+    if (Math.abs(sum - currentFinishGrandTotal) < 1) {
+      statusEl.textContent = "100% Mos keldi";
+      statusEl.className = "text-emerald-400 font-bold font-mono";
+    } else {
+      const diff = currentFinishGrandTotal - sum;
+      statusEl.textContent = diff > 0 ? `${formatMoney(diff)} yetmayapti` : `${formatMoney(-diff)} ortiqcha`;
+      statusEl.className = "text-rose-400 font-bold font-mono";
+    }
   }
 }
 
@@ -819,6 +870,25 @@ async function confirmFinishSession() {
   const paymentMethod = document.getElementById('finish-payment-method')?.value || 'CASH';
   const submitBtn = document.getElementById('finish-submit-btn');
 
+  let cashAmt = 0;
+  let cardAmt = 0;
+
+  if (paymentMethod === 'CASH') {
+    cashAmt = currentFinishGrandTotal;
+    cardAmt = 0;
+  } else if (paymentMethod === 'CARD') {
+    cashAmt = 0;
+    cardAmt = currentFinishGrandTotal;
+  } else if (paymentMethod === 'SPLIT') {
+    cashAmt = parseFloat(document.getElementById('finish-split-cash')?.value) || 0;
+    cardAmt = parseFloat(document.getElementById('finish-split-card')?.value) || 0;
+
+    if (Math.abs((cashAmt + cardAmt) - currentFinishGrandTotal) > 1) {
+      alert(`Naqd va Plastik to'lovlar yig'indisi Jami Summa (${formatMoney(currentFinishGrandTotal)}) ga teng bo'lishi kerak!`);
+      return;
+    }
+  }
+
   if (submitBtn) {
     submitBtn.disabled = true;
     submitBtn.innerText = "YOPILMOQDA...";
@@ -828,7 +898,11 @@ async function confirmFinishSession() {
     const res = await fetch(`/api/computers/${currentFinishPcId}/stop_session/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ payment_method: paymentMethod })
+      body: JSON.stringify({
+        payment_method: paymentMethod,
+        cash_amount: cashAmt,
+        card_amount: cardAmt
+      })
     });
 
     if (res.ok) {

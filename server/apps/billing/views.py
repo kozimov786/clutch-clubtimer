@@ -4,7 +4,7 @@ from django.utils import timezone
 from django.shortcuts import render
 from django.views import View
 from django.contrib.auth import authenticate, login, logout
-from django.db.models import Sum, Count, F
+from django.db.models import Sum, Count, F, Case, When, Value, DecimalField
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.decorators import action
@@ -248,6 +248,8 @@ class ComputerViewSet(viewsets.ModelViewSet):
         pc = self.get_object()
         now = timezone.now()
         payment_method = request.data.get('payment_method', 'CASH')
+        req_cash = float(request.data.get('cash_amount', 0.0))
+        req_card = float(request.data.get('card_amount', 0.0))
 
         active_session = Session.objects.filter(computer=pc, is_active=True).first()
         if not active_session:
@@ -275,15 +277,48 @@ class ComputerViewSet(viewsets.ModelViewSet):
             price_per_min = (tariff.get_effective_price_per_hour() / 60.0) if tariff else 200.0
             time_price = round(price_per_min * duration_minutes)
 
+        if start_time:
+            session_orders = Order.objects.filter(computer=pc, created_at__gte=start_time - timedelta(seconds=30)).exclude(status='CANCELLED')
+        else:
+            session_orders = Order.objects.filter(computer=pc).exclude(status='CANCELLED')
+
+        bar_total_price = float(sum(o.total_price for o in session_orders))
+        grand_total = float(time_price) + bar_total_price
+
+        if payment_method == 'CASH':
+            final_cash = grand_total
+            final_card = 0.0
+        elif payment_method == 'CARD':
+            final_cash = 0.0
+            final_card = grand_total
+        elif payment_method == 'SPLIT':
+            final_cash = req_cash
+            final_card = req_card
+            if abs((final_cash + final_card) - grand_total) > 0.01:
+                final_card = max(0.0, grand_total - final_cash)
+        else:
+            final_cash = grand_total
+            final_card = 0.0
+
+        if grand_total > 0:
+            time_ratio = float(time_price) / grand_total
+            sess_cash = round(final_cash * time_ratio, 2)
+            sess_card = round(final_card * time_ratio, 2)
+        else:
+            sess_cash = final_cash
+            sess_card = final_card
+
         if active_session:
             active_session.duration_minutes = duration_minutes
             active_session.total_price = time_price
             active_session.payment_method = payment_method
+            active_session.cash_amount = sess_cash
+            active_session.card_amount = sess_card
             active_session.end_time = now
             active_session.is_active = False
             active_session.save()
         else:
-            Session.objects.create(
+            active_session = Session.objects.create(
                 computer=pc,
                 tariff=tariff,
                 is_open_time=pc.is_open_time,
@@ -292,16 +327,21 @@ class ComputerViewSet(viewsets.ModelViewSet):
                 duration_minutes=duration_minutes,
                 total_price=time_price,
                 payment_method=payment_method,
+                cash_amount=sess_cash,
+                card_amount=sess_card,
                 is_active=False
             )
 
-        if start_time:
-            session_orders = Order.objects.filter(computer=pc, created_at__gte=start_time - timedelta(seconds=30)).exclude(status='CANCELLED')
-        else:
-            session_orders = Order.objects.filter(computer=pc).exclude(status='CANCELLED')
-
         for order in session_orders:
             order.payment_method = payment_method
+            if grand_total > 0:
+                o_ratio = float(order.total_price) / grand_total
+                order.cash_amount = round(final_cash * o_ratio, 2)
+                order.card_amount = round(final_card * o_ratio, 2)
+            else:
+                order.cash_amount = float(order.total_price) if payment_method == 'CASH' else 0.0
+                order.card_amount = float(order.total_price) if payment_method == 'CARD' else 0.0
+
             if order.status == 'PENDING':
                 order.status = 'DELIVERED'
             order.save()
@@ -491,9 +531,26 @@ class OrderViewSet(viewsets.ModelViewSet):
         if is_direct_sale:
             order_status = 'DELIVERED'
 
+        if payment_method == 'CASH':
+            cash_amt = float(total_price)
+            card_amt = 0.0
+        elif payment_method == 'CARD':
+            cash_amt = 0.0
+            card_amt = float(total_price)
+        elif payment_method == 'SPLIT':
+            cash_amt = float(request.data.get('cash_amount', 0.0))
+            card_amt = float(request.data.get('card_amount', 0.0))
+            if abs((cash_amt + card_amt) - float(total_price)) > 0.01:
+                card_amt = max(0.0, float(total_price) - cash_amt)
+        else:
+            cash_amt = float(total_price)
+            card_amt = 0.0
+
         order = Order.objects.create(
             computer=computer,
             total_price=total_price,
+            cash_amount=cash_amt,
+            card_amount=card_amt,
             payment_method=payment_method,
             status=order_status
         )
@@ -707,12 +764,42 @@ class ExpenseViewSet(viewsets.ModelViewSet):
             end_dt = timezone.make_aware(datetime.combine(now.date(), time.max))
 
         sessions_qs = Session.objects.filter(start_time__range=(start_dt, end_dt))
-        session_cash = float(sessions_qs.filter(payment_method='CASH').aggregate(Sum('total_price'))['total_price__sum'] or 0.0)
-        session_card = float(sessions_qs.filter(payment_method='CARD').aggregate(Sum('total_price'))['total_price__sum'] or 0.0)
+        session_cash = float(sessions_qs.aggregate(
+            total=Sum(Case(
+                When(payment_method='CASH', then='total_price'),
+                When(payment_method='CARD', then=Value(0)),
+                default='cash_amount',
+                output_field=DecimalField()
+            ))
+        )['total'] or 0.0)
+
+        session_card = float(sessions_qs.aggregate(
+            total=Sum(Case(
+                When(payment_method='CARD', then='total_price'),
+                When(payment_method='CASH', then=Value(0)),
+                default='card_amount',
+                output_field=DecimalField()
+            ))
+        )['total'] or 0.0)
 
         orders_qs = Order.objects.filter(status__in=['APPROVED', 'DELIVERED'], created_at__range=(start_dt, end_dt))
-        bar_cash = float(orders_qs.filter(payment_method='CASH').aggregate(Sum('total_price'))['total_price__sum'] or 0.0)
-        bar_card = float(orders_qs.filter(payment_method='CARD').aggregate(Sum('total_price'))['total_price__sum'] or 0.0)
+        bar_cash = float(orders_qs.aggregate(
+            total=Sum(Case(
+                When(payment_method='CASH', then='total_price'),
+                When(payment_method='CARD', then=Value(0)),
+                default='cash_amount',
+                output_field=DecimalField()
+            ))
+        )['total'] or 0.0)
+
+        bar_card = float(orders_qs.aggregate(
+            total=Sum(Case(
+                When(payment_method='CARD', then='total_price'),
+                When(payment_method='CASH', then=Value(0)),
+                default='card_amount',
+                output_field=DecimalField()
+            ))
+        )['total'] or 0.0)
         total_bar = bar_cash + bar_card
 
         bar_cogs = float(OrderItem.objects.filter(order__in=orders_qs).aggregate(

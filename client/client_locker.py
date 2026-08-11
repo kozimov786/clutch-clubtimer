@@ -240,11 +240,10 @@ class LockScreenWidget(QWidget):
             }
             QLabel { border: none; background: transparent; }
         """)
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(60)
-        shadow.setColor(QColor(0, 240, 255, 90))
-        shadow.setOffset(0, 0)
-        card.setGraphicsEffect(shadow)
+        # QGraphicsDropShadowEffect() ATAYLAB ishlatilmagan: QGraphicsEffect
+        # ba'zi Windows kompyuterlarda (cheklangan/eskirgan GPU-render
+        # yo'lida) butun oynani noto'g'ri (bo'sh/shaffof) chizib qo'yishi
+        # mumkin bo'lgan ma'lum Qt muammosi.
 
         cl = QVBoxLayout(card)
         cl.setContentsMargins(40, 36, 40, 36)

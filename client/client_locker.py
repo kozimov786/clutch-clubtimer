@@ -222,12 +222,19 @@ class SyncSignals(QObject):
 
 IS_WINDOWS = platform.system() == 'Windows'
 
+# Admin favqulodda chiqish kombinatsiyasi: Ctrl+Alt+Shift+U. Bosilganda
+# klaviatura hook o'chiriladi va ilova butunlay yopiladi, shunda kompyuter
+# hech qachon to'liq "qulflanib qolmaydi" (Task Manager/Ctrl+Alt+Del ham
+# always-on-top oyna ostida qolib ko'rinmay qolishi mumkin edi).
+EMERGENCY_UNLOCK_REQUESTED = False
+
 if IS_WINDOWS:
     from ctypes import wintypes
     user32  = ctypes.windll.user32
     kernel32 = ctypes.windll.kernel32
     WH_KEYBOARD_LL = 13
     VK_TAB = 0x09; VK_LWIN = 0x5B; VK_RWIN = 0x5C; VK_F4 = 0x73; VK_ESCAPE = 0x1B
+    VK_CONTROL = 0x11; VK_SHIFT = 0x10; VK_U = 0x55
 
     class KBDLLHOOKSTRUCT(ctypes.Structure):
         _fields_ = [
@@ -239,11 +246,16 @@ if IS_WINDOWS:
     hook_id = None; is_hook_enabled = False
 
     def low_level_keyboard_proc(nCode, wParam, lParam):
-        global is_hook_enabled
+        global is_hook_enabled, EMERGENCY_UNLOCK_REQUESTED
         if nCode >= 0 and is_hook_enabled:
             kb = lParam.contents; vk = kb.vkCode; alt = (kb.flags & 0x20) != 0
+            ctrl_down = (user32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
+            shift_down = (user32.GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0
+            if ctrl_down and alt and shift_down and vk == VK_U:
+                EMERGENCY_UNLOCK_REQUESTED = True
+                return user32.CallNextHookEx(hook_id, nCode, wParam, lParam)
             if (alt and vk == VK_TAB) or (vk in (VK_LWIN, VK_RWIN)) or \
-               (alt and vk == VK_F4) or (vk == VK_ESCAPE and (kb.flags & 0x01)):
+               (alt and vk == VK_F4) or (alt and vk == VK_ESCAPE):
                 return 1
         return user32.CallNextHookEx(hook_id, nCode, wParam, lParam)
     pointer_proc = HOOKPROC(low_level_keyboard_proc)
@@ -676,10 +688,24 @@ class ClientLockerApp:
         self.countdown.timeout.connect(self._tick)
         self.countdown.start(1000)
 
+        # Ctrl+Alt+Shift+U bosilganini kuzatib turadi (low_level_keyboard_proc
+        # shu bayroqni o'rnatadi) va aniqlansa kiosk rejimidan darhol chiqadi —
+        # bu yagona hech qachon bloklanmaydigan favqulodda chiqish yo'li.
+        self.emergency_timer = QTimer()
+        self.emergency_timer.timeout.connect(self._check_emergency_unlock)
+        self.emergency_timer.start(250)
+
         install_keyboard_hook()
         self.main_window.switch_to_lock()
 
         threading.Thread(target=self._run_sync, daemon=True).start()
+
+    def _check_emergency_unlock(self):
+        global EMERGENCY_UNLOCK_REQUESTED
+        if EMERGENCY_UNLOCK_REQUESTED:
+            print("[Emergency] Ctrl+Alt+Shift+U aniqlandi — kiosk rejimi o'chirilmoqda")
+            uninstall_keyboard_hook()
+            os._exit(0)
 
     def _load_config(self, path):
         cfg = {"server_url": "http://localhost:8001", "websocket_url": "ws://localhost:8001/ws/pc-status/",

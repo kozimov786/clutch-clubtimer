@@ -318,7 +318,7 @@ class ApiClient:
                     f"{self.server_url}/api/customers/kiosk_login/",
                     json={"phone": phone, "password": password},
                     headers=self._headers(),
-                    timeout=6
+                    timeout=12
                 )
                 ok = r.status_code == 200
                 if on_done:

@@ -1658,10 +1658,13 @@ class ClientLockerApp:
         ws_url_with_key = f"{self.ws_url}{separator}api_key={self.api_key}" if self.api_key else self.ws_url
         while True:
             try:
-                ws = websocket.WebSocketApp(ws_url_with_key, on_message=on_message, on_error=on_error, on_close=on_close)
+                ws = websocket.WebSocketApp(ws_url_with_key, on_open=on_open, on_message=on_message, on_error=on_error, on_close=on_close)
                 ws.run_forever()
+                print("[WS] run_forever() qaytdi (ulanish yopildi)")
             except Exception as e:
+                import traceback
                 print(f"[WS] Failed: {e}")
+                traceback.print_exc()
             self.ws_connected = False
             time.sleep(3)
 

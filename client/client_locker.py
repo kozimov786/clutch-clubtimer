@@ -1316,8 +1316,20 @@ if IS_WINDOWS:
             kernel32.CloseHandle(h)
         return None
 
-    def _find_window_for_pid(pid, exe_name=None, timeout=10.0):
+    _IGNORED_FALLBACK_EXES = {
+        'explorer.exe', 'clutch-zone', 'python.exe', 'pythonw.exe',
+        'searchhost.exe', 'shellexperiencehost.exe', 'textinputhost.exe',
+    }
+
+    def _find_window_for_pid(pid, exe_name=None, own_hwnd=None, timeout=10.0):
+        """PID yoki exe nomi bo'yicha qidiradi. Ikkisi ham topilmasa (masalan
+        Steam admin huquqida ishlab, OpenProcess() rad etilsa), oxirgi
+        chora sifatida — EnumWindows Z-tartibda (eng oldindagidan
+        boshlab) sanaganidan foydalanib, bizning oynamiz va ma'lum
+        tizim jarayonlaridan boshqa birinchi ko'rinadigan sarlavhali
+        oynani qaytaradi."""
         result = []
+        fallback = []
 
         def _enum_proc(hwnd, lparam):
             if not user32.IsWindowVisible(hwnd):
@@ -1327,14 +1339,19 @@ if IS_WINDOWS:
                 return True  # faqat mustaqil (owner'siz) top-level oynalar
             if user32.GetWindowTextLengthW(hwnd) == 0:
                 return True  # sarlavhasiz (odatda ko'rinmas yordamchi) oynalar
+            if own_hwnd and hwnd == own_hwnd:
+                return True
             proc_id = wintypes.DWORD()
             user32.GetWindowThreadProcessId(hwnd, ctypes.byref(proc_id))
             if proc_id.value == pid:
                 result.append(hwnd)
                 return False
-            if exe_name and _get_process_exe_name(proc_id.value) == exe_name:
+            win_exe = _get_process_exe_name(proc_id.value)
+            if exe_name and win_exe == exe_name:
                 result.append(hwnd)
                 return False
+            if not fallback and (win_exe or '').lower() not in _IGNORED_FALLBACK_EXES:
+                fallback.append(hwnd)
             return True
 
         WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
@@ -1345,10 +1362,16 @@ if IS_WINDOWS:
             if result:
                 break
             time.sleep(0.3)
-        return result[0] if result else None
+        if result:
+            return result[0]
+        if fallback:
+            print(f"[Launcher] PID/exe bo'yicha topilmadi, zaxira sifatida "
+                  f"boshqa ko'rinadigan oyna ishlatilmoqda (hwnd={fallback[0]})")
+            return fallback[0]
+        return None
 
-    def bring_process_window_to_front(pid, exe_name=None, timeout=10.0):
-        hwnd = _find_window_for_pid(pid, exe_name=exe_name, timeout=timeout)
+    def bring_process_window_to_front(pid, exe_name=None, own_hwnd=None, timeout=10.0):
+        hwnd = _find_window_for_pid(pid, exe_name=exe_name, own_hwnd=own_hwnd, timeout=timeout)
         if not hwnd:
             print(f"[Launcher] PID {pid} (exe={exe_name}) uchun oyna {timeout}s ichida "
                   f"topilmadi — old planga chiqarib bo'lmadi.")
@@ -1405,7 +1428,7 @@ else:
     def install_keyboard_hook():   print("[Hook] enabled (sim)")
     def uninstall_keyboard_hook(): print("[Hook] disabled (sim)")
     def register_global_hotkeys(app): pass
-    def bring_process_window_to_front(pid, exe_name=None, timeout=10.0): pass
+    def bring_process_window_to_front(pid, exe_name=None, own_hwnd=None, timeout=10.0): pass
     def hide_taskbar(): pass
     def show_taskbar(): pass
 
@@ -1504,6 +1527,17 @@ class ClientLockerApp:
     def _show_launcher_over_game(self):
         if self.current_status in ('ACTIVE', 'WARNING'):
             self.main_window.force_native_fullscreen()
+            # CS2 kabi o'yinlar to'liq ekranli eksklyuziv rejimda odatda
+            # ekran o'lchamini (masalan 1920x1080'dan pastroqqa)
+            # o'zgartiradi. F9 bosilgan zahoti Windows hali eski
+            # o'lchamdan asl monitorga QAYTIB ULGURMAGAN bo'lishi mumkin
+            # — shu daqiqada GetSystemMetrics() hali eski (kichikroq)
+            # qiymatni qaytarib, oyna "kichrayib qolgandek" ko'rinishiga
+            # sabab bo'lardi. Shuning uchun bir necha yuz millisoniyadan
+            # keyin qayta tekshirib, haqiqiy monitor o'lchamiga moslab
+            # qo'yamiz.
+            QTimer.singleShot(400, self.main_window.force_native_fullscreen)
+            QTimer.singleShot(1200, self.main_window.force_native_fullscreen)
 
     def _capture_and_upload_screenshot(self):
         if not self.pc_id:
@@ -1682,7 +1716,9 @@ class ClientLockerApp:
                 if IS_WINDOWS:
                     threading.Thread(
                         target=bring_process_window_to_front,
-                        args=(proc.pid,), kwargs={'exe_name': self.current_game_exe}, daemon=True
+                        args=(proc.pid,),
+                        kwargs={'exe_name': self.current_game_exe, 'own_hwnd': int(self.main_window.winId())},
+                        daemon=True
                     ).start()
             except Exception as e:
                 print(f"[Launcher] Error: {e}")
@@ -1702,7 +1738,9 @@ class ClientLockerApp:
         if IS_WINDOWS:
             threading.Thread(
                 target=bring_process_window_to_front,
-                args=(self.current_game_pid,), kwargs={'exe_name': self.current_game_exe}, daemon=True
+                args=(self.current_game_pid,),
+                kwargs={'exe_name': self.current_game_exe, 'own_hwnd': int(self.main_window.winId()), 'timeout': 3.0},
+                daemon=True
             ).start()
 
     def _tick(self):

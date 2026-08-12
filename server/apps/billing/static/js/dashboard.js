@@ -2337,6 +2337,22 @@ async function saveCustomer() {
   }
 }
 
+async function resetCustomerPassword() {
+  if (!activeCustomerId) return;
+  if (!confirm("Bu mijozning kiosk paroli tozalanadi — keyingi safar kirganda yangi parol o'rnatishi kerak bo'ladi. Davom etilsinmi?")) return;
+  try {
+    const res = await fetch(`/api/customers/${activeCustomerId}/reset_password/`, { method: 'POST' });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || "Xato yuz berdi");
+      return;
+    }
+    alert("Parol tozalandi. Mijoz keyingi safar kiosk'da kirganda yangi parol o'rnatadi.");
+  } catch (err) {
+    console.error(err);
+  }
+}
+
 async function customerTopUp() {
   await customerBalanceOp('top_up');
 }

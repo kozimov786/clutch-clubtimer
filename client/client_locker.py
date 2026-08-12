@@ -306,6 +306,29 @@ class ApiClient:
                     on_done(False, {"error": str(e)})
         threading.Thread(target=_post, daemon=True).start()
 
+    def customer_login_async(self, phone, password, on_done=None):
+        """Mijoz qulf ekranida telefon+parol kiritganda chaqiriladi.
+        Birinchi marta kirishda server kiritilgan parolni avtomatik
+        shu mijozning paroli sifatida saqlaydi (o'z-o'zini ro'yxatdan
+        o'tkazish) — PC holatiga ta'sir qilmaydi, faqat mijoz
+        ma'lumotini qaytaradi."""
+        def _post():
+            try:
+                r = requests.post(
+                    f"{self.server_url}/api/customers/kiosk_login/",
+                    json={"phone": phone, "password": password},
+                    headers=self._headers(),
+                    timeout=6
+                )
+                ok = r.status_code == 200
+                if on_done:
+                    on_done(ok, r.json() if r.content else {})
+            except Exception as e:
+                print(f"[API] customer_login: {e}")
+                if on_done:
+                    on_done(False, {"error": "Server bilan aloqa yo'q"})
+        threading.Thread(target=_post, daemon=True).start()
+
 
 GAME_CATEGORIES = [
     ("all", "BARCHASI", "🌐"),
@@ -322,14 +345,26 @@ CATEGORY_LABELS = {key: label for key, label, _ in GAME_CATEGORIES}
 #  5. LOCK SCREEN
 # ──────────────────────────────────────────────────────────────────────────────
 class LockScreenWidget(QWidget):
-    def __init__(self, pc_name="PC-01", parent=None):
+    # PC holatiga (qulflanganligiga) hech qanday ta'sir qilmaydi — faqat
+    # loglash uchun yuqoriga (ClientLockerApp'gacha) uzatiladi.
+    login_succeeded = pyqtSignal(dict)
+    # ApiClient.customer_login_async fon oqimida ishlaydi; Qt widget'larini
+    # to'g'ridan-to'g'ri fon oqimidan o'zgartirib bo'lmaydi (bu loyihada
+    # ilgari xuddi shu xato jiddiy render muammolariga sabab bo'lgan edi),
+    # shuning uchun natija signal orqali asosiy (GUI) oqimga uzatiladi.
+    _login_result_ready = pyqtSignal(bool, dict)
+
+    def __init__(self, pc_name="PC-01", api_client=None, parent=None):
         super().__init__(parent)
         self.pc_name = pc_name
+        self.api_client = api_client
+        self.logged_in_customer = None
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setStyleSheet("background-color: #060911;")
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(20)
         main_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         card = QFrame()
@@ -373,12 +408,188 @@ class LockScreenWidget(QWidget):
         cl.addWidget(desc)
 
         main_layout.addWidget(card)
+        main_layout.addWidget(self._build_account_card())
+
+        self._login_result_ready.connect(self._apply_login_result)
+
+    def _build_account_card(self):
+        self.account_card = QFrame()
+        self.account_card.setObjectName("accountCard")
+        self.account_card.setFixedWidth(460)
+        self.account_card.setStyleSheet("""
+            QFrame#accountCard {
+                background: #0a0e17;
+                border: 1px solid rgba(255,255,255,0.10);
+                border-radius: 16px;
+            }
+            QLabel { border: none; background: transparent; }
+        """)
+        ac = QVBoxLayout(self.account_card)
+        ac.setContentsMargins(28, 22, 28, 22)
+        ac.setSpacing(10)
+
+        input_style = """
+            QLineEdit {
+                background: #0e1420; color: #e2e8f0;
+                border: 1px solid rgba(255,255,255,0.12);
+                border-radius: 10px; padding: 0 14px; font-size: 13px;
+            }
+            QLineEdit:focus { border: 1px solid rgba(0,240,255,0.5); }
+        """
+
+        # ── Login qismi ──
+        self.login_widget = QWidget()
+        lw = QVBoxLayout(self.login_widget)
+        lw.setContentsMargins(0, 0, 0, 0)
+        lw.setSpacing(10)
+
+        login_title = QLabel("MIJOZ SIFATIDA KIRISH")
+        login_title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        login_title.setStyleSheet("color: #64748b; letter-spacing: 1px;")
+        login_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lw.addWidget(login_title)
+
+        self.phone_input = QLineEdit()
+        self.phone_input.setPlaceholderText("Telefon raqam")
+        self.phone_input.setFixedHeight(40)
+        self.phone_input.setStyleSheet(input_style)
+        self.phone_input.returnPressed.connect(self._on_login_clicked)
+        lw.addWidget(self.phone_input)
+
+        self.password_input = QLineEdit()
+        self.password_input.setPlaceholderText("Parol")
+        self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.password_input.setFixedHeight(40)
+        self.password_input.setStyleSheet(input_style)
+        self.password_input.returnPressed.connect(self._on_login_clicked)
+        lw.addWidget(self.password_input)
+
+        self.login_error = QLabel("")
+        self.login_error.setStyleSheet("color: #ef4444; font-size: 11px;")
+        self.login_error.setWordWrap(True)
+        self.login_error.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.login_error.hide()
+        lw.addWidget(self.login_error)
+
+        self.login_btn = QPushButton("Kirish")
+        self.login_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.login_btn.setFixedHeight(38)
+        self.login_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(0,240,255,0.15); color: #00f0ff;
+                border: 1px solid rgba(0,240,255,0.4); border-radius: 10px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background: rgba(0,240,255,0.25); }
+            QPushButton:disabled { color: #475569; border-color: rgba(255,255,255,0.1); }
+        """)
+        self.login_btn.clicked.connect(self._on_login_clicked)
+        lw.addWidget(self.login_btn)
+
+        hint = QLabel("Birinchi marta kirsangiz, kiritgan parolingiz saqlanib qoladi.")
+        hint.setFont(QFont("Segoe UI", 9))
+        hint.setStyleSheet("color: #475569;")
+        hint.setWordWrap(True)
+        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lw.addWidget(hint)
+
+        ac.addWidget(self.login_widget)
+
+        # ── Profil qismi (login qilingandan keyin) ──
+        self.profile_widget = QWidget()
+        pw = QVBoxLayout(self.profile_widget)
+        pw.setContentsMargins(0, 0, 0, 0)
+        pw.setSpacing(8)
+
+        self.profile_name = QLabel("")
+        self.profile_name.setFont(QFont("Segoe UI", 15, QFont.Weight.Bold))
+        self.profile_name.setStyleSheet("color: #ffffff;")
+        self.profile_name.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        pw.addWidget(self.profile_name)
+
+        self.profile_balance = QLabel("")
+        self.profile_balance.setFont(QFont("Consolas", 20, QFont.Weight.Bold))
+        self.profile_balance.setStyleSheet("color: #22c55e;")
+        self.profile_balance.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        pw.addWidget(self.profile_balance)
+
+        self.profile_bonus = QLabel("")
+        self.profile_bonus.setFont(QFont("Segoe UI", 11))
+        self.profile_bonus.setStyleSheet("color: #94a3b8;")
+        self.profile_bonus.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        pw.addWidget(self.profile_bonus)
+
+        logout_btn = QPushButton("Chiqish")
+        logout_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        logout_btn.setFixedHeight(34)
+        logout_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255,255,255,0.05); color: #94a3b8;
+                border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;
+            }
+            QPushButton:hover { color: #e2e8f0; }
+        """)
+        logout_btn.clicked.connect(self._on_logout_clicked)
+        pw.addWidget(logout_btn)
+
+        ac.addWidget(self.profile_widget)
+        self.profile_widget.hide()
+
+        return self.account_card
 
     def set_pc_name(self, pc_name):
         self.pc_name = pc_name
         self.pc_label.setText(pc_name)
 
-    def keyPressEvent(self, event): event.accept()
+    def _on_login_clicked(self):
+        phone = self.phone_input.text().strip()
+        password = self.password_input.text()
+        if not phone or not password:
+            self._show_login_error("Telefon raqam va parolni kiriting")
+            return
+        if not self.api_client:
+            return
+        self.login_btn.setEnabled(False)
+        self.login_btn.setText("Tekshirilmoqda...")
+        self.api_client.customer_login_async(
+            phone, password,
+            on_done=lambda ok, data: self._login_result_ready.emit(ok, data)
+        )
+
+    def _apply_login_result(self, ok, data):
+        self.login_btn.setEnabled(True)
+        self.login_btn.setText("Kirish")
+        if not ok:
+            self._show_login_error(data.get('error', "Xatolik yuz berdi"))
+            return
+        self.logged_in_customer = data
+        self.login_error.hide()
+        self.password_input.clear()
+        self._show_profile(data)
+        self.login_succeeded.emit(data)
+
+    def _show_login_error(self, msg):
+        self.login_error.setText(msg)
+        self.login_error.show()
+
+    def _show_profile(self, data):
+        self.profile_name.setText(data.get('full_name', ''))
+        try:
+            balance = float(data.get('balance', 0))
+        except (TypeError, ValueError):
+            balance = 0
+        self.profile_balance.setText(f"{balance:,.0f} UZS")
+        self.profile_bonus.setText(f"🎁 {data.get('bonus_points', 0)} bonus ball")
+        self.login_widget.hide()
+        self.profile_widget.show()
+
+    def _on_logout_clicked(self):
+        self.logged_in_customer = None
+        self.phone_input.clear()
+        self.password_input.clear()
+        self.login_error.hide()
+        self.profile_widget.hide()
+        self.login_widget.show()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1141,6 +1352,7 @@ class MainWindow(FullscreenMixin, QMainWindow):
     game_launched_signal = pyqtSignal(dict)
     resume_game_signal = pyqtSignal()
     app_switch_requested_signal = pyqtSignal(str)
+    customer_login_signal = pyqtSignal(dict)
 
     PAGE_LOCK = 0
     PAGE_LAUNCHER = 1
@@ -1160,7 +1372,8 @@ class MainWindow(FullscreenMixin, QMainWindow):
         self.stacked.setStyleSheet("QStackedWidget { background-color: #060911; }")
         self.stacked.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
-        self.lock_page = LockScreenWidget(pc_name=pc_name)
+        self.lock_page = LockScreenWidget(pc_name=pc_name, api_client=self.api_client)
+        self.lock_page.login_succeeded.connect(self.customer_login_signal.emit)
         self.launcher_page = LauncherPage(
             pc_name=pc_name, server_url=self.server_url, api_client=self.api_client,
             fallback_games=self.fallback_games
@@ -1738,6 +1951,7 @@ class ClientLockerApp:
         self.main_window.game_launched_signal.connect(self._handle_game_launch)
         self.main_window.resume_game_signal.connect(self._handle_resume_game)
         self.main_window.app_switch_requested_signal.connect(self._handle_app_switch)
+        self.main_window.customer_login_signal.connect(self._handle_customer_login)
 
         self.countdown = QTimer()
         self.countdown.timeout.connect(self._tick)
@@ -2067,6 +2281,12 @@ class ClientLockerApp:
                 kwargs={'exe_name': exe_name, 'own_hwnd': int(self.main_window.winId()), 'timeout': 3.0},
                 daemon=True
             ).start()
+
+    def _handle_customer_login(self, data):
+        """Mijoz qulf ekranida o'z telefon/paroli bilan kirganda —
+        faqat loglash uchun, PC holatiga (qulflanganligiga) hech
+        qanday ta'sir qilmaydi."""
+        print(f"[Customer] {data.get('full_name')} ({data.get('phone')}) tizimga kirdi")
 
     def _tick(self):
         if self.current_status in ('ACTIVE', 'WARNING'):

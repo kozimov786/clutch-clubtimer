@@ -8,7 +8,9 @@ from django.shortcuts import render
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+import re
 from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.hashers import make_password, check_password
 from django.db.models import Sum, Count, F, Case, When, Value, DecimalField, Q
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
@@ -34,6 +36,20 @@ def _log_action(request, action_key, description):
     """Muhim admin/xodim amallarini AuditLog'ga yozadi (kim, qachon, nima qildi)."""
     user = request.user if getattr(request, 'user', None) and request.user.is_authenticated else None
     AuditLog.objects.create(user=user, action=action_key, description=description)
+
+
+def _normalize_phone_core(phone):
+    """Telefon raqamni solishtirish uchun "asosiy" (mamlakat kodisiz)
+    9 xonali shaklga keltiradi — xodim dashboard'da "+998 90 111 22 33"
+    deb kiritgan bo'lishi mumkin, mijoz esa kiosk'da shunchaki
+    "90 111 22 33" yoki "0901112233" deb yozishi mumkin. Ikkalasi ham
+    bitta odamni anglatishi kerak."""
+    digits = re.sub(r'\D', '', str(phone or ''))
+    if digits.startswith('998') and len(digits) == 12:
+        digits = digits[3:]
+    elif digits.startswith('0') and len(digits) == 10:
+        digits = digits[1:]
+    return digits
 
 
 def _calculate_session_duration_and_price(pc, active_session, start_time, tariff, now):
@@ -986,12 +1002,76 @@ class CustomerViewSet(viewsets.ModelViewSet):
     queryset = Customer.objects.all().order_by('full_name')
     serializer_class = CustomerSerializer
 
+    def get_permissions(self):
+        if self.action == 'kiosk_login':
+            return [HasClientApiKey()]
+        return super().get_permissions()
+
     def get_queryset(self):
         qs = super().get_queryset()
         search = self.request.query_params.get('search')
         if search:
             qs = qs.filter(Q(full_name__icontains=search) | Q(phone__icontains=search))
         return qs
+
+    @action(detail=False, methods=['post'])
+    def kiosk_login(self, request):
+        """Kiosk qulf ekranidan (client_locker.py): mijoz o'z telefon
+        raqami va paroli bilan kiradi. Agar bu raqam uchun parol hali
+        o'rnatilmagan bo'lsa (xodim faqat ism/telefonni kiritib
+        qo'ygan), kiritilgan so'z avtomatik shu mijozning paroli
+        sifatida saqlanadi (birinchi kirish = o'z-o'zini ro'yxatdan
+        o'tkazish). PC holatiga (qulflanganligiga) hech qanday ta'sir
+        qilmaydi — faqat mijozga o'z profilini ko'rsatish uchun."""
+        phone_raw = str(request.data.get('phone', ''))
+        password = str(request.data.get('password', ''))
+        phone_core = _normalize_phone_core(phone_raw)
+
+        if not phone_core or not password:
+            return Response({'error': "Telefon raqam va parolni kiriting!"}, status=status.HTTP_400_BAD_REQUEST)
+        if len(password) < 4:
+            return Response({'error': "Parol kamida 4 belgidan iborat bo'lishi kerak!"}, status=status.HTTP_400_BAD_REQUEST)
+
+        customer = None
+        for c in Customer.objects.all():
+            if _normalize_phone_core(c.phone) == phone_core:
+                customer = c
+                break
+
+        if not customer:
+            return Response(
+                {'error': "Bu raqam ro'yxatdan o'tmagan, avval administratorga murojaat qiling."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if not customer.password_hash:
+            customer.password_hash = make_password(password)
+            customer.save(update_fields=['password_hash'])
+            AuditLog.objects.create(
+                action='CUSTOMER_LOGIN',
+                description=f"{customer.full_name} ({customer.phone}) birinchi marta kirdi (parol o'rnatildi)"
+            )
+            return Response(self.get_serializer(customer).data)
+
+        if not check_password(password, customer.password_hash):
+            return Response({'error': "Parol xato!"}, status=status.HTTP_400_BAD_REQUEST)
+
+        AuditLog.objects.create(
+            action='CUSTOMER_LOGIN',
+            description=f"{customer.full_name} ({customer.phone}) tizimga kirdi"
+        )
+        return Response(self.get_serializer(customer).data)
+
+    @action(detail=True, methods=['post'])
+    def reset_password(self, request, pk=None):
+        """Xodim uchun: mijoz parolini unutgan bo'lsa, shu orqali
+        tozalanadi — keyingi kirishda mijoz yana "birinchi marta"
+        rejimida o'zi yangi parol o'rnatadi."""
+        customer = self.get_object()
+        customer.password_hash = None
+        customer.save(update_fields=['password_hash'])
+        _log_action(request, 'CUSTOMER_PASSWORD_RESET', f"{customer.full_name} ({customer.phone}) paroli tozalandi")
+        return Response(self.get_serializer(customer).data)
 
     @action(detail=True, methods=['post'])
     def top_up(self, request, pk=None):

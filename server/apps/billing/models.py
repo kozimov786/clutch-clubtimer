@@ -89,6 +89,12 @@ class Customer(models.Model):
     balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     bonus_points = models.IntegerField(default=0)
     notes = models.TextField(blank=True, null=True)
+    # Mijoz kiosk qulf ekranida o'zi tanlagan parol (birinchi kirishda
+    # avtomatik o'rnatiladi) — Django'ning standart parol xeshlash
+    # mexanizmi (make_password/check_password) bilan saqlanadi, hech
+    # qachon oddiy matn holida emas. Bo'sh bo'lsa — mijoz hali birinchi
+    # marta kirmagan (xodim faqat ism/telefonni kiritib qo'ygan).
+    password_hash = models.CharField(max_length=255, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -276,6 +282,8 @@ AUDIT_ACTION_CHOICES = [
     ('ORDER_CANCELLED', 'Buyurtma bekor qilindi'),
     ('CUSTOMER_TOPUP', "Mijoz balansi to'ldirildi"),
     ('CUSTOMER_SPEND', 'Mijoz balansidan yechildi'),
+    ('CUSTOMER_LOGIN', 'Mijoz kiosk orqali tizimga kirdi'),
+    ('CUSTOMER_PASSWORD_RESET', 'Mijoz paroli tozalandi'),
     ('EXPENSE_CREATED', "Rasxod qo'shildi"),
     ('STOCK_SUPPLY', 'Tovar kirim qilindi'),
     ('OTHER', 'Boshqa'),

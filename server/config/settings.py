@@ -94,7 +94,13 @@ REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer',
-    ]
+    ],
+    # kiosk_login (mijoz o'z-o'ziga xizmat kirishi) uchun — bir xil IP'dan
+    # (bitta kiosk PC) haddan tashqari ko'p urinishlarni cheklab, parolni
+    # "qo'pol kuch" (brute-force) bilan topishga urinishning oldini oladi.
+    'DEFAULT_THROTTLE_RATES': {
+        'kiosk_login': '20/minute',
+    },
 }
 
 # client_locker.py kiosk ilovalari shu kalitni X-API-Key header orqali

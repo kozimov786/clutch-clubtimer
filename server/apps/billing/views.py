@@ -1,7 +1,10 @@
 from pathlib import Path
 from datetime import timedelta, datetime, time
 import calendar
+import secrets
 from django.conf import settings
+from django.core.cache import cache
+from django.db import transaction
 from django.http import FileResponse
 from django.utils import timezone
 from django.shortcuts import render
@@ -17,6 +20,7 @@ from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
+from rest_framework.throttling import ScopedRateThrottle
 
 from .models import (
     Computer, Tariff, Session, Category, Product, Order, OrderItem, Expense, Game, StockSupply,
@@ -50,6 +54,33 @@ def _normalize_phone_core(phone):
     elif digits.startswith('0') and len(digits) == 10:
         digits = digits[1:]
     return digits
+
+
+KIOSK_SESSION_TOKEN_TTL_SECONDS = 600  # 10 daqiqa
+
+def _create_kiosk_session_token(customer_id):
+    """kiosk_login muvaffaqiyatli bo'lgach chaqiriladi — mijoz ID'sini
+    o'zi bilan taxmin qilib bo'lmaydigan, muddati cheklangan tokenga
+    bog'laydi. customer_start_session ENDI xom customer_id'ga emas,
+    shu tokenga ishonadi — aks holda istalgan kiosk (umumiy API kalit
+    bilan) boshqa mijozning ID raqamini taxmin qilib, uning
+    balansidan pul yechib qo'yishi mumkin edi."""
+    token = secrets.token_urlsafe(24)
+    cache.set(f"kiosk_session:{token}", customer_id, timeout=KIOSK_SESSION_TOKEN_TTL_SECONDS)
+    return token
+
+
+def _resolve_kiosk_session_customer(request):
+    token = request.data.get('session_token')
+    if not token:
+        return None, Response({'error': "Avval tizimga kiring."}, status=status.HTTP_401_UNAUTHORIZED)
+    customer_id = cache.get(f"kiosk_session:{token}")
+    if not customer_id:
+        return None, Response({'error': "Sessiya tugagan, qayta kiring."}, status=status.HTTP_401_UNAUTHORIZED)
+    customer = Customer.objects.filter(id=customer_id).first()
+    if not customer:
+        return None, Response({'error': "Mijoz topilmadi."}, status=status.HTTP_400_BAD_REQUEST)
+    return customer, None
 
 
 def _calculate_session_duration_and_price(pc, active_session, start_time, tariff, now):
@@ -253,16 +284,27 @@ class ComputerViewSet(viewsets.ModelViewSet):
         if pc.status != 'LOCKED':
             return Response({'error': "Bu kompyuter band yoki allaqachon faol."}, status=status.HTTP_400_BAD_REQUEST)
 
-        customer_id = request.data.get('customer_id')
-        customer = Customer.objects.filter(id=customer_id).first()
-        if not customer:
-            return Response({'error': "Mijoz topilmadi."}, status=status.HTTP_400_BAD_REQUEST)
+        # Xom customer_id EMAS — faqat kiosk_login muvaffaqiyatli
+        # bo'lgandan keyin berilgan, taxmin qilib bo'lmaydigan tokenga
+        # ishonamiz. Aks holda istalgan kiosk (umumiy API kalit bilan)
+        # boshqa mijozning ID raqamini kiritib, uning balansidan pul
+        # yechib qo'yishi mumkin edi.
+        customer, error_response = _resolve_kiosk_session_customer(request)
+        if error_response:
+            return error_response
 
         tariff = pc.current_tariff or Tariff.objects.first()
         if not tariff:
             return Response({'error': "Tarif sozlanmagan, administratorga murojaat qiling."}, status=status.HTTP_400_BAD_REQUEST)
 
         price_per_minute = tariff.get_effective_price_per_hour() / 60.0
+        if price_per_minute <= 0:
+            # 0/manfiy narxli tarif bilan seans boshlashga yo'l
+            # qo'yilmaydi — aks holda balans hech qachon yechilmay,
+            # mijoz cheksiz bepul vaqtga ega bo'lib qolar edi
+            # (balance_worker.py bunday holatda hisoblashni o'tkazib
+            # yuboradi, chunki yechish uchun narx yo'q).
+            return Response({'error': "Tarif narxi sozlanmagan, administratorga murojaat qiling."}, status=status.HTTP_400_BAD_REQUEST)
         min_required = round(price_per_minute * 3, 2)  # kamida 3 daqiqalik pul
         if float(customer.balance) < min_required:
             return Response(
@@ -271,13 +313,19 @@ class ComputerViewSet(viewsets.ModelViewSet):
             )
 
         now = timezone.now()
-        pc.status = 'ACTIVE'
-        pc.is_open_time = True
-        pc.time_remaining = 0
-        pc.session_start_time = now
-        pc.session_end_time = None
-        pc.current_tariff = tariff
-        pc.save()
+        # Shart bilan (status hali ham LOCKED bo'lsagina) bitta SQL
+        # UPDATE orqali "band qilib olamiz" — bu ikkita bir vaqtdagi
+        # so'rov (masalan tugma ikki marta bosilishi yoki tarmoq qayta
+        # urinishi) bitta PC uchun ikkita faol seans yaratib
+        # qo'yishining oldini oladi (aks holda balance_worker har
+        # ikkalasidan ham pul yechardi).
+        claimed = Computer.objects.filter(pk=pc.pk, status='LOCKED').update(
+            status='ACTIVE', is_open_time=True, time_remaining=0,
+            session_start_time=now, session_end_time=None, current_tariff=tariff
+        )
+        if not claimed:
+            return Response({'error': "Bu kompyuter band yoki allaqachon faol."}, status=status.HTTP_400_BAD_REQUEST)
+        pc.refresh_from_db()
 
         Session.objects.filter(computer=pc, is_active=True).update(is_active=False, end_time=now)
         Session.objects.create(
@@ -1111,9 +1159,15 @@ class CustomerViewSet(viewsets.ModelViewSet):
     serializer_class = CustomerSerializer
 
     def get_permissions(self):
-        if self.action == 'kiosk_login':
+        if self.action in ('kiosk_login', 'my_activity', 'kiosk_change_password'):
             return [HasClientApiKey()]
         return super().get_permissions()
+
+    def get_throttles(self):
+        if self.action == 'kiosk_login':
+            self.throttle_scope = 'kiosk_login'
+            return [ScopedRateThrottle()]
+        return super().get_throttles()
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -1159,7 +1213,9 @@ class CustomerViewSet(viewsets.ModelViewSet):
                 action='CUSTOMER_LOGIN',
                 description=f"{customer.full_name} ({customer.phone}) birinchi marta kirdi (parol o'rnatildi)"
             )
-            return Response(self.get_serializer(customer).data)
+            data = self.get_serializer(customer).data
+            data['session_token'] = _create_kiosk_session_token(customer.id)
+            return Response(data)
 
         if not check_password(password, customer.password_hash):
             return Response({'error': "Parol xato!"}, status=status.HTTP_400_BAD_REQUEST)
@@ -1168,7 +1224,9 @@ class CustomerViewSet(viewsets.ModelViewSet):
             action='CUSTOMER_LOGIN',
             description=f"{customer.full_name} ({customer.phone}) tizimga kirdi"
         )
-        return Response(self.get_serializer(customer).data)
+        data = self.get_serializer(customer).data
+        data['session_token'] = _create_kiosk_session_token(customer.id)
+        return Response(data)
 
     @action(detail=True, methods=['post'])
     def reset_password(self, request, pk=None):
@@ -1181,6 +1239,48 @@ class CustomerViewSet(viewsets.ModelViewSet):
         _log_action(request, 'CUSTOMER_PASSWORD_RESET', f"{customer.full_name} ({customer.phone}) paroli tozalandi")
         return Response(self.get_serializer(customer).data)
 
+    @action(detail=False, methods=['post'])
+    def my_activity(self, request):
+        """Kiosk'dan: login qilgan mijozning o'z tranzaksiyalari va
+        seanslar tarixi — session_token orqali (URL'dagi pk emas,
+        aks holda istalgan kiosk boshqa mijozning tarixini ko'ra
+        olardi)."""
+        customer, error_response = _resolve_kiosk_session_customer(request)
+        if error_response:
+            return error_response
+        transactions = customer.transactions.all()[:50]
+        sessions = customer.sessions.exclude(is_active=True).order_by('-start_time')[:50]
+        return Response({
+            'transactions': CustomerTransactionSerializer(transactions, many=True).data,
+            'sessions': SessionSerializer(sessions, many=True).data,
+        })
+
+    @action(detail=False, methods=['post'])
+    def kiosk_change_password(self, request):
+        """Kiosk'dan: login qilgan mijoz o'z parolini o'zgartiradi.
+        session_token yetarli emas — joriy parolni ham bilishi shart
+        (qo'shimcha himoya qatlami, masalan token qandaydir yo'l bilan
+        "o'g'irlangan" taqdirda ham parolni o'zgartirib qo'ya olmasin)."""
+        customer, error_response = _resolve_kiosk_session_customer(request)
+        if error_response:
+            return error_response
+
+        old_password = str(request.data.get('old_password', ''))
+        new_password = str(request.data.get('new_password', ''))
+
+        if not check_password(old_password, customer.password_hash or ''):
+            return Response({'error': "Joriy parol xato!"}, status=status.HTTP_400_BAD_REQUEST)
+        if len(new_password) < 4:
+            return Response({'error': "Yangi parol kamida 4 belgidan iborat bo'lishi kerak!"}, status=status.HTTP_400_BAD_REQUEST)
+
+        customer.password_hash = make_password(new_password)
+        customer.save(update_fields=['password_hash'])
+        AuditLog.objects.create(
+            action='CUSTOMER_LOGIN',
+            description=f"{customer.full_name} ({customer.phone}) parolini o'zi o'zgartirdi"
+        )
+        return Response({'success': True})
+
     @action(detail=True, methods=['post'])
     def top_up(self, request, pk=None):
         customer = self.get_object()
@@ -1192,8 +1292,14 @@ class CustomerViewSet(viewsets.ModelViewSet):
             return Response({'error': "Summani to'g'ri kiriting!"}, status=status.HTTP_400_BAD_REQUEST)
 
         note = request.data.get('note', '')
-        customer.balance = float(customer.balance) + amount
-        customer.save()
+        # F() ifodasi orqali bitta atom SQL UPDATE — bir vaqtda boshqa
+        # so'rov (masalan balance_worker.py yoki boshqa xodim) balansni
+        # o'zgartirayotgan bo'lsa ham, hech qanday yangilanish yo'qolmaydi
+        # (avval "customer.balance = X; customer.save()" o'qib-yozish
+        # usuli edi — bu ikki bir vaqtdagi so'rovdan birini "yutib"
+        # yuborishi mumkin edi).
+        Customer.objects.filter(pk=customer.pk).update(balance=F('balance') + amount)
+        customer.refresh_from_db()
 
         CustomerTransaction.objects.create(
             customer=customer, type='TOPUP', amount=amount, balance_after=customer.balance,
@@ -1214,12 +1320,16 @@ class CustomerViewSet(viewsets.ModelViewSet):
             amount = 0
         if amount <= 0:
             return Response({'error': "Summani to'g'ri kiriting!"}, status=status.HTTP_400_BAD_REQUEST)
-        if float(customer.balance) < amount:
-            return Response({'error': f"Balans yetarli emas (mavjud: {customer.balance:,.0f} UZS)"}, status=status.HTTP_400_BAD_REQUEST)
-
         note = request.data.get('note', '')
-        customer.balance = float(customer.balance) - amount
-        customer.save()
+        # Tekshirish + yechish BITTA atom SQL UPDATE'da (balance__gte
+        # sharti bilan) — aks holda ikkita bir vaqtdagi so'rov ikkalasi
+        # ham "balans yetarli" deb topib, uni manfiyga tushirib
+        # qo'yishi mumkin edi.
+        updated = Customer.objects.filter(pk=customer.pk, balance__gte=amount).update(balance=F('balance') - amount)
+        if not updated:
+            customer.refresh_from_db()
+            return Response({'error': f"Balans yetarli emas (mavjud: {customer.balance:,.0f} UZS)"}, status=status.HTTP_400_BAD_REQUEST)
+        customer.refresh_from_db()
 
         CustomerTransaction.objects.create(
             customer=customer, type='SPEND', amount=amount, balance_after=customer.balance,

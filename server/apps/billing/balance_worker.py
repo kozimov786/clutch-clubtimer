@@ -18,13 +18,14 @@ import time
 import traceback
 
 from django.db import close_old_connections
+from django.db.models import F
 from django.utils import timezone
 
 CHECK_INTERVAL_SECONDS = 30
 
 
 def _process_once():
-    from .models import Session, CustomerTransaction
+    from .models import Session, Customer, CustomerTransaction
 
     close_old_connections()
     now = timezone.now()
@@ -50,6 +51,11 @@ def _process_once():
         if increment <= 0:
             continue
 
+        # Har tsiklda balansni QAYTA o'qiymiz (eskirgan qiymat bilan
+        # ishlamaslik uchun) — top_up/spend yoki boshqa PC'dagi
+        # balance_worker tsikli shu orada balansni o'zgartirgan
+        # bo'lishi mumkin.
+        customer.refresh_from_db(fields=['balance'])
         available = float(customer.balance)
 
         if available <= 0:
@@ -57,8 +63,17 @@ def _process_once():
             continue
 
         charge = min(increment, available)
-        customer.balance = round(available - charge, 2)
-        customer.save(update_fields=['balance'])
+        # F() ifodasi orqali bitta atom SQL UPDATE (balance__gte sharti
+        # bilan) — top_up/spend yoki shu funksiyaning boshqa
+        # chaqiruvi bilan bir vaqtda ishlasa ham, hech qanday
+        # yangilanish yo'qolmaydi/qayta yozilmaydi.
+        updated = Customer.objects.filter(pk=customer.pk, balance__gte=charge).update(balance=F('balance') - charge)
+        if not updated:
+            # Balans bizning oxirgi o'qishimizdan keyin kamayib
+            # ketdi (masalan boshqa joyda sarflandi) — bu safar
+            # hech narsa yechmaymiz, keyingi tsiklda qayta hisoblanadi.
+            continue
+        customer.refresh_from_db(fields=['balance'])
 
         session.balance_deducted = round(float(session.balance_deducted) + charge, 2)
         session.total_price = session.balance_deducted

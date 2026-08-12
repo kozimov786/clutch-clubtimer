@@ -46,7 +46,7 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel,
     QPushButton, QFrame, QHBoxLayout, QScrollArea, QGridLayout,
     QLineEdit, QGraphicsDropShadowEffect, QSizePolicy, QStackedWidget,
-    QSpacerItem
+    QSpacerItem, QDialog, QTabWidget
 )
 from PyQt6.QtGui import QFont, QColor, QPixmap, QGuiApplication, QIcon
 
@@ -329,17 +329,23 @@ class ApiClient:
                     on_done(False, {"error": "Server bilan aloqa yo'q"})
         threading.Thread(target=_post, daemon=True).start()
 
-    def customer_start_session_async(self, pc_id, customer_id, on_done=None):
+    def customer_start_session_async(self, pc_id, session_token, on_done=None):
         """Mijoz qulf ekranida "Kompyuterni ochish" tugmasini bosganda
         chaqiriladi — seans balansdan bosqichma-bosqich yechiladigan
         Open Time rejimida boshlanadi. Muvaffaqiyatli bo'lsa, PC
         odatdagi status-sinxronlash yo'li (heartbeat/WebSocket) orqali
-        o'zi ochiladi — bu yerda alohida "unlock" chaqirilmaydi."""
+        o'zi ochiladi — bu yerda alohida "unlock" chaqirilmaydi.
+
+        session_token — kiosk_login javobida qaytgan, taxmin qilib
+        bo'lmaydigan, muddati cheklangan token (xom customer_id EMAS —
+        server endi shu tokenni talab qiladi, aks holda istalgan kiosk
+        boshqa mijozning ID raqamini kiritib, uning balansidan pul
+        yechib qo'yishi mumkin edi)."""
         def _post():
             try:
                 r = requests.post(
                     f"{self.server_url}/api/computers/{pc_id}/customer_start_session/",
-                    json={"customer_id": customer_id},
+                    json={"session_token": session_token},
                     headers=self._headers(),
                     timeout=12
                 )
@@ -348,6 +354,45 @@ class ApiClient:
                     on_done(ok, r.json() if r.content else {})
             except Exception as e:
                 print(f"[API] customer_start_session: {e}")
+                if on_done:
+                    on_done(False, {"error": "Server bilan aloqa yo'q"})
+        threading.Thread(target=_post, daemon=True).start()
+
+    def fetch_my_activity_async(self, session_token, on_done=None):
+        """Mijozning "Kabinet" oynasidagi "Jami harakatlar" ro'yxati
+        uchun — o'z tranzaksiyalari va seanslar tarixi."""
+        def _post():
+            try:
+                r = requests.post(
+                    f"{self.server_url}/api/customers/my_activity/",
+                    json={"session_token": session_token},
+                    headers=self._headers(),
+                    timeout=10
+                )
+                ok = r.status_code == 200
+                if on_done:
+                    on_done(ok, r.json() if r.content else {})
+            except Exception as e:
+                print(f"[API] my_activity: {e}")
+                if on_done:
+                    on_done(False, {"error": "Server bilan aloqa yo'q"})
+        threading.Thread(target=_post, daemon=True).start()
+
+    def change_password_async(self, session_token, old_password, new_password, on_done=None):
+        """Mijoz "Kabinet" oynasida o'z parolini o'zgartirganda."""
+        def _post():
+            try:
+                r = requests.post(
+                    f"{self.server_url}/api/customers/kiosk_change_password/",
+                    json={"session_token": session_token, "old_password": old_password, "new_password": new_password},
+                    headers=self._headers(),
+                    timeout=10
+                )
+                ok = r.status_code == 200
+                if on_done:
+                    on_done(ok, r.json() if r.content else {})
+            except Exception as e:
+                print(f"[API] change_password: {e}")
                 if on_done:
                     on_done(False, {"error": "Server bilan aloqa yo'q"})
         threading.Thread(target=_post, daemon=True).start()
@@ -378,8 +423,9 @@ class LockScreenWidget(QWidget):
     _login_result_ready = pyqtSignal(bool, dict)
     # "Kompyuterni ochish" (balansdan): ClientLockerApp'gacha uzatiladi
     # (u pc_id'ni biladi), natija esa xuddi login kabi thread-xavfsiz
-    # signal orqali qaytadi.
-    unlock_requested = pyqtSignal(int)
+    # signal orqali qaytadi. customer_id EMAS, session_token (str)
+    # uzatiladi — server endi shuni talab qiladi.
+    unlock_requested = pyqtSignal(str)
     unlock_result_ready = pyqtSignal(bool, dict)
 
     def __init__(self, pc_name="PC-01", api_client=None, parent=None):
@@ -638,6 +684,12 @@ class LockScreenWidget(QWidget):
         self.profile_widget.show()
 
     def _on_logout_clicked(self):
+        self.reset_login_state()
+
+    def reset_login_state(self):
+        """Mijoz "Chiqish"ni bossa YOKI seans (masalan balans tugab)
+        tugab, PC qayta qulflansa chaqiriladi — aks holda keyingi
+        mijoz oldingi mijozning profilini ko'rib qolishi mumkin edi."""
         self.logged_in_customer = None
         self.phone_input.clear()
         self.password_input.clear()
@@ -651,7 +703,7 @@ class LockScreenWidget(QWidget):
         self.unlock_error.hide()
         self.unlock_btn.setEnabled(False)
         self.unlock_btn.setText("Ochilmoqda...")
-        self.unlock_requested.emit(self.logged_in_customer.get('id'))
+        self.unlock_requested.emit(self.logged_in_customer.get('session_token', ''))
 
     def _apply_unlock_result(self, ok, data):
         if ok:
@@ -673,6 +725,7 @@ class LockScreenWidget(QWidget):
 class TopBar(QFrame):
     tab_changed = pyqtSignal(str)  # "games" | "bar" | "achievements"
     resume_requested = pyqtSignal()
+    cabinet_requested = pyqtSignal()
 
     def __init__(self, pc_name="PC-01", parent=None):
         super().__init__(parent)
@@ -744,6 +797,25 @@ class TopBar(QFrame):
         self.resume_btn.hide()
         lo.addWidget(self.resume_btn)
 
+        # Mijoz kabineti — faqat kimdir qulf ekranida tizimga kirgan
+        # bo'lsa ko'rinadi (odatiy holatda yashirin).
+        self.cabinet_btn = QPushButton("👤  KABINET")
+        self.cabinet_btn.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        self.cabinet_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.cabinet_btn.setStyleSheet("""
+            QPushButton {
+                color: #e2e8f0;
+                background: rgba(255,255,255,0.06);
+                border: 1px solid rgba(255,255,255,0.15);
+                border-radius: 14px;
+                padding: 8px 16px;
+            }
+            QPushButton:hover { background: rgba(255,255,255,0.12); }
+        """)
+        self.cabinet_btn.clicked.connect(self.cabinet_requested.emit)
+        self.cabinet_btn.hide()
+        lo.addWidget(self.cabinet_btn)
+
         # Clock
         clock_box = QVBoxLayout()
         clock_box.setSpacing(0)
@@ -793,6 +865,14 @@ class TopBar(QFrame):
         else:
             self.resume_btn.hide()
 
+    def set_logged_in_customer(self, data):
+        if data:
+            first_name = (data.get('full_name') or '').split(' ')[0]
+            self.cabinet_btn.setText(f"👤  {first_name.upper()}")
+            self.cabinet_btn.show()
+        else:
+            self.cabinet_btn.hide()
+
     def _on_tab_clicked(self, key):
         self._active_tab = key
         self._apply_tab_styles()
@@ -804,6 +884,253 @@ class TopBar(QFrame):
                 btn.setStyleSheet("QPushButton { color: #ffffff; border: none; } QPushButton:hover { color: #00f0ff; }")
             else:
                 btn.setStyleSheet("QPushButton { color: #64748b; border: none; } QPushButton:hover { color: #94a3b8; }")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  6b. CUSTOMER CABINET (mijozning shaxsiy kabineti — parol, tarix)
+# ──────────────────────────────────────────────────────────────────────────────
+class CustomerCabinetDialog(QDialog):
+    # API so'rovlar fon oqimida ishlaydi; natijalar Qt widget'larini
+    # xavfsiz yangilash uchun signal orqali asosiy oqimga uzatiladi.
+    _pw_result_ready = pyqtSignal(bool, dict)
+    _activity_result_ready = pyqtSignal(bool, dict)
+
+    def __init__(self, api_client, customer_data, parent=None):
+        super().__init__(parent)
+        self.api_client = api_client
+        self.customer_data = customer_data
+        self.setWindowTitle("Mening kabinetim")
+        self.setModal(True)
+        self.setFixedSize(520, 580)
+        self.setStyleSheet("""
+            QDialog { background: #0a0e17; }
+            QLabel { color: #e2e8f0; }
+        """)
+
+        self._pw_result_ready.connect(self._apply_password_result)
+        self._activity_result_ready.connect(self._apply_activity_result)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(24, 24, 24, 24)
+        root.setSpacing(14)
+
+        name = QLabel(customer_data.get('full_name', ''))
+        name.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
+        name.setStyleSheet("color: #ffffff;")
+        root.addWidget(name)
+
+        phone = QLabel(customer_data.get('phone', ''))
+        phone.setStyleSheet("color: #64748b;")
+        root.addWidget(phone)
+
+        stats_row = QHBoxLayout()
+        balance_box = QVBoxLayout()
+        balance_tag = QLabel("BALANS")
+        balance_tag.setStyleSheet("color:#64748b; font-size:10px;")
+        balance_box.addWidget(balance_tag)
+        try:
+            bal = float(customer_data.get('balance', 0))
+        except (TypeError, ValueError):
+            bal = 0
+        balance_val = QLabel(f"{bal:,.0f} UZS")
+        balance_val.setFont(QFont("Consolas", 16, QFont.Weight.Bold))
+        balance_val.setStyleSheet("color:#22c55e;")
+        balance_box.addWidget(balance_val)
+        stats_row.addLayout(balance_box)
+
+        bonus_box = QVBoxLayout()
+        bonus_tag = QLabel("BONUS BALL")
+        bonus_tag.setStyleSheet("color:#64748b; font-size:10px;")
+        bonus_box.addWidget(bonus_tag)
+        bonus_val = QLabel(f"🎁 {customer_data.get('bonus_points', 0)}")
+        bonus_val.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
+        bonus_box.addWidget(bonus_val)
+        stats_row.addLayout(bonus_box)
+        stats_row.addStretch(1)
+        root.addLayout(stats_row)
+
+        tabs = QTabWidget()
+        tabs.setStyleSheet("""
+            QTabWidget::pane { border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; }
+            QTabBar::tab {
+                background: #0e1420; color: #94a3b8; padding: 8px 16px;
+                border-top-left-radius: 8px; border-top-right-radius: 8px;
+            }
+            QTabBar::tab:selected { background: #0a0e17; color: #00f0ff; }
+        """)
+        tabs.addTab(self._build_password_tab(), "Parolni o'zgartirish")
+        tabs.addTab(self._build_activity_tab(), "Jami harakatlar")
+        root.addWidget(tabs, 1)
+
+        close_btn = QPushButton("Yopish")
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.setFixedHeight(38)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255,255,255,0.06); color: #94a3b8;
+                border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;
+            }
+            QPushButton:hover { color: #e2e8f0; }
+        """)
+        close_btn.clicked.connect(self.accept)
+        root.addWidget(close_btn)
+
+        self._load_activity()
+
+    def _build_password_tab(self):
+        w = QWidget()
+        lo = QVBoxLayout(w)
+        lo.setContentsMargins(16, 16, 16, 16)
+        lo.setSpacing(10)
+
+        input_style = """
+            QLineEdit {
+                background: #0e1420; color: #e2e8f0;
+                border: 1px solid rgba(255,255,255,0.12);
+                border-radius: 8px; padding: 0 12px; font-size: 13px;
+            }
+            QLineEdit:focus { border: 1px solid rgba(0,240,255,0.5); }
+        """
+        self.old_pw_input = QLineEdit()
+        self.old_pw_input.setPlaceholderText("Joriy parol")
+        self.old_pw_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.old_pw_input.setFixedHeight(38)
+        self.old_pw_input.setStyleSheet(input_style)
+        lo.addWidget(self.old_pw_input)
+
+        self.new_pw_input = QLineEdit()
+        self.new_pw_input.setPlaceholderText("Yangi parol")
+        self.new_pw_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.new_pw_input.setFixedHeight(38)
+        self.new_pw_input.setStyleSheet(input_style)
+        lo.addWidget(self.new_pw_input)
+
+        self.pw_status = QLabel("")
+        self.pw_status.setWordWrap(True)
+        self.pw_status.setStyleSheet("color: #ef4444; font-size: 11px;")
+        self.pw_status.hide()
+        lo.addWidget(self.pw_status)
+
+        self.pw_submit_btn = QPushButton("Parolni yangilash")
+        self.pw_submit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.pw_submit_btn.setFixedHeight(38)
+        self.pw_submit_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(0,240,255,0.15); color: #00f0ff;
+                border: 1px solid rgba(0,240,255,0.4); border-radius: 8px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background: rgba(0,240,255,0.25); }
+            QPushButton:disabled { color: #475569; border-color: rgba(255,255,255,0.1); }
+        """)
+        self.pw_submit_btn.clicked.connect(self._on_change_password_clicked)
+        lo.addWidget(self.pw_submit_btn)
+        lo.addStretch(1)
+        return w
+
+    def _build_activity_tab(self):
+        w = QWidget()
+        lo = QVBoxLayout(w)
+        lo.setContentsMargins(16, 16, 16, 16)
+        self.activity_area = QScrollArea()
+        self.activity_area.setWidgetResizable(True)
+        self.activity_area.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        self.activity_container = QWidget()
+        self.activity_layout = QVBoxLayout(self.activity_container)
+        self.activity_layout.setSpacing(6)
+        self.activity_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.activity_loading = QLabel("Yuklanmoqda...")
+        self.activity_loading.setStyleSheet("color: #64748b;")
+        self.activity_layout.addWidget(self.activity_loading)
+        self.activity_area.setWidget(self.activity_container)
+        lo.addWidget(self.activity_area)
+        return w
+
+    def _on_change_password_clicked(self):
+        old_pw = self.old_pw_input.text()
+        new_pw = self.new_pw_input.text()
+        if not old_pw or not new_pw:
+            self._show_pw_status("Ikkala maydonni ham to'ldiring", error=True)
+            return
+        self.pw_submit_btn.setEnabled(False)
+        self.pw_submit_btn.setText("Yangilanmoqda...")
+        self.api_client.change_password_async(
+            self.customer_data.get('session_token', ''), old_pw, new_pw,
+            on_done=lambda ok, data: self._pw_result_ready.emit(ok, data)
+        )
+
+    def _apply_password_result(self, ok, data):
+        self.pw_submit_btn.setEnabled(True)
+        self.pw_submit_btn.setText("Parolni yangilash")
+        if not ok:
+            self._show_pw_status(data.get('error', "Xatolik yuz berdi"), error=True)
+            return
+        self.old_pw_input.clear()
+        self.new_pw_input.clear()
+        self._show_pw_status("Parol muvaffaqiyatli yangilandi ✓", error=False)
+
+    def _show_pw_status(self, msg, error=True):
+        self.pw_status.setStyleSheet(f"color: {'#ef4444' if error else '#22c55e'}; font-size: 11px;")
+        self.pw_status.setText(msg)
+        self.pw_status.show()
+
+    def _load_activity(self):
+        token = self.customer_data.get('session_token', '')
+        self.api_client.fetch_my_activity_async(
+            token, on_done=lambda ok, data: self._activity_result_ready.emit(ok, data)
+        )
+
+    def _apply_activity_result(self, ok, data):
+        while self.activity_layout.count():
+            item = self.activity_layout.takeAt(0)
+            if item.widget():
+                item.widget().setParent(None)
+
+        if not ok:
+            err = QLabel(data.get('error', "Yuklab bo'lmadi"))
+            err.setStyleSheet("color: #ef4444;")
+            self.activity_layout.addWidget(err)
+            return
+
+        rows = []
+        for t in data.get('transactions', []):
+            sign = '+' if t.get('type') == 'TOPUP' else '−'
+            color = '#22c55e' if t.get('type') == 'TOPUP' else '#ef4444'
+            try:
+                amount = float(t.get('amount', 0))
+            except (TypeError, ValueError):
+                amount = 0
+            rows.append((t.get('created_at', ''), t.get('type_display', ''), f"{sign}{amount:,.0f} UZS", color))
+        for s in data.get('sessions', []):
+            try:
+                price = float(s.get('total_price', 0))
+            except (TypeError, ValueError):
+                price = 0
+            rows.append((s.get('start_time', ''), f"🎮 {s.get('computer_name', '')}", f"−{price:,.0f} UZS", '#ef4444'))
+
+        rows.sort(key=lambda r: r[0] or '', reverse=True)
+
+        if not rows:
+            empty = QLabel("Hali harakatlar yo'q")
+            empty.setStyleSheet("color: #64748b;")
+            self.activity_layout.addWidget(empty)
+            return
+
+        for created_at, label, amount_text, color in rows[:60]:
+            row = QHBoxLayout()
+            date_label = QLabel(str(created_at)[:16].replace('T', ' '))
+            date_label.setStyleSheet("color: #64748b; font-size: 10px;")
+            row.addWidget(date_label)
+            type_label = QLabel(label)
+            type_label.setStyleSheet("color: #e2e8f0; font-size: 11px;")
+            row.addWidget(type_label, 1)
+            amount_label = QLabel(amount_text)
+            amount_label.setStyleSheet(f"color: {color}; font-size: 11px; font-weight: bold;")
+            amount_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+            row.addWidget(amount_label)
+            row_widget = QWidget()
+            row_widget.setLayout(row)
+            self.activity_layout.addWidget(row_widget)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1340,6 +1667,7 @@ class LauncherPage(QWidget):
         self.pc_name = pc_name
         self.api_client = api_client
         self.fallback_games = fallback_games or []
+        self.logged_in_customer = None
         self.setStyleSheet("background-color: #060911;")
 
         root = QVBoxLayout(self)
@@ -1349,6 +1677,7 @@ class LauncherPage(QWidget):
         self.top_bar = TopBar(pc_name=pc_name)
         self.top_bar.tab_changed.connect(self._switch_tab)
         self.top_bar.resume_requested.connect(self.resume_requested.emit)
+        self.top_bar.cabinet_requested.connect(self._open_cabinet)
         root.addWidget(self.top_bar)
 
         self.inner_stack = QStackedWidget()
@@ -1396,6 +1725,16 @@ class LauncherPage(QWidget):
     def set_running_apps(self, apps):
         self.apps_bar.set_apps(apps)
 
+    def set_logged_in_customer(self, data):
+        self.logged_in_customer = data
+        self.top_bar.set_logged_in_customer(data)
+
+    def _open_cabinet(self):
+        if not self.logged_in_customer:
+            return
+        dialog = CustomerCabinetDialog(self.api_client, self.logged_in_customer, parent=self)
+        dialog.exec()
+
     def reload_games(self):
         def _fetch():
             api_games = self.api_client.get_games()
@@ -1428,7 +1767,7 @@ class MainWindow(FullscreenMixin, QMainWindow):
     resume_game_signal = pyqtSignal()
     app_switch_requested_signal = pyqtSignal(str)
     customer_login_signal = pyqtSignal(dict)
-    customer_unlock_signal = pyqtSignal(int)
+    customer_unlock_signal = pyqtSignal(str)
 
     PAGE_LOCK = 0
     PAGE_LAUNCHER = 1
@@ -1455,6 +1794,10 @@ class MainWindow(FullscreenMixin, QMainWindow):
             pc_name=pc_name, server_url=self.server_url, api_client=self.api_client,
             fallback_games=self.fallback_games
         )
+        # Mijoz qulf ekranida tizimga kirsa, launcher'ning yuqori
+        # panelida ham (o'yinlar menyusiga o'tgandan keyin ham)
+        # "Kabinet" ko'rinib turishi kerak.
+        self.lock_page.login_succeeded.connect(self.launcher_page.set_logged_in_customer)
         self.launcher_page.game_launch_requested.connect(self.game_launched_signal.emit)
         self.launcher_page.resume_requested.connect(self.resume_game_signal.emit)
         self.launcher_page.app_switch_requested.connect(self.app_switch_requested_signal.emit)
@@ -2230,6 +2573,10 @@ class ClientLockerApp:
         self._kill_games()
         self.running_apps = {}
         self.main_window.set_running_apps([])
+        # Oldingi mijozning login holati (profil/kabinet) keyingi
+        # mijozga ko'rinib qolmasligi uchun tozalanadi.
+        self.main_window.lock_page.reset_login_state()
+        self.main_window.launcher_page.set_logged_in_customer(None)
 
     def _kill_games(self):
         for proc in self.launched_processes:
@@ -2366,7 +2713,7 @@ class ClientLockerApp:
         qanday ta'sir qilmaydi."""
         print(f"[Customer] {data.get('full_name')} ({data.get('phone')}) tizimga kirdi")
 
-    def _handle_customer_unlock_request(self, customer_id):
+    def _handle_customer_unlock_request(self, session_token):
         """Mijoz "Kompyuterni ochish" tugmasini bosganda — balansdan
         bosqichma-bosqich yechiladigan seansni boshlashni so'raydi.
         Muvaffaqiyatli bo'lsa, PC odatdagi status-sinxronlash orqali
@@ -2378,7 +2725,7 @@ class ClientLockerApp:
             )
             return
         self.main_window.api_client.customer_start_session_async(
-            self.pc_id, customer_id,
+            self.pc_id, session_token,
             on_done=lambda ok, data: self.main_window.lock_page.unlock_result_ready.emit(ok, data)
         )
 

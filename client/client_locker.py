@@ -1838,7 +1838,7 @@ class GamesPage(QWidget):
     def _refresh_grid(self):
         games = self._all_games
         if self._active_category != "all":
-            games = [g for g in games if g.get('category') == self._active_category]
+            games = [g for g in games if (g.get('category') or '').lower() == self._active_category.lower()]
 
         cards = []
         for g in games:

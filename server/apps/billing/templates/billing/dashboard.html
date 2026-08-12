@@ -102,6 +102,14 @@
         <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         KASSA & CASHFLOW
       </button>
+      <button onclick="switchTab('customers')" data-tab="customers" class="main-nav-btn px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white border border-transparent transition-all flex items-center gap-2 shrink-0">
+        <svg class="w-4 h-4 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-4a4 4 0 10-4-4 4 4 0 004 4zm6 0a4 4 0 10-4-4"/></svg>
+        MIJOZLAR
+      </button>
+      <button onclick="switchTab('auditlog')" data-tab="auditlog" class="main-nav-btn px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white border border-transparent transition-all flex items-center gap-2 shrink-0">
+        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        FAOLIYAT JURNALI
+      </button>
 
     </div>
   </nav>
@@ -185,6 +193,26 @@
       <div>
         <div class="font-bold text-sm">Kassa & Cashflow</div>
         <div class="text-[11px] text-slate-500 font-normal">Moliya va chiqimlar nazorati</div>
+      </div>
+    </button>
+
+    <button onclick="mobileSwitchTab('customers')" data-mobile-tab="customers" class="mobile-nav-drawer-btn" id="mnav-customers">
+      <span class="mobile-nav-icon text-pink-400">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-4a4 4 0 10-4-4 4 4 0 004 4zm6 0a4 4 0 10-4-4"/></svg>
+      </span>
+      <div>
+        <div class="font-bold text-sm">Mijozlar</div>
+        <div class="text-[11px] text-slate-500 font-normal">A'zolik va balans</div>
+      </div>
+    </button>
+
+    <button onclick="mobileSwitchTab('auditlog')" data-mobile-tab="auditlog" class="mobile-nav-drawer-btn" id="mnav-auditlog">
+      <span class="mobile-nav-icon text-slate-400">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      </span>
+      <div>
+        <div class="font-bold text-sm">Faoliyat Jurnali</div>
+        <div class="text-[11px] text-slate-500 font-normal">Kim nima qildi</div>
       </div>
     </button>
 
@@ -680,6 +708,71 @@
 
     </div>
 
+    <!-- TAB: MIJOZLAR (Customers / Membership) -->
+    <div id="tab-view-customers" class="hidden space-y-6">
+      <div class="glass-panel p-4 rounded-2xl">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <h3 class="text-lg font-bold font-orbitron text-white flex items-center gap-2">
+            <svg class="w-5 h-5 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-4a4 4 0 10-4-4 4 4 0 004 4zm6 0a4 4 0 10-4-4"/></svg>
+            Mijozlar
+          </h3>
+          <div class="flex items-center gap-2 flex-1 sm:flex-none justify-end">
+            <input type="text" id="customer-search-input" oninput="onCustomerSearchInput()" placeholder="Ism yoki telefon bo'yicha qidirish..." class="bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-pink-500 font-mono w-full sm:w-64">
+            <button onclick="openCustomerModal()" class="px-3 py-2 rounded-xl bg-pink-600/20 hover:bg-pink-600/30 border border-pink-500/40 text-pink-400 text-xs font-bold transition-all shrink-0">➕ Yangi mijoz</button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto max-h-[560px]">
+          <table class="w-full text-left text-xs min-w-[720px]">
+            <thead>
+              <tr class="border-b border-slate-800 text-slate-400 uppercase font-mono whitespace-nowrap">
+                <th class="py-2.5 px-2.5">Ism</th>
+                <th class="py-2.5 px-2.5">Telefon</th>
+                <th class="py-2.5 px-2.5">Balans</th>
+                <th class="py-2.5 px-2.5">Bonus</th>
+                <th class="py-2.5 px-2.5">Jami xarid</th>
+                <th class="py-2.5 px-2.5">Seanslar</th>
+                <th class="py-2.5 px-2.5 text-right">Amal</th>
+              </tr>
+            </thead>
+            <tbody id="customers-table-body">
+              <!-- Dynamically populated by renderCustomers -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: FAOLIYAT JURNALI (Audit Log) -->
+    <div id="tab-view-auditlog" class="hidden space-y-6">
+      <div class="glass-panel p-4 rounded-2xl">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <h3 class="text-lg font-bold font-orbitron text-white flex items-center gap-2">
+            <svg class="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            Faoliyat Jurnali
+          </h3>
+          <button onclick="fetchAuditLog()" class="px-3 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-bold transition-all">🔄 Yangilash</button>
+        </div>
+        <p class="text-[11px] text-slate-500 mb-3">Muhim amallar tarixi: kim, qachon, nima qildi (chegirma, majburiy to'xtatish, tarif o'zgarishi, buyurtma tasdiqlash, mijoz balansi va h.k.)</p>
+
+        <div class="overflow-x-auto max-h-[600px]">
+          <table class="w-full text-left text-xs min-w-[640px]">
+            <thead>
+              <tr class="border-b border-slate-800 text-slate-400 uppercase font-mono whitespace-nowrap">
+                <th class="py-2.5 px-2.5">Vaqt</th>
+                <th class="py-2.5 px-2.5">Xodim</th>
+                <th class="py-2.5 px-2.5">Amal turi</th>
+                <th class="py-2.5 px-2.5">Tavsif</th>
+              </tr>
+            </thead>
+            <tbody id="auditlog-table-body">
+              <!-- Dynamically populated by renderAuditLog -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
   </main>
 
 
@@ -726,6 +819,49 @@
         <p id="screenshot-error" class="hidden text-slate-500 text-sm p-8 text-center">Bu kompyuterdan hali skrinshot kelmagan (client_locker.py yangi versiyasi ishga tushirilganini tekshiring, ~20 soniya kutish kerak bo'lishi mumkin).</p>
       </div>
       <p class="text-[11px] text-slate-500 mt-3 text-center">Har 5 soniyada avtomatik yangilanadi</p>
+    </div>
+  </div>
+
+  <!-- Customer Modal (Create / Edit / Balance) -->
+  <div id="customer-modal" class="modal-wrapper fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="modal-sheet-inner glass-panel w-full max-w-lg rounded-2xl p-6 relative border border-slate-700 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+        <h3 class="text-xl font-bold font-orbitron text-white" id="customer-modal-title">Yangi mijoz</h3>
+        <button onclick="closeCustomerModal()" class="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+      </div>
+      <input type="hidden" id="customer-id-input">
+      <div class="pt-4 space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Ism familiya</label>
+          <input type="text" id="customer-name-input" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-pink-500 font-mono">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Telefon</label>
+          <input type="text" id="customer-phone-input" placeholder="+998 90 123 45 67" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-pink-500 font-mono">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Izoh</label>
+          <textarea id="customer-notes-input" rows="2" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-pink-500 font-medium"></textarea>
+        </div>
+        <p id="customer-modal-error" class="hidden text-xs text-rose-400 font-semibold"></p>
+        <button onclick="saveCustomer()" class="w-full py-3 rounded-xl glow-btn-cyan text-sm font-extrabold">Saqlash</button>
+      </div>
+
+      <div id="customer-balance-section" class="hidden pt-5 mt-5 border-t border-slate-800 space-y-4">
+        <div class="flex items-center justify-between text-sm">
+          <span class="text-slate-400">Joriy balans:</span>
+          <span id="customer-modal-balance" class="font-bold font-orbitron text-emerald-400 text-lg">0 UZS</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="number" id="customer-tx-amount" placeholder="Summa" class="flex-1 bg-slate-900/90 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500 font-mono">
+          <button onclick="customerTopUp()" class="px-3 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-400 text-xs font-bold shrink-0">+ To'ldirish</button>
+          <button onclick="customerSpend()" class="px-3 py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-400 text-xs font-bold shrink-0">− Sarflash</button>
+        </div>
+        <div>
+          <div class="text-xs text-slate-400 uppercase tracking-wider mb-2">So'nggi tranzaksiyalar</div>
+          <div id="customer-tx-list" class="space-y-1 max-h-40 overflow-y-auto text-xs"></div>
+        </div>
+      </div>
     </div>
   </div>
 

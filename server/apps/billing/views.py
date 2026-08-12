@@ -9,21 +9,31 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.contrib.auth import authenticate, login, logout
-from django.db.models import Sum, Count, F, Case, When, Value, DecimalField
+from django.db.models import Sum, Count, F, Case, When, Value, DecimalField, Q
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 
-from .models import Computer, Tariff, Session, Category, Product, Order, OrderItem, Expense, Game, StockSupply
+from .models import (
+    Computer, Tariff, Session, Category, Product, Order, OrderItem, Expense, Game, StockSupply,
+    Customer, CustomerTransaction, ClientBuild, AuditLog
+)
 from .serializers import (
     ComputerSerializer, TariffSerializer, SessionSerializer,
     CategorySerializer, ProductSerializer, OrderSerializer, OrderItemSerializer, ExpenseSerializer,
-    GameSerializer, StockSupplySerializer
+    GameSerializer, StockSupplySerializer,
+    CustomerSerializer, CustomerTransactionSerializer, ClientBuildSerializer, AuditLogSerializer
 )
 from .consumers import notify_pc_status_change, notify_bar_order_change
 from .permissions import HasClientApiKey, IsStaffOrHasApiKey
+
+
+def _log_action(request, action_key, description):
+    """Muhim admin/xodim amallarini AuditLog'ga yozadi (kim, qachon, nima qildi)."""
+    user = request.user if getattr(request, 'user', None) and request.user.is_authenticated else None
+    AuditLog.objects.create(user=user, action=action_key, description=description)
 
 
 def _calculate_session_duration_and_price(pc, active_session, start_time, tariff, now):
@@ -81,6 +91,7 @@ class AdminLoginView(APIView):
         user = authenticate(request, username=username, password=password)
         if user is not None and user.is_staff:
             login(request, user)
+            AuditLog.objects.create(user=user, action='LOGIN', description=f"{user.username} tizimga kirdi")
             return Response({'success': True, 'username': user.username, 'is_admin': True})
         return Response({'success': False, 'error': 'Invalid admin credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
@@ -105,6 +116,15 @@ class LauncherView(View):
 class TariffViewSet(viewsets.ModelViewSet):
     queryset = Tariff.objects.all().order_by('id')
     serializer_class = TariffSerializer
+
+    def perform_update(self, serializer):
+        old_price = serializer.instance.price_per_hour
+        instance = serializer.save()
+        if old_price != instance.price_per_hour:
+            _log_action(
+                self.request, 'TARIFF_CHANGED',
+                f"Tarif '{instance.name}' narxi {old_price:,.0f} → {instance.price_per_hour:,.0f} UZS/soat ga o'zgartirildi"
+            )
 
 class GameViewSet(viewsets.ModelViewSet):
     queryset = Game.objects.filter(is_active=True).order_by('name')
@@ -148,6 +168,8 @@ class ComputerViewSet(viewsets.ModelViewSet):
         amount = request.data.get('amount')
         is_open_time = request.data.get('is_open_time', False) or (request.data.get('mode') == 'open')
         tariff_id = request.data.get('tariff_id')
+        customer_id = request.data.get('customer_id')
+        customer = Customer.objects.filter(id=customer_id).first() if customer_id else None
 
         tariff = Tariff.objects.filter(id=tariff_id).first() if tariff_id else pc.current_tariff or Tariff.objects.first()
 
@@ -187,6 +209,7 @@ class ComputerViewSet(viewsets.ModelViewSet):
         Session.objects.create(
             computer=pc,
             tariff=tariff,
+            customer=customer,
             is_open_time=is_open_time,
             start_time=now,
             end_time=end_time,
@@ -381,6 +404,8 @@ class ComputerViewSet(viewsets.ModelViewSet):
         pc.current_tariff = None
         pc.save()
 
+        _log_action(request, 'SESSION_STOPPED', f"{pc.name}: seans yakunlandi, jami {grand_total:,.0f} UZS ({payment_method})")
+
         serializer = self.get_serializer(pc)
         notify_pc_status_change({
             'action': 'SESSION_STOPPED',
@@ -402,6 +427,8 @@ class ComputerViewSet(viewsets.ModelViewSet):
 
         Session.objects.filter(computer=pc, is_active=True).update(is_active=False, end_time=now)
 
+        _log_action(request, 'EMERGENCY_LOCK', f"{pc.name} favqulodda bloklandi")
+
         serializer = self.get_serializer(pc)
         notify_pc_status_change({
             'action': 'EMERGENCY_LOCK',
@@ -422,6 +449,8 @@ class ComputerViewSet(viewsets.ModelViewSet):
             pc.save()
 
         Session.objects.filter(is_active=True).update(is_active=False, end_time=now)
+
+        _log_action(request, 'EMERGENCY_LOCK', "Barcha kompyuterlar favqulodda bloklandi")
 
         notify_pc_status_change({
             'action': 'EMERGENCY_LOCK_ALL'
@@ -643,6 +672,8 @@ class OrderViewSet(viewsets.ModelViewSet):
         order.status = 'APPROVED'
         order.save()
 
+        _log_action(request, 'ORDER_APPROVED', f"Buyurtma #{order.id} tasdiqlandi ({order.total_price:,.0f} UZS)")
+
         serializer = self.get_serializer(order)
         notify_bar_order_change({
             'action': 'ORDER_APPROVED',
@@ -658,6 +689,8 @@ class OrderViewSet(viewsets.ModelViewSet):
 
         order.status = 'DELIVERED'
         order.save()
+
+        _log_action(request, 'ORDER_DELIVERED', f"Buyurtma #{order.id} yetkazildi ({order.total_price:,.0f} UZS)")
 
         serializer = self.get_serializer(order)
         notify_bar_order_change({
@@ -676,6 +709,8 @@ class OrderViewSet(viewsets.ModelViewSet):
 
         order.status = 'CANCELLED'
         order.save()
+
+        _log_action(request, 'ORDER_CANCELLED', f"Buyurtma #{order.id} bekor qilindi ({order.total_price:,.0f} UZS)")
 
         serializer = self.get_serializer(order)
         notify_bar_order_change({
@@ -783,6 +818,8 @@ class StockSupplyViewSet(viewsets.ModelViewSet):
             description=f"{quantity}x {product.name} kirim qilindi (@ {cost_price:,.0f} UZS){note_str}"
         )
 
+        _log_action(request, 'STOCK_SUPPLY', f"{quantity}x {product.name} kirim qilindi ({total_cost:,.0f} UZS)")
+
         serializer = self.get_serializer(supply)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
@@ -791,6 +828,13 @@ class StockSupplyViewSet(viewsets.ModelViewSet):
 class ExpenseViewSet(viewsets.ModelViewSet):
     queryset = Expense.objects.all().order_by('-created_at')
     serializer_class = ExpenseSerializer
+
+    def perform_create(self, serializer):
+        expense = serializer.save()
+        _log_action(
+            self.request, 'EXPENSE_CREATED',
+            f"Rasxod: {expense.amount:,.0f} UZS ({expense.category})" + (f" - {expense.recipient_name}" if expense.recipient_name else "")
+        )
 
     @action(detail=False, methods=['get'])
     def cashflow(self, request):
@@ -932,5 +976,127 @@ class ExpenseViewSet(viewsets.ModelViewSet):
             'expenses': expense_serializer.data,
             'recent_sales': recent_sales
         }, status=status.HTTP_200_OK)
+
+
+class CustomerViewSet(viewsets.ModelViewSet):
+    """Mijozlar/a'zolik: ism, telefon, balans (bonus/depozit hisobi).
+    Sessiya/buyurtmalar ixtiyoriy ravishda mijozga bog'lanishi mumkin —
+    to'lov (naqd/plastik) hisob-kitobiga ta'sir qilmaydi, faqat
+    xarid tarixini ko'rish uchun ishlatiladi."""
+    queryset = Customer.objects.all().order_by('full_name')
+    serializer_class = CustomerSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        search = self.request.query_params.get('search')
+        if search:
+            qs = qs.filter(Q(full_name__icontains=search) | Q(phone__icontains=search))
+        return qs
+
+    @action(detail=True, methods=['post'])
+    def top_up(self, request, pk=None):
+        customer = self.get_object()
+        try:
+            amount = float(request.data.get('amount', 0))
+        except (TypeError, ValueError):
+            amount = 0
+        if amount <= 0:
+            return Response({'error': "Summani to'g'ri kiriting!"}, status=status.HTTP_400_BAD_REQUEST)
+
+        note = request.data.get('note', '')
+        customer.balance = float(customer.balance) + amount
+        customer.save()
+
+        CustomerTransaction.objects.create(
+            customer=customer, type='TOPUP', amount=amount, balance_after=customer.balance,
+            note=note, created_by=request.user if request.user.is_authenticated else None
+        )
+        _log_action(
+            request, 'CUSTOMER_TOPUP',
+            f"{customer.full_name} ({customer.phone}) balansiga {amount:,.0f} UZS qo'shildi (yangi balans: {customer.balance:,.0f} UZS)"
+        )
+        return Response(self.get_serializer(customer).data)
+
+    @action(detail=True, methods=['post'])
+    def spend(self, request, pk=None):
+        customer = self.get_object()
+        try:
+            amount = float(request.data.get('amount', 0))
+        except (TypeError, ValueError):
+            amount = 0
+        if amount <= 0:
+            return Response({'error': "Summani to'g'ri kiriting!"}, status=status.HTTP_400_BAD_REQUEST)
+        if float(customer.balance) < amount:
+            return Response({'error': f"Balans yetarli emas (mavjud: {customer.balance:,.0f} UZS)"}, status=status.HTTP_400_BAD_REQUEST)
+
+        note = request.data.get('note', '')
+        customer.balance = float(customer.balance) - amount
+        customer.save()
+
+        CustomerTransaction.objects.create(
+            customer=customer, type='SPEND', amount=amount, balance_after=customer.balance,
+            note=note, created_by=request.user if request.user.is_authenticated else None
+        )
+        _log_action(
+            request, 'CUSTOMER_SPEND',
+            f"{customer.full_name} ({customer.phone}) balansidan {amount:,.0f} UZS yechildi (qolgan balans: {customer.balance:,.0f} UZS)"
+        )
+        return Response(self.get_serializer(customer).data)
+
+    @action(detail=True, methods=['get'])
+    def transactions(self, request, pk=None):
+        customer = self.get_object()
+        txs = customer.transactions.all()[:100]
+        return Response(CustomerTransactionSerializer(txs, many=True).data)
+
+    @action(detail=True, methods=['get'])
+    def history(self, request, pk=None):
+        customer = self.get_object()
+        sessions = customer.sessions.order_by('-start_time')[:50]
+        orders = customer.orders.exclude(status='CANCELLED').order_by('-created_at')[:50]
+        return Response({
+            'sessions': SessionSerializer(sessions, many=True).data,
+            'orders': OrderSerializer(orders, many=True).data,
+        })
+
+
+class ClientLatestVersionView(APIView):
+    """Kiosk klienti (client_locker.py) shu yerdan eng so'nggi versiya
+    raqamini so'raydi. Kiosk API kaliti bilan himoyalangan (heartbeat
+    kabi) — mijozlar/tashqi odamlar bu yerga kira olmaydi."""
+    permission_classes = [HasClientApiKey]
+
+    def get(self, request):
+        build = ClientBuild.objects.filter(is_active=True).order_by('-released_at').first()
+        if not build:
+            return Response({'version': None})
+        return Response({'version': build.version, 'notes': build.notes or ''})
+
+
+class ClientDownloadView(APIView):
+    """Eng so'nggi faol klient build'ining zip arxivini qaytaradi —
+    client_locker.py shu yerdan yuklab olib, o'zini yangilaydi."""
+    permission_classes = [HasClientApiKey]
+
+    def get(self, request):
+        build = ClientBuild.objects.filter(is_active=True).order_by('-released_at').first()
+        if not build or not build.zip_file:
+            return Response({'error': "Mavjud versiya topilmadi"}, status=status.HTTP_404_NOT_FOUND)
+        return FileResponse(build.zip_file.open('rb'), content_type='application/zip', filename=f"client_{build.version}.zip")
+
+
+class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
+    """Xodimlar bajargan muhim amallarning tarixi (kim, qachon, nima
+    qildi) — bitta umumiy admin hisobi ostida ham kunlik voqealarni
+    keyinroq tekshirish uchun foydali."""
+    queryset = AuditLog.objects.all().order_by('-created_at')
+    serializer_class = AuditLogSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        action_filter = self.request.query_params.get('action')
+        if action_filter:
+            qs = qs.filter(action=action_filter)
+        return qs[:300]
 
 

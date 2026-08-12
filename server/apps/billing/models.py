@@ -81,11 +81,48 @@ PAYMENT_METHOD_CHOICES = [
     ('SPLIT', 'Aralash (Naqd + Card)'),
 ]
 
+class Customer(models.Model):
+    objects = models.Manager()
+
+    full_name = models.CharField(max_length=150)
+    phone = models.CharField(max_length=20, unique=True)
+    balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    bonus_points = models.IntegerField(default=0)
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.full_name} ({self.phone}) - Balans: {self.balance:,.0f} UZS"
+
+CUSTOMER_TRANSACTION_CHOICES = [
+    ('TOPUP', "To'ldirish"),
+    ('SPEND', 'Sarflash'),
+    ('ADJUST', 'Tuzatish'),
+]
+
+class CustomerTransaction(models.Model):
+    objects = models.Manager()
+
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='transactions')
+    type = models.CharField(max_length=10, choices=CUSTOMER_TRANSACTION_CHOICES)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    balance_after = models.DecimalField(max_digits=12, decimal_places=2)
+    note = models.CharField(max_length=255, blank=True, null=True)
+    created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.get_type_display()}: {self.amount:,.0f} UZS - {self.customer.full_name}"
+
 class Session(models.Model):
     objects = models.Manager()
 
     computer = models.ForeignKey(Computer, on_delete=models.CASCADE, related_name='sessions')
     tariff = models.ForeignKey(Tariff, on_delete=models.SET_NULL, null=True, blank=True)
+    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True, related_name='sessions')
     is_open_time = models.BooleanField(default=False)
     start_time = models.DateTimeField(default=timezone.now)
     end_time = models.DateTimeField(null=True, blank=True)
@@ -150,6 +187,7 @@ class Order(models.Model):
     ]
 
     computer = models.ForeignKey(Computer, on_delete=models.CASCADE, related_name='bar_orders', null=True, blank=True)
+    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
     total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     cash_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     card_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
@@ -206,5 +244,60 @@ class Game(models.Model):
 
     def __str__(self):
         return f"{self.name} [{self.category}]"
+
+
+class ClientBuild(models.Model):
+    """Kiosk klient (client_locker.py) yangi versiyasi shu yerga
+    yuklanadi (zip). Klientlar davriy ravishda shu ro'yxatdagi eng
+    so'nggi is_active=True versiyani tekshirib, o'zini avtomatik
+    yangilaydi — endi har bir PC'ga qo'lda git pull qilish shart emas."""
+    objects = models.Manager()
+
+    version = models.CharField(max_length=30, unique=True, help_text="Masalan: 1.0.1")
+    zip_file = models.FileField(upload_to='client_builds/', help_text="client/ papkasining zip arxivi (config.json'siz)")
+    notes = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(default=True, help_text="Faqat True bo'lgan eng so'nggi versiya kiosklarga taqdim etiladi")
+    released_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-released_at']
+
+    def __str__(self):
+        return f"v{self.version}" + ("" if self.is_active else " (nofaol)")
+
+
+AUDIT_ACTION_CHOICES = [
+    ('LOGIN', 'Tizimga kirdi'),
+    ('SESSION_STOPPED', 'Seans yakunlandi'),
+    ('EMERGENCY_LOCK', 'Favqulodda bloklandi'),
+    ('TARIFF_CHANGED', "Tarif narxi o'zgartirildi"),
+    ('ORDER_APPROVED', 'Buyurtma tasdiqlandi'),
+    ('ORDER_DELIVERED', 'Buyurtma yetkazildi'),
+    ('ORDER_CANCELLED', 'Buyurtma bekor qilindi'),
+    ('CUSTOMER_TOPUP', "Mijoz balansi to'ldirildi"),
+    ('CUSTOMER_SPEND', 'Mijoz balansidan yechildi'),
+    ('EXPENSE_CREATED', "Rasxod qo'shildi"),
+    ('STOCK_SUPPLY', 'Tovar kirim qilindi'),
+    ('OTHER', 'Boshqa'),
+]
+
+class AuditLog(models.Model):
+    """Kim (qaysi tizimga kirgan xodim) qachon qanday muhim amal
+    bajarganini yozib boradi — kelajakda bir nechta xodim/rol
+    qo'shilganda buni kengaytirish mumkin, hozircha bitta admin
+    ostida ham kunlik voqealar tarixi sifatida foydali."""
+    objects = models.Manager()
+
+    user = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True)
+    action = models.CharField(max_length=30, choices=AUDIT_ACTION_CHOICES, default='OTHER')
+    description = models.CharField(max_length=500)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        who = self.user.username if self.user else 'tizim'
+        return f"[{self.created_at:%Y-%m-%d %H:%M}] {who}: {self.description}"
 
 

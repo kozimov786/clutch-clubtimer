@@ -381,10 +381,16 @@ function switchTab(tabName) {
   document.getElementById('tab-view-analytics').classList.toggle('hidden', tabName !== 'analytics');
   const finTab = document.getElementById('tab-view-finance');
   if (finTab) finTab.classList.toggle('hidden', tabName !== 'finance');
+  const custTab = document.getElementById('tab-view-customers');
+  if (custTab) custTab.classList.toggle('hidden', tabName !== 'customers');
+  const auditTab = document.getElementById('tab-view-auditlog');
+  if (auditTab) auditTab.classList.toggle('hidden', tabName !== 'auditlog');
 
   if (tabName === 'bar') fetchBarOrders();
   if (tabName === 'analytics') fetchAnalytics();
   if (tabName === 'finance') fetchFinanceData();
+  if (tabName === 'customers') fetchCustomers();
+  if (tabName === 'auditlog') fetchAuditLog();
 }
 
 
@@ -2209,3 +2215,216 @@ async function fetchStockHistory() {
 }
 
 
+
+
+// ══════════════════════════════════════════════════════════════════
+//  MIJOZLAR (Customers / Membership)
+// ══════════════════════════════════════════════════════════════════
+let customerSearchDebounce = null;
+let activeCustomerId = null;
+
+function onCustomerSearchInput() {
+  clearTimeout(customerSearchDebounce);
+  customerSearchDebounce = setTimeout(fetchCustomers, 300);
+}
+
+async function fetchCustomers() {
+  const tbody = document.getElementById('customers-table-body');
+  if (!tbody) return;
+  const search = document.getElementById('customer-search-input')?.value.trim() || '';
+  try {
+    const url = search ? `/api/customers/?search=${encodeURIComponent(search)}` : '/api/customers/';
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const customers = await res.json();
+    renderCustomers(customers);
+  } catch (err) {
+    console.error("Customers fetch error:", err);
+  }
+}
+
+function renderCustomers(customers) {
+  const tbody = document.getElementById('customers-table-body');
+  if (!customers.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-xs text-slate-500">Mijozlar topilmadi</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = customers.map(c => `
+    <tr class="border-b border-slate-800 hover:bg-slate-900/50 transition-colors whitespace-nowrap text-xs">
+      <td class="py-2.5 px-2.5 font-bold text-white">${c.full_name}</td>
+      <td class="py-2.5 px-2.5 font-mono text-slate-300">${c.phone}</td>
+      <td class="py-2.5 px-2.5 font-mono font-bold text-emerald-400">${formatMoney(c.balance)}</td>
+      <td class="py-2.5 px-2.5 font-mono text-amber-400">${c.bonus_points} ball</td>
+      <td class="py-2.5 px-2.5 font-mono text-slate-300">${formatMoney(c.total_spent)}</td>
+      <td class="py-2.5 px-2.5 font-mono text-slate-400">${c.session_count}</td>
+      <td class="py-2.5 px-2.5 text-right">
+        <button onclick="openCustomerModal(${c.id})" class="px-2.5 py-1 rounded-lg bg-pink-600/20 hover:bg-pink-600/30 border border-pink-500/40 text-pink-400 text-xs font-bold transition-all">Ochish</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function openCustomerModal(customerId) {
+  activeCustomerId = customerId || null;
+  document.getElementById('customer-id-input').value = customerId || '';
+  document.getElementById('customer-modal-error').classList.add('hidden');
+  const balanceSection = document.getElementById('customer-balance-section');
+
+  if (customerId) {
+    document.getElementById('customer-modal-title').textContent = 'Mijozni tahrirlash';
+    balanceSection.classList.remove('hidden');
+    try {
+      const res = await fetch(`/api/customers/${customerId}/`);
+      const c = res.ok ? await res.json() : null;
+      if (c) {
+        document.getElementById('customer-name-input').value = c.full_name;
+        document.getElementById('customer-phone-input').value = c.phone;
+        document.getElementById('customer-notes-input').value = c.notes || '';
+        document.getElementById('customer-modal-balance').textContent = formatMoney(c.balance);
+      }
+    } catch (err) { console.error(err); }
+    loadCustomerTransactions(customerId);
+  } else {
+    document.getElementById('customer-modal-title').textContent = 'Yangi mijoz';
+    balanceSection.classList.add('hidden');
+    document.getElementById('customer-name-input').value = '';
+    document.getElementById('customer-phone-input').value = '';
+    document.getElementById('customer-notes-input').value = '';
+  }
+  document.getElementById('customer-tx-amount').value = '';
+  document.getElementById('customer-modal').classList.remove('hidden');
+}
+
+function closeCustomerModal() {
+  document.getElementById('customer-modal').classList.add('hidden');
+  activeCustomerId = null;
+}
+
+async function saveCustomer() {
+  const errEl = document.getElementById('customer-modal-error');
+  errEl.classList.add('hidden');
+  const fullName = document.getElementById('customer-name-input').value.trim();
+  const phone = document.getElementById('customer-phone-input').value.trim();
+  const notes = document.getElementById('customer-notes-input').value.trim();
+
+  if (!fullName || !phone) {
+    errEl.textContent = "Ism va telefon raqamini kiriting!";
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  const isEdit = !!activeCustomerId;
+  const url = isEdit ? `/api/customers/${activeCustomerId}/` : '/api/customers/';
+  const method = isEdit ? 'PATCH' : 'POST';
+
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ full_name: fullName, phone, notes })
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      errEl.textContent = data.phone ? "Bu telefon raqami allaqachon ro'yxatdan o'tgan!" : "Xato yuz berdi, qayta urinib ko'ring.";
+      errEl.classList.remove('hidden');
+      return;
+    }
+    closeCustomerModal();
+    fetchCustomers();
+  } catch (err) {
+    errEl.textContent = "Tarmoq xatosi.";
+    errEl.classList.remove('hidden');
+  }
+}
+
+async function customerTopUp() {
+  await customerBalanceOp('top_up');
+}
+
+async function customerSpend() {
+  await customerBalanceOp('spend');
+}
+
+async function customerBalanceOp(action) {
+  if (!activeCustomerId) return;
+  const amountInput = document.getElementById('customer-tx-amount');
+  const amount = parseFloat(amountInput.value);
+  if (!amount || amount <= 0) {
+    alert("Summani to'g'ri kiriting!");
+    return;
+  }
+  try {
+    const res = await fetch(`/api/customers/${activeCustomerId}/${action}/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || "Xato yuz berdi");
+      return;
+    }
+    document.getElementById('customer-modal-balance').textContent = formatMoney(data.balance);
+    amountInput.value = '';
+    loadCustomerTransactions(activeCustomerId);
+    fetchCustomers();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function loadCustomerTransactions(customerId) {
+  const list = document.getElementById('customer-tx-list');
+  try {
+    const res = await fetch(`/api/customers/${customerId}/transactions/`);
+    if (!res.ok) return;
+    const txs = await res.json();
+    if (!txs.length) {
+      list.innerHTML = `<div class="text-slate-500 text-xs py-2">Tranzaksiyalar yo'q</div>`;
+      return;
+    }
+    list.innerHTML = txs.map(t => `
+      <div class="flex items-center justify-between py-1.5 border-b border-slate-800/60">
+        <span class="text-slate-400">${new Date(t.created_at).toLocaleString('uz-UZ')}</span>
+        <span class="font-mono font-bold ${t.type === 'TOPUP' ? 'text-emerald-400' : 'text-rose-400'}">
+          ${t.type === 'TOPUP' ? '+' : '−'}${formatMoney(t.amount)}
+        </span>
+      </div>
+    `).join('');
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+//  FAOLIYAT JURNALI (Audit Log)
+// ══════════════════════════════════════════════════════════════════
+async function fetchAuditLog() {
+  const tbody = document.getElementById('auditlog-table-body');
+  if (!tbody) return;
+  try {
+    const res = await fetch('/api/audit-logs/');
+    if (!res.ok) return;
+    const logs = await res.json();
+    renderAuditLog(logs);
+  } catch (err) {
+    console.error("Audit log fetch error:", err);
+  }
+}
+
+function renderAuditLog(logs) {
+  const tbody = document.getElementById('auditlog-table-body');
+  if (!logs.length) {
+    tbody.innerHTML = `<tr><td colspan="4" class="py-6 text-center text-xs text-slate-500">Hali yozuvlar yo'q</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = logs.map(l => `
+    <tr class="border-b border-slate-800 hover:bg-slate-900/50 transition-colors whitespace-nowrap text-xs">
+      <td class="py-2.5 px-2.5 text-slate-400 font-mono">${new Date(l.created_at).toLocaleString('uz-UZ')}</td>
+      <td class="py-2.5 px-2.5 font-bold text-cyan-400">${l.username || 'tizim'}</td>
+      <td class="py-2.5 px-2.5"><span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-semibold">${l.action_display}</span></td>
+      <td class="py-2.5 px-2.5 text-slate-300 whitespace-normal">${l.description}</td>
+    </tr>
+  `).join('');
+}

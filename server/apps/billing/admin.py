@@ -1,5 +1,8 @@
 from django.contrib import admin
-from .models import Computer, Session, Tariff, Category, Product, Order, OrderItem, Expense, Game, StockSupply
+from .models import (
+    Computer, Session, Tariff, Category, Product, Order, OrderItem, Expense, Game, StockSupply,
+    Customer, CustomerTransaction, ClientBuild, AuditLog
+)
 
 @admin.register(StockSupply)
 class StockSupplyAdmin(admin.ModelAdmin):
@@ -52,4 +55,27 @@ class ExpenseAdmin(admin.ModelAdmin):
     list_display = ('id', 'amount', 'payment_method', 'category', 'recipient_name', 'created_at')
     list_filter = ('payment_method', 'category')
     search_fields = ('category', 'recipient_name', 'description')
+
+@admin.register(Customer)
+class CustomerAdmin(admin.ModelAdmin):
+    list_display = ('id', 'full_name', 'phone', 'balance', 'bonus_points', 'created_at')
+    search_fields = ('full_name', 'phone')
+
+@admin.register(CustomerTransaction)
+class CustomerTransactionAdmin(admin.ModelAdmin):
+    list_display = ('id', 'customer', 'type', 'amount', 'balance_after', 'created_by', 'created_at')
+    list_filter = ('type',)
+    search_fields = ('customer__full_name', 'customer__phone')
+
+@admin.register(ClientBuild)
+class ClientBuildAdmin(admin.ModelAdmin):
+    list_display = ('id', 'version', 'is_active', 'released_at')
+    list_filter = ('is_active',)
+    search_fields = ('version',)
+
+@admin.register(AuditLog)
+class AuditLogAdmin(admin.ModelAdmin):
+    list_display = ('id', 'created_at', 'user', 'action', 'description')
+    list_filter = ('action',)
+    search_fields = ('description', 'user__username')
 

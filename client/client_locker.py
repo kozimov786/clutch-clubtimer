@@ -36,6 +36,9 @@ import socket
 import subprocess
 import platform
 import threading
+import zipfile
+import shutil
+import tempfile
 import requests
 
 from PyQt6.QtCore import Qt, QTimer, QEvent, pyqtSignal, QObject, QDate, QByteArray, QBuffer, QIODevice
@@ -48,6 +51,69 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QFont, QColor, QPixmap, QGuiApplication, QIcon
 
 ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+CLIENT_DIR = os.path.dirname(os.path.abspath(__file__))
+VERSION_FILE = os.path.join(CLIENT_DIR, "VERSION")
+
+
+def get_local_client_version():
+    try:
+        with open(VERSION_FILE, 'r') as f:
+            return f.read().strip()
+    except Exception:
+        return "0.0.0"
+
+
+def check_and_apply_update(server_url, api_key):
+    """Serverdan (ClientBuild) eng so'nggi versiyani tekshiradi; agar
+    yangisi bo'lsa, zip arxivini yuklab olib client/ papkasi ustiga
+    yozadi (config.json'ga tegmaydi) va True qaytaradi — chaqiruvchi
+    True kelganda dasturni yopishi kerak (watchdog.bat uni yangi kod
+    bilan qayta ishga tushiradi). Har qanday xatoda jim False qaytaradi —
+    yangilanish bilan bog'liq muammo hech qachon kiosk ishga tushishiga
+    to'sqinlik qilmasligi kerak."""
+    try:
+        local_version = get_local_client_version()
+        headers = {"X-API-Key": api_key} if api_key else {}
+        resp = requests.get(f"{server_url}/api/client/latest/", headers=headers, timeout=6)
+        if resp.status_code != 200:
+            return False
+        server_version = resp.json().get('version')
+        if not server_version or server_version == local_version:
+            return False
+
+        print(f"[Update] Yangi versiya topildi: {server_version} (joriy: {local_version}) — yuklab olinmoqda...")
+        dl = requests.get(f"{server_url}/api/client/download/", headers=headers, timeout=60)
+        if dl.status_code != 200:
+            print(f"[Update] Yuklab bo'lmadi: HTTP {dl.status_code}")
+            return False
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            zip_path = os.path.join(tmpdir, "update.zip")
+            with open(zip_path, 'wb') as f:
+                f.write(dl.content)
+
+            extract_dir = os.path.join(tmpdir, "extracted")
+            with zipfile.ZipFile(zip_path) as zf:
+                zf.extractall(extract_dir)
+
+            for root, _dirs, files in os.walk(extract_dir):
+                for fname in files:
+                    if fname == "config.json":
+                        continue
+                    src = os.path.join(root, fname)
+                    rel = os.path.relpath(src, extract_dir)
+                    dest = os.path.join(CLIENT_DIR, rel)
+                    os.makedirs(os.path.dirname(dest), exist_ok=True)
+                    shutil.copy2(src, dest)
+
+        with open(VERSION_FILE, 'w') as f:
+            f.write(server_version)
+
+        print(f"[Update] {server_version} versiyasi o'rnatildi, dastur qayta ishga tushirilmoqda...")
+        return True
+    except Exception as e:
+        print(f"[Update] Tekshirishda xato (e'tiborsiz qoldirildi): {e}")
+        return False
 
 
 def get_screen_resolution():
@@ -1308,6 +1374,13 @@ class ClientLockerApp:
         self.screenshot_timer.timeout.connect(self._capture_and_upload_screenshot)
         self.screenshot_timer.start(20000)
 
+        # Markazlashgan yangilanish: har 30 daqiqada serverda yangi klient
+        # versiyasi bor-yo'qligini tekshiradi. Faqat PC LOCKED holatda
+        # bo'lganda o'rnatadi (mijoz o'ynayotganda uzilish bo'lmasin uchun).
+        self.update_check_timer = QTimer()
+        self.update_check_timer.timeout.connect(self._check_for_update)
+        self.update_check_timer.start(30 * 60 * 1000)
+
         install_keyboard_hook()
         if IS_WINDOWS:
             hide_taskbar()
@@ -1365,6 +1438,15 @@ class ClientLockerApp:
             except Exception as e:
                 print(f"[Screenshot] Yuklashda xato: {e}")
         threading.Thread(target=_upload, daemon=True).start()
+
+    def _check_for_update(self):
+        if self.current_status != 'LOCKED':
+            return  # mijoz o'ynayotganda yangilanish o'rnatilmaydi
+        def _bg():
+            if check_and_apply_update(self.server_url, self.api_key):
+                print("[Update] Yangilanish o'rnatildi — dastur qayta ishga tushirilmoqda...")
+                os._exit(17)
+        threading.Thread(target=_bg, daemon=True).start()
 
     def _load_config(self, path):
         cfg = {"server_url": "http://localhost:8001", "websocket_url": "ws://localhost:8001/ws/pc-status/",
@@ -1579,6 +1661,22 @@ def main():
         print("[UNHANDLED EXCEPTION]")
         traceback.print_exception(exc_type, exc_value, exc_tb)
     sys.excepthook = _excepthook
+
+    # Dastur ishga tushishidan oldin: serverda yangi klient versiyasi
+    # bo'lsa, uni o'rnatib, nolmas kod bilan chiqamiz — watchdog.bat
+    # buni "kutilmagan to'xtash" deb hisoblab, yangi kod bilan qayta
+    # ishga tushiradi (kod 0 bo'lganda esa qayta ishga tushirmas edi).
+    try:
+        with open("config.json", 'r') as f:
+            _cfg = json.load(f)
+        _server_url = _cfg.get("server_url", "").rstrip('/')
+        _api_key = _cfg.get("api_key", "")
+        if _server_url and check_and_apply_update(_server_url, _api_key):
+            sys.exit(17)
+    except SystemExit:
+        raise
+    except Exception as e:
+        print(f"[Update] Ishga tushishda yangilanishni tekshirib bo'lmadi: {e}")
 
     app = QApplication(sys.argv)
     app.setStyleSheet("""

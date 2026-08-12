@@ -41,7 +41,7 @@ import shutil
 import tempfile
 import requests
 
-from PyQt6.QtCore import Qt, QTimer, QEvent, pyqtSignal, QObject, QDate, QByteArray, QBuffer, QIODevice
+from PyQt6.QtCore import Qt, QTimer, QEvent, pyqtSignal, QObject, QDate, QByteArray, QBuffer, QIODevice, QPointF
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel,
     QPushButton, QFrame, QHBoxLayout, QScrollArea, QGridLayout,
@@ -494,9 +494,13 @@ def serif_font(size, weight=QFont.Weight.Bold):
 
 
 class BracketFrame(QFrame):
-    def __init__(self, parent=None, bracket_color=COLOR_CYAN, bracket_len=16, bracket_width=2):
+    """4 burchakli HUD chizig'i. `bracket_color2` berilsa, ikki xil
+    rang navbatma-navbat qo'llaniladi (masalan o'yin kartalarida
+    referens dizayndagi kabi cyan+pushti aralash burchaklar)."""
+    def __init__(self, parent=None, bracket_color=COLOR_CYAN, bracket_color2=None, bracket_len=16, bracket_width=2):
         super().__init__(parent)
         self._bracket_color = QColor(bracket_color)
+        self._bracket_color2 = QColor(bracket_color2) if bracket_color2 else self._bracket_color
         self._bracket_len = bracket_len
         self._bracket_w = bracket_width
 
@@ -511,15 +515,20 @@ class BracketFrame(QFrame):
         w, h = self.width(), self.height()
         seg = self._bracket_len
         m = 2
-        # 4 burchak — HUD uslubidagi "L" shakllar
+        # 4 burchak — HUD uslubidagi "L" shakllar (bosh rang: yuqori-chap, pastki-o'ng)
         painter.drawLine(m, m, m + seg, m)
         painter.drawLine(m, m, m, m + seg)
+        painter.drawLine(w - m, h - m, w - m - seg, h - m)
+        painter.drawLine(w - m, h - m, w - m, h - m - seg)
+        # ikkinchi rang: yuqori-o'ng, pastki-chap
+        pen2 = QPen(self._bracket_color2)
+        pen2.setWidth(self._bracket_w)
+        pen2.setCapStyle(Qt.PenCapStyle.SquareCap)
+        painter.setPen(pen2)
         painter.drawLine(w - m, m, w - m - seg, m)
         painter.drawLine(w - m, m, w - m, m + seg)
         painter.drawLine(m, h - m, m + seg, h - m)
         painter.drawLine(m, h - m, m, h - m - seg)
-        painter.drawLine(w - m, h - m, w - m - seg, h - m)
-        painter.drawLine(w - m, h - m, w - m, h - m - seg)
         painter.end()
 
 
@@ -811,29 +820,214 @@ class LockScreenWidget(QWidget):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+#  5b. DIZAYN TIZIMI — TopBar/sahifa sarlavhalarida qayta ishlatiladigan
+#      kichik widget'lar (referens dizayn: profil kapsulasi, qiya/oval
+#      tab almashtirgichlar, taktik radar bezagi).
+# ──────────────────────────────────────────────────────────────────────────────
+class ProfileCapsule(QFrame):
+    """TopBar'ning o'ng tarafidagi "ALEX_GAMER / STATION #042" ovalsimon
+    kapsulasi — doiraviy avatar + ism/stansiya matni. Bosilganda Kabinet
+    ochiladi."""
+    clicked = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFixedHeight(48)
+        self.setStyleSheet(f"""
+            QFrame {{
+                background: {COLOR_PANEL};
+                border: 1px solid {COLOR_PANEL_BORDER};
+                border-radius: 24px;
+            }}
+        """)
+        lo = QHBoxLayout(self)
+        lo.setContentsMargins(6, 6, 16, 6)
+        lo.setSpacing(10)
+
+        self.avatar = QLabel("?")
+        self.avatar.setFixedSize(36, 36)
+        self.avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.avatar.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        self.avatar.setStyleSheet(f"""
+            color: {COLOR_BG}; border: none;
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {COLOR_CYAN}, stop:1 {COLOR_VIOLET});
+            border-radius: 18px;
+        """)
+        lo.addWidget(self.avatar)
+
+        text_col = QVBoxLayout()
+        text_col.setSpacing(0)
+        self.name_label = QLabel("")
+        self.name_label.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        self.name_label.setStyleSheet("color: #ffffff; background: transparent; border: none;")
+        text_col.addWidget(self.name_label)
+        self.station_label = QLabel("")
+        self.station_label.setFont(QFont("Segoe UI", 8))
+        self.station_label.setStyleSheet("color: #64748b; background: transparent; border: none;")
+        text_col.addWidget(self.station_label)
+        lo.addLayout(text_col)
+
+    def set_data(self, name, station):
+        self.avatar.setText((name or '?')[:1].upper())
+        self.name_label.setText((name or '').upper())
+        self.station_label.setText(station)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(event)
+
+
+class ParallelogramTabBar(QWidget):
+    """GamesPage sarlavhasidagi "GAMES LIBRARY / BAR & SNACKS" qiya
+    (konsol-uslubidagi) tab almashtirgichi. `active_key` shu widget
+    joylashgan sahifaga mos ravishda qat'iy beriladi (masalan
+    GamesPage doim "games"ni faol ko'rsatadi) — bosilganda esa
+    LauncherPage.inner_stack boshqa sahifaga o'tkaziladi."""
+    tab_clicked = pyqtSignal(str)
+    TABS = [("games", "🎮  GAMES LIBRARY"), ("bar", "🍔  BAR & SNACKS")]
+
+    def __init__(self, active_key="games", parent=None):
+        super().__init__(parent)
+        self._active = active_key
+        lo = QHBoxLayout(self)
+        lo.setContentsMargins(0, 0, 0, 0)
+        lo.setSpacing(2)
+        self._buttons = {}
+        for key, label in self.TABS:
+            btn = QPushButton(label)
+            btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFixedHeight(38)
+            btn.setMinimumWidth(160)
+            btn.clicked.connect(lambda _, k=key: self._on_click(k))
+            lo.addWidget(btn)
+            self._buttons[key] = btn
+        self._apply_styles()
+
+    def _on_click(self, key):
+        if key != self._active:
+            self.tab_clicked.emit(key)
+
+    def _apply_styles(self):
+        for key, btn in self._buttons.items():
+            if key == self._active:
+                btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background: {COLOR_PANEL}; color: {COLOR_CYAN};
+                        border: 1px solid {COLOR_CYAN}; border-radius: 6px;
+                    }}
+                """)
+            else:
+                btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background: #0d0f13; color: #64748b;
+                        border: 1px solid {COLOR_PANEL_BORDER}; border-radius: 6px;
+                    }}
+                    QPushButton:hover {{ color: #94a3b8; }}
+                """)
+
+
+class OvalTabBar(QWidget):
+    """BarPage sarlavhasidagi ovalsimon "Games Library / Bar & Snacks"
+    almashtirgichi — ParallelogramTabBar bilan bir xil signal ammo
+    ko'proq yumaloqlashtirilgan (referens dizaynda ikkinchi sahifada
+    bu tablar kichikroq/ovalsimon ko'rinishda)."""
+    tab_clicked = pyqtSignal(str)
+    TABS = [("games", "Games Library"), ("bar", "Bar & Snacks")]
+
+    def __init__(self, active_key="bar", parent=None):
+        super().__init__(parent)
+        self._active = active_key
+        lo = QHBoxLayout(self)
+        lo.setContentsMargins(0, 0, 0, 0)
+        lo.setSpacing(8)
+        self._buttons = {}
+        for key, label in self.TABS:
+            btn = QPushButton(label)
+            btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFixedHeight(32)
+            btn.clicked.connect(lambda _, k=key: self._on_click(k))
+            lo.addWidget(btn)
+            self._buttons[key] = btn
+        self._apply_styles()
+
+    def _on_click(self, key):
+        if key != self._active:
+            self.tab_clicked.emit(key)
+
+    def _apply_styles(self):
+        for key, btn in self._buttons.items():
+            if key == self._active:
+                btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background: {COLOR_PANEL}; color: {COLOR_CYAN};
+                        border: 1px solid {COLOR_CYAN}; border-radius: 16px; padding: 0 16px;
+                    }}
+                """)
+            else:
+                btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background: transparent; color: #64748b;
+                        border: 1px solid {COLOR_PANEL_BORDER}; border-radius: 16px; padding: 0 16px;
+                    }}
+                    QPushButton:hover {{ color: #94a3b8; }}
+                """)
+
+
+class RadarGraphic(QWidget):
+    """"COMMAND CENTER"/"Provisions" sarlavhalari ortidagi taktik radar
+    dekoratsiyasi — sof bezak, hech qanday funksiyaga ega emas."""
+    def __init__(self, size=90, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(size, size)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pen = QPen(QColor(255, 255, 255, 28))
+        pen.setWidth(1)
+        painter.setPen(pen)
+        w, h = self.width(), self.height()
+        cx, cy = w / 2, h / 2
+        for ratio in (0.32, 0.6, 0.9):
+            radius = min(w, h) / 2 * ratio
+            painter.drawEllipse(QPointF(cx, cy), radius, radius)
+        painter.drawLine(0, int(cy), w, int(cy))
+        painter.drawLine(int(cx), 0, int(cx), h)
+        painter.end()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 #  6. TOP BAR
 # ──────────────────────────────────────────────────────────────────────────────
 class TopBar(QFrame):
-    tab_changed = pyqtSignal(str)  # "games" | "bar" | "achievements"
+    """Referens dizayn bo'yicha: chapda logo + balans + qolgan vaqt,
+    o'ngda Yutuqlar havolasi + profil kapsulasi. O'yinlar/Bar orasidagi
+    navigatsiya endi bu yerda EMAS — har bir sahifaning o'z sarlavhasida
+    (ParallelogramTabBar/OvalTabBar) joylashgan."""
+    achievements_requested = pyqtSignal()
     resume_requested = pyqtSignal()
     cabinet_requested = pyqtSignal()
 
     def __init__(self, pc_name="PC-01", parent=None):
         super().__init__(parent)
         self.pc_name = pc_name
-        self._active_tab = "games"
         self.setFixedHeight(84)
-        self.setStyleSheet("""
-            QFrame#topBar {
-                background-color: #0a0e17;
-                border-bottom: 1px solid rgba(255,255,255,0.06);
-            }
+        self.setStyleSheet(f"""
+            QFrame#topBar {{
+                background-color: {COLOR_PANEL};
+                border-bottom: 1px solid {COLOR_PANEL_BORDER};
+            }}
         """)
         self.setObjectName("topBar")
 
         lo = QHBoxLayout(self)
         lo.setContentsMargins(28, 0, 28, 0)
-        lo.setSpacing(24)
+        lo.setSpacing(20)
 
         # Logo
         logo_row = QHBoxLayout()
@@ -843,28 +1037,30 @@ class TopBar(QFrame):
         if os.path.exists(logo_pix_path):
             pix = QPixmap(logo_pix_path)
             if not pix.isNull():
-                logo_label.setPixmap(pix.scaled(38, 38, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+                logo_label.setPixmap(pix.scaled(34, 34, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
         logo_row.addWidget(logo_label)
         title = QLabel("CLUTCH ZONE")
-        title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
+        title.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
         title.setStyleSheet("color: #ffffff; letter-spacing: 1px;")
         logo_row.addWidget(title)
         logo_widget = QWidget()
         logo_widget.setLayout(logo_row)
         lo.addWidget(logo_widget)
 
-        lo.addSpacing(30)
+        lo.addSpacing(20)
 
-        # Nav tabs
-        self.nav_buttons = {}
-        for key, label in [("games", "O'YINLAR"), ("bar", "BAR MENYUSI"), ("achievements", "YUTUQLAR")]:
-            btn = QPushButton(label)
-            btn.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setFlat(True)
-            btn.clicked.connect(lambda _, k=key: self._on_tab_clicked(k))
-            lo.addWidget(btn)
-            self.nav_buttons[key] = btn
+        # Balans (faqat mijoz tizimga kirgan bo'lsa ko'rinadi)
+        self.balance_badge = QLabel("")
+        self.balance_badge.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        self.balance_badge.setStyleSheet(f"color: {COLOR_CYAN};")
+        self.balance_badge.hide()
+        lo.addWidget(self.balance_badge)
+
+        # Qolgan vaqt
+        self.time_badge = QLabel("")
+        self.time_badge.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        self.time_badge.setStyleSheet("color: #94a3b8;")
+        lo.addWidget(self.time_badge)
 
         lo.addStretch(1)
 
@@ -874,80 +1070,61 @@ class TopBar(QFrame):
         self.resume_btn = QPushButton("▶  O'YINGA QAYTISH")
         self.resume_btn.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
         self.resume_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.resume_btn.setStyleSheet("""
-            QPushButton {
-                color: #060911;
-                background: #00f0ff;
+        self.resume_btn.setStyleSheet(f"""
+            QPushButton {{
+                color: {COLOR_BG};
+                background: {COLOR_CYAN};
                 border: none;
                 border-radius: 14px;
                 padding: 8px 18px;
-            }
-            QPushButton:hover { background: #4df6ff; }
+            }}
+            QPushButton:hover {{ background: #4df6ff; }}
         """)
         self.resume_btn.clicked.connect(self.resume_requested.emit)
         self.resume_btn.hide()
         lo.addWidget(self.resume_btn)
 
+        # Yutuqlar — referens dizaynda alohida ko'rsatilmagan, lekin
+        # mavjud funksiyani yo'qotmaslik uchun kichik ikonka-tugma
+        # sifatida saqlab qolinadi.
+        self.achievements_btn = QPushButton("🏆")
+        self.achievements_btn.setFont(QFont("Segoe UI", 13))
+        self.achievements_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.achievements_btn.setFixedSize(38, 38)
+        self.achievements_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {COLOR_INPUT_BG}; border: 1px solid {COLOR_INPUT_BORDER};
+                border-radius: 19px;
+            }}
+            QPushButton:hover {{ border: 1px solid {COLOR_CYAN}; }}
+        """)
+        self.achievements_btn.clicked.connect(self.achievements_requested.emit)
+        lo.addWidget(self.achievements_btn)
+
         # Mijoz kabineti — faqat kimdir qulf ekranida tizimga kirgan
         # bo'lsa ko'rinadi (odatiy holatda yashirin).
-        self.cabinet_btn = QPushButton("👤  KABINET")
-        self.cabinet_btn.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        self.cabinet_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.cabinet_btn.setStyleSheet("""
-            QPushButton {
-                color: #e2e8f0;
-                background: rgba(255,255,255,0.06);
-                border: 1px solid rgba(255,255,255,0.15);
-                border-radius: 14px;
-                padding: 8px 16px;
-            }
-            QPushButton:hover { background: rgba(255,255,255,0.12); }
-        """)
-        self.cabinet_btn.clicked.connect(self.cabinet_requested.emit)
-        self.cabinet_btn.hide()
-        lo.addWidget(self.cabinet_btn)
-
-        # Clock
-        clock_box = QVBoxLayout()
-        clock_box.setSpacing(0)
-        self.clock_label = QLabel("00:00")
-        self.clock_label.setFont(QFont("Consolas", 16, QFont.Weight.Bold))
-        self.clock_label.setStyleSheet("color: #00f0ff;")
-        self.clock_label.setAlignment(Qt.AlignmentFlag.AlignRight)
-        clock_box.addWidget(self.clock_label)
-        loc = QLabel("TASHKENT, UZ")
-        loc.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
-        loc.setStyleSheet("color: #00f0ff; letter-spacing: 1px;")
-        loc.setAlignment(Qt.AlignmentFlag.AlignRight)
-        clock_box.addWidget(loc)
-        clock_widget = QWidget()
-        clock_widget.setLayout(clock_box)
-        lo.addWidget(clock_widget)
-
-        self._clock_timer = QTimer(self)
-        self._clock_timer.timeout.connect(self._update_clock)
-        self._clock_timer.start(1000)
-        self._update_clock()
+        self.cabinet_capsule = ProfileCapsule()
+        self.cabinet_capsule.clicked.connect(self.cabinet_requested.emit)
+        self.cabinet_capsule.hide()
+        lo.addWidget(self.cabinet_capsule)
 
         # PC status pill
         self.status_pill = QLabel(f"{self.pc_name} · ACTIVE")
         self.status_pill.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        self.status_pill.setStyleSheet("""
-            color: #00f0ff;
-            background: rgba(0,240,255,0.08);
-            border: 1px solid rgba(0,240,255,0.35);
+        self.status_pill.setStyleSheet(f"""
+            color: {COLOR_CYAN};
+            background: rgba(0,243,255,0.08);
+            border: 1px solid rgba(0,243,255,0.35);
             border-radius: 14px;
             padding: 8px 16px;
         """)
         lo.addWidget(self.status_pill)
 
-        self._apply_tab_styles()
-
-    def _update_clock(self):
-        self.clock_label.setText(time.strftime("%H:%M"))
-
     def set_status(self, pc_name, status_text):
         self.status_pill.setText(f"{pc_name} · {status_text}")
+
+    def set_time_remaining(self, text):
+        self.time_badge.setText(f"⏱  {text}" if text else "")
 
     def set_running_game(self, name):
         if name:
@@ -958,23 +1135,17 @@ class TopBar(QFrame):
 
     def set_logged_in_customer(self, data):
         if data:
-            first_name = (data.get('full_name') or '').split(' ')[0]
-            self.cabinet_btn.setText(f"👤  {first_name.upper()}")
-            self.cabinet_btn.show()
+            try:
+                balance = float(data.get('balance', 0))
+            except (TypeError, ValueError):
+                balance = 0
+            self.balance_badge.setText(f"💳  {balance:,.0f} UZS")
+            self.balance_badge.show()
+            self.cabinet_capsule.set_data(data.get('full_name', ''), f"STATION {self.pc_name}")
+            self.cabinet_capsule.show()
         else:
-            self.cabinet_btn.hide()
-
-    def _on_tab_clicked(self, key):
-        self._active_tab = key
-        self._apply_tab_styles()
-        self.tab_changed.emit(key)
-
-    def _apply_tab_styles(self):
-        for key, btn in self.nav_buttons.items():
-            if key == self._active_tab:
-                btn.setStyleSheet("QPushButton { color: #ffffff; border: none; } QPushButton:hover { color: #00f0ff; }")
-            else:
-                btn.setStyleSheet("QPushButton { color: #64748b; border: none; } QPushButton:hover { color: #94a3b8; }")
+            self.balance_badge.hide()
+            self.cabinet_capsule.hide()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1525,7 +1696,7 @@ class GameCard(BracketFrame):
     launch_requested = pyqtSignal(dict)
 
     def __init__(self, game, parent=None):
-        super().__init__(bracket_color=COLOR_CYAN, bracket_len=12)
+        super().__init__(bracket_color=COLOR_CYAN, bracket_color2=COLOR_ROSE, bracket_len=12)
         self.game = game
         self.setFixedWidth(260)
         self.setObjectName("gameCard")
@@ -1602,6 +1773,7 @@ class GameCard(BracketFrame):
 # ──────────────────────────────────────────────────────────────────────────────
 class GamesPage(QWidget):
     game_launch_requested = pyqtSignal(dict)
+    tab_switch_requested = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1614,7 +1786,7 @@ class GamesPage(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # Sahifa sarlavhasi
+        # Sahifa sarlavhasi + taktik radar bezagi + SYS.ONLINE teg
         header_row = QHBoxLayout()
         header_row.setContentsMargins(28, 20, 28, 4)
         title_row = QHBoxLayout()
@@ -1628,6 +1800,7 @@ class GamesPage(QWidget):
         title_row.addWidget(page_title)
         header_row.addLayout(title_row)
         header_row.addStretch(1)
+        header_row.addWidget(RadarGraphic(size=70))
         online_tag = QLabel("SYS.ONLINE")
         online_tag.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
         online_tag.setStyleSheet("""
@@ -1639,6 +1812,17 @@ class GamesPage(QWidget):
         header_widget0 = QWidget()
         header_widget0.setLayout(header_row)
         root.addWidget(header_widget0)
+
+        # Sahifa almashtirgichi (GAMES LIBRARY / BAR & SNACKS)
+        switcher_row = QHBoxLayout()
+        switcher_row.setContentsMargins(28, 8, 28, 0)
+        self.page_tabs = ParallelogramTabBar(active_key="games")
+        self.page_tabs.tab_clicked.connect(self.tab_switch_requested.emit)
+        switcher_row.addWidget(self.page_tabs)
+        switcher_row.addStretch(1)
+        switcher_widget = QWidget()
+        switcher_widget.setLayout(switcher_row)
+        root.addWidget(switcher_widget)
 
         # Category filter row
         cat_row = QHBoxLayout()
@@ -1829,6 +2013,7 @@ class BarPage(QWidget):
     # create_order_async'ning on_done callback'i fon oqimidan chaqiriladi —
     # shu signal orqali natija xavfsiz tarzda GUI oqimiga uzatiladi.
     _order_result = pyqtSignal(bool, dict)
+    tab_switch_requested = pyqtSignal(str)
 
     def __init__(self, api_client, pc_name, parent=None):
         super().__init__(parent)
@@ -1844,11 +2029,20 @@ class BarPage(QWidget):
 
         header = QHBoxLayout()
         header.setContentsMargins(28, 20, 28, 4)
+        header.setSpacing(10)
         title = QLabel("Provisions")
         title.setFont(serif_font(26))
         title.setStyleSheet("color: #ffffff; letter-spacing: 1px;")
         header.addWidget(title)
+        dot = QLabel("●")
+        dot.setStyleSheet(f"color: {COLOR_ROSE}; font-size: 12px;")
+        header.addWidget(dot, 0, Qt.AlignmentFlag.AlignTop)
         header.addStretch(1)
+
+        self.page_tabs = OvalTabBar(active_key="bar")
+        self.page_tabs.tab_clicked.connect(self.tab_switch_requested.emit)
+        header.addWidget(self.page_tabs)
+        header.addSpacing(10)
 
         self.total_label = QLabel("Jami: 0 so'm")
         self.total_label.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
@@ -1972,10 +2166,33 @@ class BarPage(QWidget):
 #  11. ACHIEVEMENTS PAGE (placeholder)
 # ──────────────────────────────────────────────────────────────────────────────
 class AchievementsPage(QWidget):
+    # Bu sahifa TopBar'dagi 🏆 ikonkasi orqali ochiladi (page-local
+    # tab almashtirgichlari ichida "Yutuqlar" yo'q) — shuning uchun
+    # o'zining "orqaga" tugmasi kerak, aks holda foydalanuvchi
+    # Games/Bar'ga qaytish imkoniyatisiz qolib ketadi.
+    back_requested = pyqtSignal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setStyleSheet("background-color: #060911;")
-        lo = QVBoxLayout(self)
+        self.setStyleSheet(f"background-color: {COLOR_BG};")
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(28, 20, 28, 20)
+
+        back_btn = QPushButton("←  ORQAGA")
+        back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        back_btn.setFixedHeight(30)
+        back_btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        back_btn.setStyleSheet("""
+            QPushButton { background: transparent; color: #94a3b8; border: none; text-align: left; }
+            QPushButton:hover { color: #e2e8f0; }
+        """)
+        back_btn.clicked.connect(self.back_requested.emit)
+        back_row = QHBoxLayout()
+        back_row.addWidget(back_btn)
+        back_row.addStretch(1)
+        outer.addLayout(back_row)
+
+        lo = QVBoxLayout()
         lo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         icon = QLabel("🏆")
         icon.setFont(QFont("Segoe UI", 54))
@@ -1986,6 +2203,7 @@ class AchievementsPage(QWidget):
         text.setStyleSheet("color: #94a3b8;")
         text.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lo.addWidget(text)
+        outer.addLayout(lo, 1)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -2090,7 +2308,7 @@ class LauncherPage(QWidget):
         root.setSpacing(0)
 
         self.top_bar = TopBar(pc_name=pc_name)
-        self.top_bar.tab_changed.connect(self._switch_tab)
+        self.top_bar.achievements_requested.connect(lambda: self._switch_tab("achievements"))
         self.top_bar.resume_requested.connect(self.resume_requested.emit)
         self.top_bar.cabinet_requested.connect(self._open_cabinet)
         root.addWidget(self.top_bar)
@@ -2098,8 +2316,11 @@ class LauncherPage(QWidget):
         self.inner_stack = QStackedWidget()
         self.games_page = GamesPage()
         self.games_page.game_launch_requested.connect(self.game_launch_requested.emit)
+        self.games_page.tab_switch_requested.connect(self._switch_tab)
         self.bar_page = BarPage(api_client=api_client, pc_name=pc_name)
+        self.bar_page.tab_switch_requested.connect(self._switch_tab)
         self.achievements_page = AchievementsPage()
+        self.achievements_page.back_requested.connect(lambda: self._switch_tab("games"))
         self.cabinet_page = CustomerCabinetPage(api_client=api_client)
         self.cabinet_page.stop_session_requested.connect(self.cabinet_stop_requested.emit)
         self.cabinet_page.back_requested.connect(self._close_cabinet)
@@ -2138,6 +2359,9 @@ class LauncherPage(QWidget):
 
     def set_pc_status(self, pc_name, status_text):
         self.top_bar.set_status(pc_name, status_text)
+
+    def set_time_remaining(self, text):
+        self.top_bar.set_time_remaining(text)
 
     def set_running_game(self, name):
         self.top_bar.set_running_game(name)
@@ -2298,6 +2522,7 @@ class MainWindow(FullscreenMixin, QMainWindow):
         s = seconds % 60
         status = f"ACTIVE · {h:02d}:{m:02d}:{s:02d}"
         self.launcher_page.set_pc_status(self.pc_name, status)
+        self.launcher_page.set_time_remaining(f"{h:02d}h {m:02d}m")
 
     def show_launch_error(self, msg="O'yin fayli topilmadi"):
         self.launcher_page.show_launch_error(msg)

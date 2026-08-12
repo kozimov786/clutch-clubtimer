@@ -1651,11 +1651,33 @@ class ClientLockerApp:
 #  ENTRY POINT
 # ──────────────────────────────────────────────────────────────────────────────
 def main():
+    # Production kiosk rejimida hech qanday qora konsol oynasi
+    # ko'rinmasligi kerak (u locker oynasi ustiga chiqib, mijozga
+    # ko'rinib qolishi mumkin edi). Shuning uchun: (1) barcha
+    # print()/xato chiqishini konsol o'rniga log faylga yo'naltiramiz,
+    # (2) konsol oynasining o'zini yashiramiz. Log fayl keyinroq
+    # muammoni tekshirish uchun kerak bo'ladi (client_locker.log).
+    if IS_WINDOWS:
+        try:
+            log_path = os.path.join(CLIENT_DIR, "client_locker.log")
+            log_file = open(log_path, "a", buffering=1, encoding="utf-8")
+            sys.stdout = log_file
+            sys.stderr = log_file
+            print(f"\n===== {time.strftime('%Y-%m-%d %H:%M:%S')} — ishga tushdi =====")
+        except Exception:
+            pass
+        try:
+            hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+            if hwnd:
+                ctypes.windll.user32.ShowWindow(hwnd, 0)  # SW_HIDE
+        except Exception:
+            pass
+
     # PyQt6 ba'zan Qt slot/callback ichidagi Python xatosini konsolga chiqarmasdan
     # yutib yuborishi mumkin — bu esa "sababsiz" shaffof/qotgan oyna kabi
     # tashxis qo'yish qiyin bo'lgan holatlarga olib kelishi mumkin. Har qanday
-    # ushlanmagan xato albatta konsolga to'liq traceback bilan chiqishini
-    # kafolatlaymiz.
+    # ushlanmagan xato albatta konsolga (endi — log faylga) to'liq traceback
+    # bilan chiqishini kafolatlaymiz.
     def _excepthook(exc_type, exc_value, exc_tb):
         import traceback
         print("[UNHANDLED EXCEPTION]")

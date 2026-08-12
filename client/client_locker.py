@@ -2377,7 +2377,7 @@ class ClientLockerApp:
                 False, {"error": "Server bilan hali sinxronlanmoqda, biroz kuting va qayta urinib ko'ring."}
             )
             return
-        self.api_client.customer_start_session_async(
+        self.main_window.api_client.customer_start_session_async(
             self.pc_id, customer_id,
             on_done=lambda ok, data: self.main_window.lock_page.unlock_result_ready.emit(ok, data)
         )

@@ -1006,9 +1006,16 @@ class RunningAppsBar(QFrame):
         self._layout.addWidget(tag)
 
         for a in apps:
-            btn = QPushButton(f"🎮  {a['label']}")
+            icon_pixmap = a.get('icon')
+            btn = QPushButton()
             btn.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            if icon_pixmap:
+                btn.setIcon(QIcon(icon_pixmap))
+                btn.setIconSize(icon_pixmap.rect().size())
+                btn.setText(f"  {a['label']}")
+            else:
+                btn.setText(f"🎮  {a['label']}")
             btn.setStyleSheet("""
                 QPushButton {
                     color: #e2e8f0;
@@ -1374,13 +1381,7 @@ if IS_WINDOWS:
     ]
     kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
 
-    def _get_process_exe_name(pid):
-        """PID'ga tegishli .exe faylining nomini qaytaradi (masalan
-        'steam.exe') — Steam kabi ilovalar ko'pincha yangi ishga
-        tushirilgan jarayonni allaqachon ochiq turgan asosiy nusxaga
-        signal berib, o'zi darhol chiqib ketadi (shuning uchun asl PID
-        bo'yicha oyna qidirish natija bermaydi) — bunday holatda exe
-        nomi bo'yicha qidirish kerak bo'ladi."""
+    def _get_process_full_path(pid):
         h = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
         if not h:
             return None
@@ -1388,16 +1389,47 @@ if IS_WINDOWS:
             buf = ctypes.create_unicode_buffer(260)
             size = wintypes.DWORD(260)
             if kernel32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
-                return os.path.basename(buf.value)
+                return buf.value
         except Exception:
             pass
         finally:
             kernel32.CloseHandle(h)
         return None
 
+    def _get_process_exe_name(pid):
+        """PID'ga tegishli .exe faylining nomini qaytaradi (masalan
+        'steam.exe') — Steam kabi ilovalar ko'pincha yangi ishga
+        tushirilgan jarayonni allaqachon ochiq turgan asosiy nusxaga
+        signal berib, o'zi darhol chiqib ketadi (shuning uchun asl PID
+        bo'yicha oyna qidirish natija bermaydi) — bunday holatda exe
+        nomi bo'yicha qidirish kerak bo'ladi."""
+        path = _get_process_full_path(pid)
+        return os.path.basename(path) if path else None
+
+    _WINDIR = os.environ.get('WINDIR', r'C:\Windows').lower()
+
+    def _is_windows_system_process(pid):
+        """C:\\Windows ostidan ishga tushirilgan jarayonlar (Sozlamalar,
+        ApplicationFrameHost, qidiruv va h.k.) — foydalanuvchi hech
+        qachon "o'yin/dastur" deb o'ylamaydigan, "ishlab turgan
+        dasturlar" panjarasida ko'rinmasligi kerak bo'lgan tizim
+        jarayonlari. Bu — qattiq kodlangan nom ro'yxatidan ko'ra
+        umumiyroq va kelajakda paydo bo'ladigan shunga o'xshash
+        jarayonlarni ham avtomatik qamrab oladi."""
+        path = _get_process_full_path(pid)
+        return bool(path) and path.lower().startswith(_WINDIR)
+
     _IGNORED_FALLBACK_EXES = {
         'explorer.exe', 'clutch-zone', 'python.exe', 'pythonw.exe',
         'searchhost.exe', 'shellexperiencehost.exe', 'textinputhost.exe',
+        # Steam/GPU-drayver fon yordamchi jarayonlari — mijoz "dastur"
+        # deb o'ylamaydigan, alohida oynasi bo'lmasligi kerak bo'lgan
+        # jarayonlar (ba'zan yashirin/nolinchi oynasi ko'rinib qolishi
+        # mumkin edi).
+        'steamwebhelper.exe', 'steamservice.exe', 'gameoverlayui.exe',
+        'windowsterminal.exe', 'openconsole.exe',
+        'nvcontainer.exe', 'nvidia share.exe', 'nvsphelper64.exe',
+        'nvbackend.exe', 'nvdisplay.container.exe',
     }
 
     def _find_window_for_pid(pid, exe_name=None, own_hwnd=None, timeout=10.0):
@@ -1429,7 +1461,8 @@ if IS_WINDOWS:
             if exe_name and win_exe == exe_name:
                 result.append(hwnd)
                 return False
-            if not fallback and (win_exe or '').lower() not in _IGNORED_FALLBACK_EXES:
+            if (not fallback and (win_exe or '').lower() not in _IGNORED_FALLBACK_EXES
+                    and not _is_windows_system_process(proc_id.value)):
                 fallback.append(hwnd)
             return True
 
@@ -1486,6 +1519,91 @@ if IS_WINDOWS:
         base = os.path.splitext(exe_name)[0]
         return base[:16].upper()
 
+    # ── .exe faylidan ikonka olib, "ishlab turgan dasturlar" panjarasida
+    #    matn o'rniga haqiqiy dastur belgisini ko'rsatish uchun ──
+    shell32 = ctypes.WinDLL('shell32', use_last_error=True)
+    gdiplus = ctypes.WinDLL('gdiplus', use_last_error=True)
+    shell32.ExtractIconExW.restype = wintypes.UINT
+    shell32.ExtractIconExW.argtypes = [
+        ctypes.c_wchar_p, ctypes.c_int,
+        ctypes.POINTER(ctypes.c_void_p), ctypes.POINTER(ctypes.c_void_p), wintypes.UINT
+    ]
+    user32.DestroyIcon.restype = wintypes.BOOL
+    user32.DestroyIcon.argtypes = [ctypes.c_void_p]
+
+    class _GdiplusStartupInput(ctypes.Structure):
+        _fields_ = [
+            ("GdiplusVersion", ctypes.c_uint32),
+            ("DebugEventCallback", ctypes.c_void_p),
+            ("SuppressBackgroundThread", ctypes.c_int),
+            ("SuppressExternalCodecs", ctypes.c_int),
+        ]
+
+    class _GUID(ctypes.Structure):
+        _fields_ = [
+            ("Data1", ctypes.c_ulong), ("Data2", ctypes.c_ushort),
+            ("Data3", ctypes.c_ushort), ("Data4", ctypes.c_ubyte * 8),
+        ]
+
+    _PNG_CLSID = _GUID(0x557cf406, 0x1a04, 0x11d3,
+                        (ctypes.c_ubyte * 8)(0x9a, 0x73, 0x00, 0x00, 0xf8, 0x1e, 0xf3, 0x2e))
+    _gdiplus_token = ctypes.c_ulong(0)
+    _gdiplus_ready = False
+    try:
+        _gdi_startup_input = _GdiplusStartupInput(1, None, 0, 0)
+        _gdi_status = gdiplus.GdiplusStartup(ctypes.byref(_gdiplus_token), ctypes.byref(_gdi_startup_input), None)
+        _gdiplus_ready = (_gdi_status == 0)
+    except Exception as e:
+        print(f"[Icon] GDI+ ishga tushmadi (ikonkalar matn bilan almashtiriladi): {e}")
+
+    _icon_pixmap_cache = {}
+
+    def _get_app_icon_pixmap(exe_path):
+        """.exe fayldan kichik ikonkani QPixmap sifatida qaytaradi.
+        Har qanday xatoda (kutilmagan format, GDI+ muammosi va h.k.)
+        jim ravishda None qaytaradi — chaqiruvchi bunday holda emoji/
+        matn bilan almashtiradi, hech qachon dasturni yiqitmaydi."""
+        if not exe_path or not _gdiplus_ready:
+            return None
+        if exe_path in _icon_pixmap_cache:
+            return _icon_pixmap_cache[exe_path]
+        pixmap = None
+        large = (ctypes.c_void_p * 1)()
+        small = (ctypes.c_void_p * 1)()
+        hicon = None
+        try:
+            n = shell32.ExtractIconExW(ctypes.c_wchar_p(exe_path), 0, large, small, 1)
+            hicon = small[0] or large[0]
+            if n and hicon:
+                tmp_path = os.path.join(
+                    tempfile.gettempdir(), f"cz_icon_{abs(hash(exe_path))}.png"
+                )
+                bitmap_ptr = ctypes.c_void_p()
+                status = gdiplus.GdipCreateBitmapFromHICON(hicon, ctypes.byref(bitmap_ptr))
+                if status == 0 and bitmap_ptr:
+                    try:
+                        status2 = gdiplus.GdipSaveImageToFile(
+                            bitmap_ptr, ctypes.c_wchar_p(tmp_path), ctypes.byref(_PNG_CLSID), None
+                        )
+                        if status2 == 0 and os.path.exists(tmp_path):
+                            pix = QPixmap(tmp_path)
+                            if not pix.isNull():
+                                pixmap = pix
+                    finally:
+                        gdiplus.GdipDisposeImage(bitmap_ptr)
+        except Exception as e:
+            print(f"[Icon] {exe_path}: {e}")
+        finally:
+            try:
+                if small[0]:
+                    user32.DestroyIcon(small[0])
+                if large[0] and large[0] != small[0]:
+                    user32.DestroyIcon(large[0])
+            except Exception:
+                pass
+        _icon_pixmap_cache[exe_path] = pixmap
+        return pixmap
+
     def enumerate_running_apps(own_hwnd=None):
         """Ekranda hozir ko'rinadigan barcha top-level oynalarni (bizniki
         va ma'lum tizim jarayonlaridan tashqari) exe nomi bo'yicha
@@ -1506,11 +1624,18 @@ if IS_WINDOWS:
                 return True
             proc_id = wintypes.DWORD()
             user32.GetWindowThreadProcessId(hwnd, ctypes.byref(proc_id))
-            exe = _get_process_exe_name(proc_id.value)
+            full_path = _get_process_full_path(proc_id.value)
+            exe = os.path.basename(full_path) if full_path else None
             if not exe or exe.lower() in _IGNORED_FALLBACK_EXES:
                 return True
+            if full_path and full_path.lower().startswith(_WINDIR):
+                return True
             if exe not in apps:
-                apps[exe] = {'hwnd': hwnd, 'pid': proc_id.value, 'label': _friendly_app_label(exe)}
+                apps[exe] = {
+                    'hwnd': hwnd, 'pid': proc_id.value,
+                    'label': _friendly_app_label(exe),
+                    'icon': _get_app_icon_pixmap(full_path),
+                }
             return True
 
         WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
@@ -1567,6 +1692,7 @@ else:
 # ──────────────────────────────────────────────────────────────────────────────
 class SyncSignals(QObject):
     status_updated = pyqtSignal(dict)
+    status_resync = pyqtSignal(dict)
     bar_order_updated = pyqtSignal(dict)
 
 
@@ -1575,6 +1701,7 @@ class ClientLockerApp:
         self._load_config(config_path)
         self.signals = SyncSignals()
         self.signals.status_updated.connect(self._handle_status)
+        self.signals.status_resync.connect(self._handle_status_resync)
         self.signals.bar_order_updated.connect(self._handle_bar_order)
         self.launched_processes = []
         self.current_status = 'LOCKED'
@@ -1769,6 +1896,25 @@ class ClientLockerApp:
             if self.current_status != 'LOCKED':
                 self._lock()
 
+    def _handle_status_resync(self, data):
+        """WebSocket ulangan paytda heartbeat shu yerga yo'naltiriladi
+        (_run_sync'ga qarang) — LOCK/UNLOCK holatini ATAYLAB
+        o'ZGARTIRMAYDI (buni faqat WebSocket qiladi, aks holda eski
+        miltillash muammosi qaytadi). Lekin time_remaining'ni serverdagi
+        haqiqiy qiymat bilan davriy moslab turadi — aks holda mahalliy
+        soniyalik hisoblagich (_tick) hech kim tomonidan tuzatilmay,
+        asta-sekin haqiqiy vaqtdan chalg'ib ketib, seans hali server
+        tomonda faol bo'lsa ham muddatidan oldin o'zi qulflab qo'yishi
+        mumkin edi."""
+        new_status = data.get('status', 'LOCKED')
+        if self.current_status not in ('ACTIVE', 'WARNING') or new_status not in ('ACTIVE', 'WARNING'):
+            return
+        self.time_remaining = data.get('time_remaining', self.time_remaining)
+        self.is_open_time = data.get('is_open_time', self.is_open_time)
+        self.main_window.update_timer(self.time_remaining)
+        if data.get('id'):
+            self.pc_id = data.get('id')
+
     def _handle_bar_order(self, data): pass
 
     def _unlock(self):
@@ -1901,7 +2047,7 @@ class ClientLockerApp:
         found = enumerate_running_apps(own_hwnd=own_hwnd)
         if set(found.keys()) != set(self.running_apps.keys()):
             self.running_apps = found
-            apps_list = [{'exe': exe, 'label': info['label']} for exe, info in found.items()]
+            apps_list = [{'exe': exe, 'label': info['label'], 'icon': info.get('icon')} for exe, info in found.items()]
             self.main_window.set_running_apps(apps_list)
         else:
             self.running_apps = found  # hwnd/pid yangilanishi mumkin
@@ -1960,20 +2106,28 @@ class ClientLockerApp:
                     headers=headers, timeout=4
                 )
                 if r.status_code == 200:
-                    # WebSocket ulangan bo'lsa, holat yangilanishlari shu
-                    # yerdan emas, real-vaqtli push orqali keladi — aks
-                    # holda kechikkan heartbeat javobi eski holatni qayta
-                    # tiklab, ekranda miltillashga sabab bo'lishi mumkin edi.
-                    # Lekin BIRINCHI marta sinxronlash — bundan mustasno:
-                    # WebSocket ulangan bo'lsa ham, agar hali birorta ham
-                    # haqiqiy holat kelmagan bo'lsa (masalan dastur endigina
-                    # ishga tushdi, seans esa undan OLDIN faol bo'lgan),
-                    # baribir shu javobni qabul qilamiz — aks holda dastur
+                    # WebSocket ulangan bo'lsa, LOCK/UNLOCK holat
+                    # o'tishlari shu yerdan emas, real-vaqtli push orqali
+                    # keladi — aks holda kechikkan heartbeat javobi eski
+                    # holatni qayta tiklab, ekranda miltillashga sabab
+                    # bo'lishi mumkin edi. Lekin BIRINCHI marta
+                    # sinxronlash — bundan mustasno: WebSocket ulangan
+                    # bo'lsa ham, agar hali birorta ham haqiqiy holat
+                    # kelmagan bo'lsa (masalan dastur endigina ishga
+                    # tushdi, seans esa undan OLDIN faol bo'lgan), baribir
+                    # shu javobni qabul qilamiz — aks holda dastur
                     # haqiqatda ACTIVE bo'lgan seansni hech qachon
                     # bilmasdan, doimiy LOCKED holatda qolib ketishi mumkin.
                     if not self.ws_connected or not self._got_initial_sync:
                         self.signals.status_updated.emit(r.json())
                         self._got_initial_sync = True
+                    else:
+                        # LOCK/UNLOCK'ga tegmasdan, faqat time_remaining'ni
+                        # serverdagi haqiqiy qiymat bilan moslab turadi —
+                        # aks holda mahalliy soniyalik hisoblagich
+                        # tuzatilmay, seans hali faol bo'lsa ham
+                        # muddatidan oldin o'zi qulflab qo'yishi mumkin edi.
+                        self.signals.status_resync.emit(r.json())
                 elif r.status_code in (401, 403):
                     print(f"[Heartbeat] Ruxsat rad etildi ({r.status_code}) — "
                           f"config.json'dagi api_key server bilan mos kelmayapti.")

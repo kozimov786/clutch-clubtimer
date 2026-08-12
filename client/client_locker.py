@@ -1217,11 +1217,46 @@ if IS_WINDOWS:
             if attached:
                 user32.AttachThreadInput(fg_thread, current_thread, False)
         print(f"[Launcher] O'yin oynasi (hwnd={hwnd}, pid={pid}) old planga chiqarildi")
+
+    # ── Windows taskbar'ni yashirish/qaytarish ──
+    # To'liq ekranli, "har doim tepada" oyna bo'lsa ham, sichqonchani
+    # ekranning eng pastki chetiga olib borilsa, Windows taskbar'ni
+    # avtomatik "chiqarib yuboradi" — bu hatto topmost oynalar ustidan
+    # ham ko'rinadi. Kiosk-rejim uchun standart yechim: taskbar oynasini
+    # (Shell_TrayWnd) dastur ishlab turgan davrda butunlay yashirish.
+    user32.FindWindowW.restype = ctypes.c_void_p
+    user32.FindWindowW.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p]
+    SW_HIDE = 0
+    SW_SHOW = 5
+
+    def _taskbar_hwnds():
+        hwnds = []
+        primary = user32.FindWindowW("Shell_TrayWnd", None)
+        if primary:
+            hwnds.append(primary)
+        secondary = user32.FindWindowW("Shell_SecondaryTrayWnd", None)
+        if secondary:
+            hwnds.append(secondary)
+        return hwnds
+
+    def hide_taskbar():
+        hwnds = _taskbar_hwnds()
+        for hwnd in hwnds:
+            user32.ShowWindow(hwnd, SW_HIDE)
+        print(f"[Taskbar] Yashirildi ({len(hwnds)} ta oyna)")
+
+    def show_taskbar():
+        hwnds = _taskbar_hwnds()
+        for hwnd in hwnds:
+            user32.ShowWindow(hwnd, SW_SHOW)
+        print(f"[Taskbar] Qaytarildi ({len(hwnds)} ta oyna)")
 else:
     def install_keyboard_hook():   print("[Hook] enabled (sim)")
     def uninstall_keyboard_hook(): print("[Hook] disabled (sim)")
     def register_global_hotkeys(app): pass
     def bring_process_window_to_front(pid, timeout=10.0): pass
+    def hide_taskbar(): pass
+    def show_taskbar(): pass
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1257,6 +1292,8 @@ class ClientLockerApp:
         self.hotkey_timer.start(250)
 
         install_keyboard_hook()
+        if IS_WINDOWS:
+            hide_taskbar()
         self.main_window.switch_to_lock()
 
         threading.Thread(target=self._run_sync, daemon=True).start()
@@ -1266,6 +1303,8 @@ class ClientLockerApp:
         if EMERGENCY_UNLOCK_REQUESTED:
             print("[Emergency] Ctrl+Alt+Shift+U yoki Ctrl+Shift+P aniqlandi — kiosk rejimi o'chirilmoqda")
             uninstall_keyboard_hook()
+            if IS_WINDOWS:
+                show_taskbar()
             os._exit(0)
         if SHOW_LAUNCHER_REQUESTED:
             SHOW_LAUNCHER_REQUESTED = False
@@ -1313,8 +1352,12 @@ class ClientLockerApp:
     def _handle_bar_order(self, data): pass
 
     def _unlock(self):
+        # Alt+Tab/Win/Alt+F4/Alt+Esc bloklash ENDI ACTIVE holatda ham
+        # o'chirilmaydi — F9/Ctrl+Shift+P global hotkeylar orqali
+        # menyuga/Windows'ga qaytish allaqachon ishlaydi, shuning uchun
+        # Alt+Tab'ga hojat yo'q va mijoz undan ish stoliga chiqish uchun
+        # foydalana olmasligi kerak.
         print("[Locker] UNLOCK -> Launcher")
-        uninstall_keyboard_hook()
         self.main_window.load_games()
         self.main_window.switch_to_launcher()
         self.main_window.force_native_fullscreen()
@@ -1326,7 +1369,6 @@ class ClientLockerApp:
         self.time_remaining = 0
         self.main_window.switch_to_lock()
         self.main_window.force_native_fullscreen()
-        install_keyboard_hook()
         self._kill_games()
 
     def _kill_games(self):

@@ -191,9 +191,15 @@ def _on_image_loaded(label, data):
         if pixmap.loadFromData(data):
             target_w = label.width() if label.width() > 0 else 280
             target_h = label.height() if label.height() > 0 else 150
+            # KeepAspectRatio ("object-fit: contain") — rasm butunlay
+            # ko'rinadi, hech qismi kesilmaydi. Oldin
+            # KeepAspectRatioByExpanding ishlatilgan edi ("cover"), bu esa
+            # nisbati mos kelmagan rasmlarni kuchli kattalashtirib,
+            # ko'pini kesib tashlar edi (xira/juda yaqinlashtirilgan
+            # ko'rinish sababi shu edi).
             scaled = pixmap.scaled(
                 target_w, target_h,
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation
             )
             label.setPixmap(scaled)
@@ -3174,8 +3180,19 @@ class ClientLockerApp:
     def _kill_games(self):
         for proc in self.launched_processes:
             try:
-                proc.terminate()
-                proc.kill()
+                if IS_WINDOWS:
+                    # /T — butun jarayon DARAXTINI o'chiradi. .bat fayl
+                    # orqali ishga tushirilgan o'yinlarda (masalan CS 1.6)
+                    # bizga ma'lum bo'lgan PID aslida cmd.exe'niki bo'ladi,
+                    # haqiqiy o'yin jarayoni esa uning FARZANDI — oddiy
+                    # proc.kill() faqat cmd.exe'ni o'chiradi, o'yin esa
+                    # orqa fonda ishlab qolib ketadi va keyingi safar
+                    # "faqat bitta nusxa ishlashi mumkin" xatosi bilan
+                    # ochilmay qoladi.
+                    subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True)
+                else:
+                    proc.terminate()
+                    proc.kill()
             except Exception as e:
                 print(f"[Cleanup] {e}")
         self.launched_processes.clear()
@@ -3184,8 +3201,14 @@ class ClientLockerApp:
         self.current_game_exe = None
         self.main_window.set_running_game(None)
         if IS_WINDOWS:
+            # Qo'shimcha xavfsizlik to'ri — Steam kabi ba'zi ilovalar
+            # yangi jarayonni butunlay mustaqil (bizning jarayon
+            # daraxtimizdan tashqarida) ochib, o'zi darhol chiqib
+            # ketishi mumkin, bunday holda yuqoridagi /T ham yordam
+            # bermaydi, shuning uchun nom bo'yicha ham o'chiriladi.
             for exe in ["cs2.exe", "VALORANT.exe", "TslGame.exe", "GTA5.exe", "Cyberpunk2077.exe",
-                        "RDR2.exe", "FC24.exe", "NFSUnbound.exe", "NBA2K24.exe", "dota2.exe", "LeagueClient.exe"]:
+                        "RDR2.exe", "FC24.exe", "NFSUnbound.exe", "NBA2K24.exe", "dota2.exe", "LeagueClient.exe",
+                        "hl.exe"]:
                 try:
                     subprocess.run(["taskkill", "/F", "/IM", exe], capture_output=True)
                 except Exception:
@@ -3203,7 +3226,14 @@ class ClientLockerApp:
                     cwd = cwd_
                 elif exe and os.path.dirname(exe):
                     cwd = os.path.dirname(exe)
-                proc = subprocess.Popen([exe], cwd=cwd)
+                if os.path.splitext(exe)[1].lower() in ('.bat', '.cmd'):
+                    # .bat/.cmd fayllar CreateProcess orqali to'g'ridan-
+                    # to'g'ri ishga tushmaydi ("WinError 193: %1 is not a
+                    # valid Win32 application") — Windows ularni faqat
+                    # cmd.exe orqali bajaradi.
+                    proc = subprocess.Popen(["cmd.exe", "/c", exe], cwd=cwd)
+                else:
+                    proc = subprocess.Popen([exe], cwd=cwd)
                 self.launched_processes.append(proc)
                 print(f"[Launcher] PID: {proc.pid}")
                 self.main_window.show_launch_success(name)

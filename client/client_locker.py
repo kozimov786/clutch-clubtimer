@@ -1179,8 +1179,12 @@ SHOW_LAUNCHER_REQUESTED = False
 
 if IS_WINDOWS:
     from ctypes import wintypes
-    user32 = ctypes.windll.user32
-    kernel32 = ctypes.windll.kernel32
+    # ctypes.windll.* orqali yuklangan DLL'larda ctypes.get_last_error()
+    # haqiqiy Windows GetLastError() qiymatini KO'RSATMAYDI — buning
+    # uchun DLL use_last_error=True bilan aniq yuklanishi shart, aks
+    # holda xato kodlari doim 0 (yolg'on "muvaffaqiyatli") ko'rinadi.
+    user32 = ctypes.WinDLL('user32', use_last_error=True)
+    kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
     WH_KEYBOARD_LL = 13
     VK_TAB = 0x09; VK_LWIN = 0x5B; VK_RWIN = 0x5C; VK_F4 = 0x73; VK_ESCAPE = 0x1B
     VK_U = 0x55; VK_F9 = 0x78; VK_P = 0x50
@@ -1437,6 +1441,16 @@ class ClientLockerApp:
         # eskisi bilan qayta yozib, ekranda qisqa "miltillash" (masalan
         # ACTIVE -> LOCKED -> ACTIVE) keltirib chiqarishi mumkin edi.
         self.ws_connected = False
+        # Dastur yangi ishga tushganda, WebSocket ulanishi heartbeat'ning
+        # birinchi javobidan OLDIN ulgurib qolsa (LAN'da tez bo'lishi
+        # mumkin), o'sha birinchi heartbeat javobi "e'tiborsiz
+        # qoldiriladi" (yuqoridagi izoh) — lekin bu paytgacha WebSocket
+        # orqali hali HECH QANDAY xabar kelmagan bo'ladi (chunki xabar
+        # faqat admin biror amal bajarganda yuboriladi), shuning uchun
+        # dastur "haqiqatda ACTIVE bo'lgan seansni ko'rmasdan" LOCKED
+        # holatda abadiy qolib ketishi mumkin edi. Shu bayroq — hech
+        # bo'lmasa BITTA haqiqiy sinxronlash sodir bo'lishini kafolatlaydi.
+        self._got_initial_sync = False
 
         self.main_window = MainWindow(
             pc_name=self.pc_name, server_url=self.server_url,
@@ -1733,8 +1747,16 @@ class ClientLockerApp:
                     # yerdan emas, real-vaqtli push orqali keladi — aks
                     # holda kechikkan heartbeat javobi eski holatni qayta
                     # tiklab, ekranda miltillashga sabab bo'lishi mumkin edi.
-                    if not self.ws_connected:
+                    # Lekin BIRINCHI marta sinxronlash — bundan mustasno:
+                    # WebSocket ulangan bo'lsa ham, agar hali birorta ham
+                    # haqiqiy holat kelmagan bo'lsa (masalan dastur endigina
+                    # ishga tushdi, seans esa undan OLDIN faol bo'lgan),
+                    # baribir shu javobni qabul qilamiz — aks holda dastur
+                    # haqiqatda ACTIVE bo'lgan seansni hech qachon
+                    # bilmasdan, doimiy LOCKED holatda qolib ketishi mumkin.
+                    if not self.ws_connected or not self._got_initial_sync:
                         self.signals.status_updated.emit(r.json())
+                        self._got_initial_sync = True
                 elif r.status_code in (401, 403):
                     print(f"[Heartbeat] Ruxsat rad etildi ({r.status_code}) — "
                           f"config.json'dagi api_key server bilan mos kelmayapti.")

@@ -1,3 +1,4 @@
+import secrets
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
 from apps.billing.models import Computer, Tariff
@@ -6,15 +7,20 @@ class Command(BaseCommand):
     help = 'Initialize 40 computers across 1-VIP Zone, 2-VIP Zone, Main Zone, and Standard Zone'
 
     def handle(self, *args, **options):
-        # 1. Superuser
+        # 1. Superuser — faqat hali mavjud bo'lmasa yaratiladi, tasodifiy
+        # kuchli parol bilan. Mavjud "admin" foydalanuvchisining paroli
+        # ENDI qayta ishga tushirilganda avtomatik qayta o'rnatilmaydi —
+        # avvalgi xatti-harakat operator o'z xohishi bilan almashtirgan
+        # parolni ham har safar 'admin123'ga qaytarib qo'yardi.
         if not User.objects.filter(username='admin').exists():
-            User.objects.create_superuser('admin', 'admin@example.com', 'admin123')
-            self.stdout.write(self.style.SUCCESS('Created superuser: admin / admin123'))
+            password = secrets.token_urlsafe(12)
+            User.objects.create_superuser('admin', 'admin@example.com', password)
+            self.stdout.write(self.style.SUCCESS(f'Superuser yaratildi: admin / {password}'))
+            self.stdout.write(self.style.WARNING(
+                'Bu parolni hoziroq xavfsiz joyga yozib qo\'ying — qayta ko\'rsatilmaydi!'
+            ))
         else:
-            admin = User.objects.get(username='admin')
-            admin.set_password('admin123')
-            admin.save()
-            self.stdout.write('Superuser "admin" password updated to admin123')
+            self.stdout.write('Superuser "admin" allaqachon mavjud — paroli o\'zgartirilmadi.')
 
         # 2. Clear old tariffs and recreate 2 tariffs
         Tariff.objects.all().delete()

@@ -3,11 +3,27 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = 'django-insecure-openclub-shell-billing-key-secret'
+# Ishlab chiqarish (production) muhitida bu uchtasi DJANGO_SECRET_KEY,
+# DJANGO_DEBUG, DJANGO_ALLOWED_HOSTS muhit o'zgaruvchilari orqali
+# sozlanishi kerak — pastdagilar faqat muhit o'zgaruvchisi
+# o'rnatilmagan hollarda ishlatiladigan standart (fallback) qiymatlar.
+SECRET_KEY = os.environ.get(
+    'DJANGO_SECRET_KEY',
+    '1NhUaGjRqczYSQ8PehQxRH419jnhLKcrof4fclYM0B_TCgNj8WjMdOBLb9QyTMtsPcc'
+)
 
-DEBUG = True
+# DEBUG=True bo'lganda, xatolik yuz berganda butun sozlamalar (SECRET_KEY,
+# CLIENT_API_KEY va h.k.) xato sahifasida ochiq ko'rinadi — shuning uchun
+# standart qiymat endi False. Xatolikni tekshirish kerak bo'lsa,
+# `DJANGO_DEBUG=True` muhit o'zgaruvchisi bilan vaqtincha yoqish mumkin.
+DEBUG = os.environ.get('DJANGO_DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = ['*']
+# Standart holatda hammasiga ochiq (LAN ichida turli IP/hostname orqali
+# kirilishi mumkinligi uchun) — aniq IP/domenlaringizni bilsangiz,
+# DJANGO_ALLOWED_HOSTS="192.168.88.100,localhost" kabi vergul bilan
+# ajratib bering.
+_allowed_hosts_env = os.environ.get('DJANGO_ALLOWED_HOSTS')
+ALLOWED_HOSTS = _allowed_hosts_env.split(',') if _allowed_hosts_env else ['*']
 
 INSTALLED_APPS = [
     'daphne',

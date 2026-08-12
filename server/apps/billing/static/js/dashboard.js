@@ -12,6 +12,24 @@ let searchQuery = '';
 let currentTab = 'grid';
 let activeInputMode = 'money';
 
+// Server endi har bir API so'rovi uchun tizimga kirgan bo'lishni talab
+// qiladi. Har bir fetch() chaqiruvini alohida tekshirish o'rniga,
+// global fetch() bitta joyda "o'raladi": 401/403 qaytgan har qanday
+// so'rov (login so'rovining o'zidan tashqari) login oynasini avtomatik
+// ochadi, shunda xodim sessiyasi tugagan/hali kirmagan bo'lsa ham,
+// nima uchun ma'lumotlar yuklanmayotganini tushunadi.
+(function () {
+  const _originalFetch = window.fetch.bind(window);
+  window.fetch = async (...args) => {
+    const res = await _originalFetch(...args);
+    const url = (args[0] && args[0].toString()) || '';
+    if ((res.status === 401 || res.status === 403) && !url.includes('/api/login/')) {
+      if (typeof openLoginModal === 'function') openLoginModal();
+    }
+    return res;
+  };
+})();
+
 function getCookie(name) {
   let cookieValue = null;
   if (document.cookie && document.cookie !== '') {
@@ -999,16 +1017,20 @@ async function handleAddTariff(e) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Server endi API'ga har bir so'rov uchun tizimga kirgan bo'lishni talab
-  // qiladi (avvalroq bu tekshiruv umuman yo'q edi). Xodimlarning ish
-  // oqimini buzmaslik uchun sahifa ochilganda formadagi (standart holatda
-  // admin/admin123 bilan to'ldirilgan) ma'lumotlar bilan avtomatik kirish
-  // urinib ko'riladi — shundan keyingina qolgan barcha so'rovlar ishlaydi.
+  // Standart admin/admin123 login ma'lumotlari endi formada oldindan
+  // to'ldirilmaydi (xavfsizlik uchun), shuning uchun avtomatik login
+  // urinishning ma'nosi yo'q. Buning o'rniga: agar brauzerda avvaldan
+  // amaldagi sessiya bo'lsa (oxirgi ~2 hafta ichida tizimga kirilgan
+  // bo'lsa), quyidagi so'rovlar shunchaki muvaffaqiyatli o'tadi. Aks
+  // holda ular 401/403 qaytaradi va pastdagi global fetch himoyachisi
+  // login oynasini avtomatik ochadi.
+  updateAuthUI(false);
   try {
-    await handleAdminLogin();
-  } catch (err) {
-    console.error('Avtomatik kirish muvaffaqiyatsiz:', err);
-  }
+    const sessionCheck = await fetch('/api/computers/');
+    if (sessionCheck.ok) {
+      updateAuthUI(true, localStorage.getItem('admin_username') || 'Admin');
+    }
+  } catch (err) {}
 
   fetchTariffs();
   fetchComputers();

@@ -3,6 +3,7 @@
   "websocket_url": "ws://localhost:8000/ws/pc-status/",
   "pc_name": "PC-01",
   "heartbeat_interval_seconds": 5,
+  "api_key": "AKiv9qEeJqBlO8Xa4HJfJ_ZmMig6c5srmY7Nr1c4oOw",
   "fallback_games": [
     {
       "name": "Counter-Strike 2",

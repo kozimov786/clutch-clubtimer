@@ -11,6 +11,7 @@ from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
 
 from .models import Computer, Tariff, Session, Category, Product, Order, OrderItem, Expense, Game, StockSupply
 from .serializers import (
@@ -19,6 +20,7 @@ from .serializers import (
     GameSerializer, StockSupplySerializer
 )
 from .consumers import notify_pc_status_change, notify_bar_order_change
+from .permissions import HasClientApiKey, IsStaffOrHasApiKey
 
 
 def _calculate_session_duration_and_price(pc, active_session, start_time, tariff, now):
@@ -68,6 +70,8 @@ def _deduct_stock_for_order(order):
         item.product.save()
 
 class AdminLoginView(APIView):
+    permission_classes = [AllowAny]
+
     def post(self, request):
         username = request.data.get('username')
         password = request.data.get('password')
@@ -78,6 +82,8 @@ class AdminLoginView(APIView):
         return Response({'success': False, 'error': 'Invalid admin credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
 class AdminLogoutView(APIView):
+    permission_classes = [AllowAny]
+
     def post(self, request):
         logout(request)
         return Response({'success': True})
@@ -101,6 +107,11 @@ class GameViewSet(viewsets.ModelViewSet):
     queryset = Game.objects.filter(is_active=True).order_by('name')
     serializer_class = GameSerializer
 
+    def get_permissions(self):
+        if self.action == 'list':
+            return [IsStaffOrHasApiKey()]
+        return super().get_permissions()
+
 class SessionViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Session.objects.all().order_by('-start_time')
     serializer_class = SessionSerializer
@@ -108,6 +119,11 @@ class SessionViewSet(viewsets.ReadOnlyModelViewSet):
 class ComputerViewSet(viewsets.ModelViewSet):
     queryset = Computer.objects.all().order_by('name')
     serializer_class = ComputerSerializer
+
+    def get_permissions(self):
+        if self.action == 'heartbeat':
+            return [HasClientApiKey()]
+        return super().get_permissions()
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
@@ -437,9 +453,19 @@ class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all().order_by('id')
     serializer_class = CategorySerializer
 
+    def get_permissions(self):
+        if self.action == 'list':
+            return [IsStaffOrHasApiKey()]
+        return super().get_permissions()
+
 class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all().order_by('category', 'name')
     serializer_class = ProductSerializer
+
+    def get_permissions(self):
+        if self.action == 'list':
+            return [IsStaffOrHasApiKey()]
+        return super().get_permissions()
 
     @action(detail=True, methods=['post'])
     def restock(self, request, pk=None):
@@ -497,6 +523,11 @@ class ProductViewSet(viewsets.ModelViewSet):
 class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.all().order_by('-created_at')
     serializer_class = OrderSerializer
+
+    def get_permissions(self):
+        if self.action == 'create':
+            return [IsStaffOrHasApiKey()]
+        return super().get_permissions()
 
     def create(self, request, *args, **kwargs):
         pc_name = request.data.get('pc_name')

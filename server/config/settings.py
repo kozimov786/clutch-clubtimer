@@ -69,14 +69,22 @@ CHANNEL_LAYERS = {
 }
 
 REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'apps.billing.authentication.CsrfExemptSessionAuthentication',
+    ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
+        'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer',
     ]
 }
+
+# client_locker.py kiosk ilovalari shu kalitni X-API-Key header orqali
+# yuboradi (foydalanuvchi hisobi bo'lmagani uchun login qila olmaydi).
+# Har bir klub o'z serverida buni o'zgartirishi tavsiya etiladi.
+CLIENT_API_KEY = 'AKiv9qEeJqBlO8Xa4HJfJ_ZmMig6c5srmY7Nr1c4oOw'
 
 AUTH_PASSWORD_VALIDATORS = []
 

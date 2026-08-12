@@ -998,7 +998,18 @@ async function handleAddTariff(e) {
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  // Server endi API'ga har bir so'rov uchun tizimga kirgan bo'lishni talab
+  // qiladi (avvalroq bu tekshiruv umuman yo'q edi). Xodimlarning ish
+  // oqimini buzmaslik uchun sahifa ochilganda formadagi (standart holatda
+  // admin/admin123 bilan to'ldirilgan) ma'lumotlar bilan avtomatik kirish
+  // urinib ko'riladi — shundan keyingina qolgan barcha so'rovlar ishlaydi.
+  try {
+    await handleAdminLogin();
+  } catch (err) {
+    console.error('Avtomatik kirish muvaffaqiyatsiz:', err);
+  }
+
   fetchTariffs();
   fetchComputers();
   fetchSessions();
@@ -1008,10 +1019,6 @@ document.addEventListener('DOMContentLoaded', () => {
   startCountdownTimer();
   setInterval(updateHeaderClock, 1000);
   updateHeaderClock();
-
-  const loggedIn = localStorage.getItem('admin_logged_in') === 'true';
-  const username = localStorage.getItem('admin_username') || 'admin';
-  updateAuthUI(loggedIn, username);
 });
 
 // Bar Orders & Inventory Analytics

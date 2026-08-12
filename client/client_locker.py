@@ -191,14 +191,21 @@ def load_image_async(url_or_path, label):
 #  4. DJANGO REST API CLIENT
 # ──────────────────────────────────────────────────────────────────────────────
 class ApiClient:
-    def __init__(self, server_url):
+    def __init__(self, server_url, api_key=None):
         self.server_url = server_url.rstrip('/')
+        self.api_key = api_key
+
+    def _headers(self):
+        return {"X-API-Key": self.api_key} if self.api_key else {}
 
     def _get(self, path):
         try:
-            r = requests.get(f"{self.server_url}{path}", timeout=6)
+            r = requests.get(f"{self.server_url}{path}", headers=self._headers(), timeout=6)
             if r.status_code == 200:
                 return r.json()
+            elif r.status_code in (401, 403):
+                print(f"[API] GET {path}: ruxsat rad etildi ({r.status_code}) — "
+                      f"config.json'dagi api_key server bilan mos kelmayapti.")
         except Exception as e:
             print(f"[API] GET {path}: {e}")
         return None
@@ -221,6 +228,7 @@ class ApiClient:
                 r = requests.post(
                     f"{self.server_url}/api/orders/",
                     json={"pc_name": pc_name, "items": items, "payment_method": "CASH"},
+                    headers=self._headers(),
                     timeout=6
                 )
                 ok = r.status_code == 201
@@ -955,12 +963,12 @@ class MainWindow(FullscreenMixin, QMainWindow):
     PAGE_LOCK = 0
     PAGE_LAUNCHER = 1
 
-    def __init__(self, pc_name="PC-01", server_url="http://localhost:8001", fallback_games=None):
+    def __init__(self, pc_name="PC-01", server_url="http://localhost:8001", fallback_games=None, api_key=None):
         super().__init__()
         self.pc_name = pc_name
         self.server_url = server_url.rstrip('/')
         self.fallback_games = fallback_games or []
-        self.api_client = ApiClient(self.server_url)
+        self.api_client = ApiClient(self.server_url, api_key=api_key)
 
         self.setWindowTitle(f"Clutch Zone Client Locker - {pc_name}")
         self.setStyleSheet("QMainWindow, QWidget { background-color: #060911; }")
@@ -1279,7 +1287,7 @@ class ClientLockerApp:
 
         self.main_window = MainWindow(
             pc_name=self.pc_name, server_url=self.server_url,
-            fallback_games=self.fallback_games
+            fallback_games=self.fallback_games, api_key=self.api_key
         )
         self.main_window.game_launched_signal.connect(self._handle_game_launch)
 
@@ -1316,7 +1324,7 @@ class ClientLockerApp:
 
     def _load_config(self, path):
         cfg = {"server_url": "http://localhost:8001", "websocket_url": "ws://localhost:8001/ws/pc-status/",
-               "pc_name": "PC-01", "heartbeat_interval_seconds": 5, "fallback_games": []}
+               "pc_name": "PC-01", "heartbeat_interval_seconds": 5, "fallback_games": [], "api_key": ""}
         if os.path.exists(path):
             try:
                 with open(path, 'r') as f: cfg.update(json.load(f))
@@ -1335,6 +1343,11 @@ class ClientLockerApp:
         self.pc_name = cfg["pc_name"]
         self.heartbeat_interval = cfg["heartbeat_interval_seconds"]
         self.fallback_games = cfg.get("fallback_games", [])
+        self.api_key = cfg.get("api_key", "")
+        if not self.api_key:
+            print("[Config] OGOHLANTIRISH: 'api_key' config.json'da yo'q yoki bo'sh — "
+                  "server endi API kalitini talab qiladi, heartbeat/o'yinlar/buyurtmalar "
+                  "so'rovlari 401/403 xatosi bilan rad etilishi mumkin.")
 
     def _handle_status(self, data):
         new_status = data.get('status', 'LOCKED')
@@ -1451,9 +1464,17 @@ class ClientLockerApp:
         local_ip = self._get_local_ip()
         while True:
             try:
-                r = requests.post(f"{self.server_url}/api/computers/heartbeat/", json={"pc_name": self.pc_name, "ip_address": local_ip}, timeout=4)
+                headers = {"X-API-Key": self.api_key} if self.api_key else {}
+                r = requests.post(
+                    f"{self.server_url}/api/computers/heartbeat/",
+                    json={"pc_name": self.pc_name, "ip_address": local_ip},
+                    headers=headers, timeout=4
+                )
                 if r.status_code == 200:
                     self.signals.status_updated.emit(r.json())
+                elif r.status_code in (401, 403):
+                    print(f"[Heartbeat] Ruxsat rad etildi ({r.status_code}) — "
+                          f"config.json'dagi api_key server bilan mos kelmayapti.")
             except Exception as e:
                 print(f"[Heartbeat] {e}")
             time.sleep(self.heartbeat_interval)

@@ -1928,6 +1928,15 @@ if IS_WINDOWS:
     user32.CallNextHookEx.argtypes = [ctypes.c_void_p, ctypes.c_int, wintypes.WPARAM, ctypes.POINTER(KBDLLHOOKSTRUCT)]
     user32.UnhookWindowsHookEx.restype = wintypes.BOOL
     user32.UnhookWindowsHookEx.argtypes = [ctypes.c_void_p]
+    # XUDDI SHU 64-bit kesilib qolish xatosi GetModuleHandleW'da ham bor
+    # edi — u SetWindowsHookExA'ga hMod sifatida uzatiladigan HMODULE
+    # qiymatini qaytaradi. restype aniq belgilanmagani uchun bu qiymat
+    # 32-bitga kesilib, SetWindowsHookExA'ga yaroqsiz hMod uzatilar edi
+    # (natijada ERROR_MOD_NOT_FOUND / kod 126 bilan muvaffaqiyatsiz
+    # tugar edi) — aynan shuning uchun klaviatura hook'i (va shu bilan
+    # Alt+Tab bloklash) hech qachon o'rnatilmagan edi.
+    kernel32.GetModuleHandleW.restype = ctypes.c_void_p
+    kernel32.GetModuleHandleW.argtypes = [ctypes.c_wchar_p]
 
     hook_id = None; is_hook_enabled = False
 

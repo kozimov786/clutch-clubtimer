@@ -79,6 +79,7 @@ PAYMENT_METHOD_CHOICES = [
     ('CASH', 'Naqd'),
     ('CARD', 'Plastik'),
     ('SPLIT', 'Aralash (Naqd + Card)'),
+    ('BALANCE', 'Mijoz balansi'),
 ]
 
 class Customer(models.Model):
@@ -138,6 +139,11 @@ class Session(models.Model):
     card_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     payment_method = models.CharField(max_length=10, choices=PAYMENT_METHOD_CHOICES, default='CASH')
     is_active = models.BooleanField(default=True)
+    # BALANCE to'lov usulida (mijoz o'zi balansidan ochgan seans) fon
+    # ishchisi (balance_worker.py) har 30 soniyada shu paytgacha qancha
+    # pul yechilganini shu yerda kuzatib boradi — bu qiymat orqali
+    # keyingi safar FAQAT yangi o'sgan qismini yechadi (idempotent).
+    balance_deducted = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
 
     def __str__(self):
         return f"Session for {self.computer.name} ({self.payment_method}) - {self.duration_minutes} mins"

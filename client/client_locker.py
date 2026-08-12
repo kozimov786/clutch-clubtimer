@@ -329,6 +329,29 @@ class ApiClient:
                     on_done(False, {"error": "Server bilan aloqa yo'q"})
         threading.Thread(target=_post, daemon=True).start()
 
+    def customer_start_session_async(self, pc_id, customer_id, on_done=None):
+        """Mijoz qulf ekranida "Kompyuterni ochish" tugmasini bosganda
+        chaqiriladi — seans balansdan bosqichma-bosqich yechiladigan
+        Open Time rejimida boshlanadi. Muvaffaqiyatli bo'lsa, PC
+        odatdagi status-sinxronlash yo'li (heartbeat/WebSocket) orqali
+        o'zi ochiladi — bu yerda alohida "unlock" chaqirilmaydi."""
+        def _post():
+            try:
+                r = requests.post(
+                    f"{self.server_url}/api/computers/{pc_id}/customer_start_session/",
+                    json={"customer_id": customer_id},
+                    headers=self._headers(),
+                    timeout=12
+                )
+                ok = r.status_code == 200
+                if on_done:
+                    on_done(ok, r.json() if r.content else {})
+            except Exception as e:
+                print(f"[API] customer_start_session: {e}")
+                if on_done:
+                    on_done(False, {"error": "Server bilan aloqa yo'q"})
+        threading.Thread(target=_post, daemon=True).start()
+
 
 GAME_CATEGORIES = [
     ("all", "BARCHASI", "🌐"),
@@ -353,6 +376,11 @@ class LockScreenWidget(QWidget):
     # ilgari xuddi shu xato jiddiy render muammolariga sabab bo'lgan edi),
     # shuning uchun natija signal orqali asosiy (GUI) oqimga uzatiladi.
     _login_result_ready = pyqtSignal(bool, dict)
+    # "Kompyuterni ochish" (balansdan): ClientLockerApp'gacha uzatiladi
+    # (u pc_id'ni biladi), natija esa xuddi login kabi thread-xavfsiz
+    # signal orqali qaytadi.
+    unlock_requested = pyqtSignal(int)
+    unlock_result_ready = pyqtSignal(bool, dict)
 
     def __init__(self, pc_name="PC-01", api_client=None, parent=None):
         super().__init__(parent)
@@ -411,6 +439,7 @@ class LockScreenWidget(QWidget):
         main_layout.addWidget(self._build_account_card())
 
         self._login_result_ready.connect(self._apply_login_result)
+        self.unlock_result_ready.connect(self._apply_unlock_result)
 
     def _build_account_card(self):
         self.account_card = QFrame()
@@ -519,6 +548,28 @@ class LockScreenWidget(QWidget):
         self.profile_bonus.setAlignment(Qt.AlignmentFlag.AlignCenter)
         pw.addWidget(self.profile_bonus)
 
+        self.unlock_error = QLabel("")
+        self.unlock_error.setStyleSheet("color: #ef4444; font-size: 11px;")
+        self.unlock_error.setWordWrap(True)
+        self.unlock_error.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.unlock_error.hide()
+        pw.addWidget(self.unlock_error)
+
+        self.unlock_btn = QPushButton("🔓  Kompyuterni ochish")
+        self.unlock_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.unlock_btn.setFixedHeight(38)
+        self.unlock_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(34,197,94,0.15); color: #22c55e;
+                border: 1px solid rgba(34,197,94,0.4); border-radius: 10px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background: rgba(34,197,94,0.25); }
+            QPushButton:disabled { color: #475569; border-color: rgba(255,255,255,0.1); }
+        """)
+        self.unlock_btn.clicked.connect(self._on_unlock_clicked)
+        pw.addWidget(self.unlock_btn)
+
         logout_btn = QPushButton("Chiqish")
         logout_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         logout_btn.setFixedHeight(34)
@@ -580,6 +631,9 @@ class LockScreenWidget(QWidget):
             balance = 0
         self.profile_balance.setText(f"{balance:,.0f} UZS")
         self.profile_bonus.setText(f"🎁 {data.get('bonus_points', 0)} bonus ball")
+        self.unlock_error.hide()
+        self.unlock_btn.setEnabled(True)
+        self.unlock_btn.setText("🔓  Kompyuterni ochish")
         self.login_widget.hide()
         self.profile_widget.show()
 
@@ -590,6 +644,27 @@ class LockScreenWidget(QWidget):
         self.login_error.hide()
         self.profile_widget.hide()
         self.login_widget.show()
+
+    def _on_unlock_clicked(self):
+        if not self.logged_in_customer:
+            return
+        self.unlock_error.hide()
+        self.unlock_btn.setEnabled(False)
+        self.unlock_btn.setText("Ochilmoqda...")
+        self.unlock_requested.emit(self.logged_in_customer.get('id'))
+
+    def _apply_unlock_result(self, ok, data):
+        if ok:
+            # PC odatdagi status-sinxronlash orqali (heartbeat/WebSocket)
+            # o'zi ACTIVE holatga o'tadi — bu yerda qo'shimcha hech
+            # narsa qilish shart emas, tugma holati ham muhim emas
+            # (butun LockScreenWidget hozir yashirinib, launcher
+            # ko'rsatiladi).
+            return
+        self.unlock_btn.setEnabled(True)
+        self.unlock_btn.setText("🔓  Kompyuterni ochish")
+        self.unlock_error.setText(data.get('error', "Xatolik yuz berdi"))
+        self.unlock_error.show()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1353,6 +1428,7 @@ class MainWindow(FullscreenMixin, QMainWindow):
     resume_game_signal = pyqtSignal()
     app_switch_requested_signal = pyqtSignal(str)
     customer_login_signal = pyqtSignal(dict)
+    customer_unlock_signal = pyqtSignal(int)
 
     PAGE_LOCK = 0
     PAGE_LAUNCHER = 1
@@ -1374,6 +1450,7 @@ class MainWindow(FullscreenMixin, QMainWindow):
 
         self.lock_page = LockScreenWidget(pc_name=pc_name, api_client=self.api_client)
         self.lock_page.login_succeeded.connect(self.customer_login_signal.emit)
+        self.lock_page.unlock_requested.connect(self.customer_unlock_signal.emit)
         self.launcher_page = LauncherPage(
             pc_name=pc_name, server_url=self.server_url, api_client=self.api_client,
             fallback_games=self.fallback_games
@@ -1952,6 +2029,7 @@ class ClientLockerApp:
         self.main_window.resume_game_signal.connect(self._handle_resume_game)
         self.main_window.app_switch_requested_signal.connect(self._handle_app_switch)
         self.main_window.customer_login_signal.connect(self._handle_customer_login)
+        self.main_window.customer_unlock_signal.connect(self._handle_customer_unlock_request)
 
         self.countdown = QTimer()
         self.countdown.timeout.connect(self._tick)
@@ -2287,6 +2365,22 @@ class ClientLockerApp:
         faqat loglash uchun, PC holatiga (qulflanganligiga) hech
         qanday ta'sir qilmaydi."""
         print(f"[Customer] {data.get('full_name')} ({data.get('phone')}) tizimga kirdi")
+
+    def _handle_customer_unlock_request(self, customer_id):
+        """Mijoz "Kompyuterni ochish" tugmasini bosganda — balansdan
+        bosqichma-bosqich yechiladigan seansni boshlashni so'raydi.
+        Muvaffaqiyatli bo'lsa, PC odatdagi status-sinxronlash orqali
+        o'zi ACTIVE holatga o'tadi (bu yerda alohida unlock chaqirilmaydi)."""
+        if not self.pc_id:
+            print("[Customer] pc_id hali noma'lum, birozdan keyin qayta urinib ko'ring")
+            self.main_window.lock_page.unlock_result_ready.emit(
+                False, {"error": "Server bilan hali sinxronlanmoqda, biroz kuting va qayta urinib ko'ring."}
+            )
+            return
+        self.api_client.customer_start_session_async(
+            self.pc_id, customer_id,
+            on_done=lambda ok, data: self.main_window.lock_page.unlock_result_ready.emit(ok, data)
+        )
 
     def _tick(self):
         if self.current_status in ('ACTIVE', 'WARNING'):

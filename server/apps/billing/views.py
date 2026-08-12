@@ -160,7 +160,7 @@ class ComputerViewSet(viewsets.ModelViewSet):
     serializer_class = ComputerSerializer
 
     def get_permissions(self):
-        if self.action in ('heartbeat', 'upload_screenshot'):
+        if self.action in ('heartbeat', 'upload_screenshot', 'customer_start_session'):
             return [HasClientApiKey()]
         return super().get_permissions()
 
@@ -233,6 +233,63 @@ class ComputerViewSet(viewsets.ModelViewSet):
             total_price=total_price,
             payment_method=payment_method,
             is_active=True
+        )
+
+        serializer = self.get_serializer(pc)
+        notify_pc_status_change({
+            'action': 'SESSION_STARTED',
+            'pc': serializer.data
+        })
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'])
+    def customer_start_session(self, request, pk=None):
+        """Kiosk qulf ekranidan: mijoz o'zi tizimga kirgach, "Kompyuterni
+        ochish" tugmasini bosganda chaqiriladi. Seans Open Time rejimida
+        boshlanadi — pul darhol yechilmaydi, buni fon ishchisi
+        (balance_worker.py) har 30 soniyada bosqichma-bosqich yechib
+        boradi (balans tugasa, seansni o'zi to'xtatadi)."""
+        pc = self.get_object()
+        if pc.status != 'LOCKED':
+            return Response({'error': "Bu kompyuter band yoki allaqachon faol."}, status=status.HTTP_400_BAD_REQUEST)
+
+        customer_id = request.data.get('customer_id')
+        customer = Customer.objects.filter(id=customer_id).first()
+        if not customer:
+            return Response({'error': "Mijoz topilmadi."}, status=status.HTTP_400_BAD_REQUEST)
+
+        tariff = pc.current_tariff or Tariff.objects.first()
+        if not tariff:
+            return Response({'error': "Tarif sozlanmagan, administratorga murojaat qiling."}, status=status.HTTP_400_BAD_REQUEST)
+
+        price_per_minute = tariff.get_effective_price_per_hour() / 60.0
+        min_required = round(price_per_minute * 3, 2)  # kamida 3 daqiqalik pul
+        if float(customer.balance) < min_required:
+            return Response(
+                {'error': f"Balans yetarli emas (kamida {min_required:,.0f} UZS kerak, mavjud: {float(customer.balance):,.0f} UZS)"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        now = timezone.now()
+        pc.status = 'ACTIVE'
+        pc.is_open_time = True
+        pc.time_remaining = 0
+        pc.session_start_time = now
+        pc.session_end_time = None
+        pc.current_tariff = tariff
+        pc.save()
+
+        Session.objects.filter(computer=pc, is_active=True).update(is_active=False, end_time=now)
+        Session.objects.create(
+            computer=pc, tariff=tariff, customer=customer,
+            is_open_time=True, start_time=now, end_time=None,
+            duration_minutes=0, total_price=0.0, balance_deducted=0.0,
+            payment_method='BALANCE', is_active=True
+        )
+
+        AuditLog.objects.create(
+            action='CUSTOMER_LOGIN',
+            description=f"{customer.full_name} ({customer.phone}) {pc.name}ni o'z balansidan ochdi"
         )
 
         serializer = self.get_serializer(pc)
@@ -361,6 +418,57 @@ class ComputerViewSet(viewsets.ModelViewSet):
             session_orders = Order.objects.filter(computer=pc).exclude(status='CANCELLED')
 
         bar_total_price = float(sum(o.total_price for o in session_orders))
+
+        if active_session and active_session.payment_method == 'BALANCE':
+            # Vaqt narxi allaqachon fon ishchisi (balance_worker.py)
+            # orqali bosqichma-bosqich mijoz balansidan yechilgan —
+            # bu yerda uni QAYTA naqd/plastik sifatida hisoblab
+            # bo'lmaydi (aks holda mijoz ikki marta to'lagan bo'lib
+            # chiqardi). Faqat shu seans davomidagi bar buyurtmalari
+            # (bo'lsa) xodim ko'rsatgan to'lov usuli bilan alohida
+            # hisoblanadi.
+            bar_final_cash, bar_final_card = _split_payment(payment_method, bar_total_price, req_cash, req_card)
+
+            active_session.duration_minutes = duration_minutes
+            active_session.total_price = float(active_session.balance_deducted)
+            active_session.cash_amount = 0.0
+            active_session.card_amount = 0.0
+            active_session.end_time = now
+            active_session.is_active = False
+            active_session.save()
+
+            for order in session_orders:
+                order.payment_method = payment_method
+                if bar_total_price > 0:
+                    o_ratio = float(order.total_price) / bar_total_price
+                    order.cash_amount = round(bar_final_cash * o_ratio, 2)
+                    order.card_amount = round(bar_final_card * o_ratio, 2)
+                else:
+                    order.cash_amount = 0.0
+                    order.card_amount = 0.0
+                if order.status == 'PENDING':
+                    _deduct_stock_for_order(order)
+                    order.status = 'DELIVERED'
+                order.save()
+
+            pc.status = 'LOCKED'
+            pc.is_open_time = False
+            pc.time_remaining = 0
+            pc.session_start_time = None
+            pc.session_end_time = None
+            pc.current_tariff = None
+            pc.save()
+
+            _log_action(
+                request, 'SESSION_STOPPED',
+                f"{pc.name}: balans seansi yakunlandi, jami {float(active_session.balance_deducted):,.0f} UZS balansdan"
+                + (f" + {bar_total_price:,.0f} UZS bar ({payment_method})" if bar_total_price > 0 else "")
+            )
+
+            serializer = self.get_serializer(pc)
+            notify_pc_status_change({'action': 'SESSION_STOPPED', 'pc': serializer.data})
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
         grand_total = float(time_price) + bar_total_price
 
         final_cash, final_card = _split_payment(payment_method, grand_total, req_cash, req_card)

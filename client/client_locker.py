@@ -1504,9 +1504,11 @@ class ClientLockerApp:
                 print(f"[WS] {e}")
         def on_open(ws): print("[WS] Connected")
         def on_error(ws, e): print(f"[WS] Error: {e}")
+        separator = '&' if '?' in self.ws_url else '?'
+        ws_url_with_key = f"{self.ws_url}{separator}api_key={self.api_key}" if self.api_key else self.ws_url
         while True:
             try:
-                ws = websocket.WebSocketApp(self.ws_url, on_message=on_message, on_error=on_error)
+                ws = websocket.WebSocketApp(ws_url_with_key, on_message=on_message, on_error=on_error)
                 ws.run_forever()
             except Exception as e:
                 print(f"[WS] Failed: {e}")

@@ -464,12 +464,12 @@ class LockScreenWidget(QWidget):
 
         card = QFrame()
         card.setObjectName("lockCard")
-        card.setFixedSize(460, 300)
+        card.setFixedSize(460, 360)
         card.setStyleSheet("""
             QFrame#lockCard {
                 background: #0a0e17;
-                border: 2px solid rgba(0,240,255,0.35);
-                border-radius: 20px;
+                border: 1px solid rgba(0,240,255,0.35);
+                border-radius: 22px;
             }
             QLabel { border: none; background: transparent; }
         """)
@@ -479,25 +479,49 @@ class LockScreenWidget(QWidget):
         # mumkin bo'lgan ma'lum Qt muammosi.
 
         cl = QVBoxLayout(card)
-        cl.setContentsMargins(40, 36, 40, 36)
-        cl.setSpacing(16)
+        cl.setContentsMargins(40, 32, 40, 30)
+        cl.setSpacing(12)
         cl.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        s = QLabel("🔒 STATION LOCKED")
-        s.setFont(QFont("Segoe UI", 22, QFont.Weight.Bold))
-        s.setStyleSheet("color: #ef4444; letter-spacing: 3px;")
-        s.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        cl.addWidget(s)
+        logo_pix_path = os.path.join(ASSETS_DIR, "clutch_logo_mark.png")
+        if os.path.exists(logo_pix_path):
+            logo_label = QLabel()
+            pix = QPixmap(logo_pix_path)
+            if not pix.isNull():
+                logo_label.setPixmap(pix.scaled(56, 56, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            cl.addWidget(logo_label)
+
+        brand = QLabel("CLUTCH ZONE")
+        brand.setFont(QFont("Georgia", 25, QFont.Weight.Bold))
+        brand.setStyleSheet("color: #d8b4fe; letter-spacing: 2px;")
+        brand.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        cl.addWidget(brand)
+
+        badge_row = QHBoxLayout()
+        badge_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        s = QLabel("🔒  STATION LOCKED")
+        s.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        s.setStyleSheet("""
+            color: #ef4444;
+            background: rgba(239,68,68,0.10);
+            border: 1px solid rgba(239,68,68,0.30);
+            border-radius: 12px;
+            padding: 5px 16px;
+            letter-spacing: 2px;
+        """)
+        badge_row.addWidget(s)
+        cl.addLayout(badge_row)
 
         self.pc_label = QLabel(self.pc_name)
-        self.pc_label.setFont(QFont("Consolas", 44, QFont.Weight.Bold))
+        self.pc_label.setFont(QFont("Consolas", 34, QFont.Weight.Bold))
         self.pc_label.setStyleSheet("color: #00f0ff; letter-spacing: 2px;")
         self.pc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cl.addWidget(self.pc_label)
 
-        desc = QLabel("Seansni boshlash uchun administratorga murojaat qiling.")
-        desc.setFont(QFont("Segoe UI", 13))
-        desc.setStyleSheet("color: #94a3b8;")
+        desc = QLabel("Seansni boshlash uchun administratorga murojaat qiling,\nyoki quyida shaxsiy hisobingizga kiring.")
+        desc.setFont(QFont("Segoe UI", 11))
+        desc.setStyleSheet("color: #64748b;")
         desc.setWordWrap(True)
         desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cl.addWidget(desc)
@@ -516,21 +540,32 @@ class LockScreenWidget(QWidget):
             QFrame#accountCard {
                 background: #0a0e17;
                 border: 1px solid rgba(255,255,255,0.10);
-                border-radius: 16px;
+                border-radius: 20px;
             }
             QLabel { border: none; background: transparent; }
         """)
         ac = QVBoxLayout(self.account_card)
-        ac.setContentsMargins(28, 22, 28, 22)
-        ac.setSpacing(10)
+        ac.setContentsMargins(28, 24, 28, 24)
+        ac.setSpacing(12)
 
         input_style = """
             QLineEdit {
-                background: #0e1420; color: #e2e8f0;
-                border: 1px solid rgba(255,255,255,0.12);
-                border-radius: 10px; padding: 0 14px; font-size: 13px;
+                background: #12182a; color: #e2e8f0;
+                border: 1px solid rgba(255,255,255,0.10);
+                border-radius: 12px; padding: 0 16px; font-size: 13px;
             }
-            QLineEdit:focus { border: 1px solid rgba(0,240,255,0.5); }
+            QLineEdit:focus { background: #151c30; border: 1px solid rgba(0,240,255,0.5); }
+        """
+        gradient_btn_style = """
+            QPushButton {
+                color: #060911; font-weight: bold;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #00f0ff, stop:1 #a855f7);
+                border: none; border-radius: 12px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #4df6ff, stop:1 #c084fc);
+            }
+            QPushButton:disabled { color: #475569; background: rgba(255,255,255,0.08); }
         """
 
         # ── Login qismi ──
@@ -546,16 +581,16 @@ class LockScreenWidget(QWidget):
         lw.addWidget(login_title)
 
         self.phone_input = QLineEdit()
-        self.phone_input.setPlaceholderText("Telefon raqam")
-        self.phone_input.setFixedHeight(40)
+        self.phone_input.setPlaceholderText("👤   Telefon raqam")
+        self.phone_input.setFixedHeight(42)
         self.phone_input.setStyleSheet(input_style)
         self.phone_input.returnPressed.connect(self._on_login_clicked)
         lw.addWidget(self.phone_input)
 
         self.password_input = QLineEdit()
-        self.password_input.setPlaceholderText("Parol")
+        self.password_input.setPlaceholderText("🔒   Parol")
         self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.password_input.setFixedHeight(40)
+        self.password_input.setFixedHeight(42)
         self.password_input.setStyleSheet(input_style)
         self.password_input.returnPressed.connect(self._on_login_clicked)
         lw.addWidget(self.password_input)
@@ -567,18 +602,11 @@ class LockScreenWidget(QWidget):
         self.login_error.hide()
         lw.addWidget(self.login_error)
 
-        self.login_btn = QPushButton("Kirish")
+        self.login_btn = QPushButton("KIRISH")
         self.login_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.login_btn.setFixedHeight(38)
-        self.login_btn.setStyleSheet("""
-            QPushButton {
-                background: rgba(0,240,255,0.15); color: #00f0ff;
-                border: 1px solid rgba(0,240,255,0.4); border-radius: 10px;
-                font-weight: bold;
-            }
-            QPushButton:hover { background: rgba(0,240,255,0.25); }
-            QPushButton:disabled { color: #475569; border-color: rgba(255,255,255,0.1); }
-        """)
+        self.login_btn.setFixedHeight(42)
+        self.login_btn.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        self.login_btn.setStyleSheet(gradient_btn_style)
         self.login_btn.clicked.connect(self._on_login_clicked)
         lw.addWidget(self.login_btn)
 
@@ -604,8 +632,8 @@ class LockScreenWidget(QWidget):
         pw.addWidget(self.profile_name)
 
         self.profile_balance = QLabel("")
-        self.profile_balance.setFont(QFont("Consolas", 20, QFont.Weight.Bold))
-        self.profile_balance.setStyleSheet("color: #22c55e;")
+        self.profile_balance.setFont(QFont("Consolas", 22, QFont.Weight.Bold))
+        self.profile_balance.setStyleSheet("color: #00f0ff;")
         self.profile_balance.setAlignment(Qt.AlignmentFlag.AlignCenter)
         pw.addWidget(self.profile_balance)
 
@@ -622,18 +650,11 @@ class LockScreenWidget(QWidget):
         self.unlock_error.hide()
         pw.addWidget(self.unlock_error)
 
-        self.unlock_btn = QPushButton("🔓  Kompyuterni ochish")
+        self.unlock_btn = QPushButton("🔓  KOMPYUTERNI OCHISH")
         self.unlock_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.unlock_btn.setFixedHeight(38)
-        self.unlock_btn.setStyleSheet("""
-            QPushButton {
-                background: rgba(34,197,94,0.15); color: #22c55e;
-                border: 1px solid rgba(34,197,94,0.4); border-radius: 10px;
-                font-weight: bold;
-            }
-            QPushButton:hover { background: rgba(34,197,94,0.25); }
-            QPushButton:disabled { color: #475569; border-color: rgba(255,255,255,0.1); }
-        """)
+        self.unlock_btn.setFixedHeight(42)
+        self.unlock_btn.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        self.unlock_btn.setStyleSheet(gradient_btn_style)
         self.unlock_btn.clicked.connect(self._on_unlock_clicked)
         pw.addWidget(self.unlock_btn)
 
@@ -676,7 +697,7 @@ class LockScreenWidget(QWidget):
 
     def _apply_login_result(self, ok, data):
         self.login_btn.setEnabled(True)
-        self.login_btn.setText("Kirish")
+        self.login_btn.setText("KIRISH")
         if not ok:
             self._show_login_error(data.get('error', "Xatolik yuz berdi"))
             return
@@ -700,7 +721,7 @@ class LockScreenWidget(QWidget):
         self.profile_bonus.setText(f"🎁 {data.get('bonus_points', 0)} bonus ball")
         self.unlock_error.hide()
         self.unlock_btn.setEnabled(True)
-        self.unlock_btn.setText("🔓  Kompyuterni ochish")
+        self.unlock_btn.setText("🔓  KOMPYUTERNI OCHISH")
         self.login_widget.hide()
         self.profile_widget.show()
 
@@ -735,7 +756,7 @@ class LockScreenWidget(QWidget):
             # ko'rsatiladi).
             return
         self.unlock_btn.setEnabled(True)
-        self.unlock_btn.setText("🔓  Kompyuterni ochish")
+        self.unlock_btn.setText("🔓  KOMPYUTERNI OCHISH")
         self.unlock_error.setText(data.get('error', "Xatolik yuz berdi"))
         self.unlock_error.show()
 
@@ -920,15 +941,32 @@ class CustomerCabinetDialog(QDialog):
     # (LauncherPage -> MainWindow -> ClientLockerApp) uzatiladi.
     stop_session_requested = pyqtSignal(str)
 
+    CARD_STYLE = """
+        QFrame#cabinetCard {
+            background: #0a0e17;
+            border: 1px solid rgba(255,255,255,0.10);
+            border-radius: 18px;
+        }
+        QLabel { border: none; background: transparent; }
+    """
+    INPUT_STYLE = """
+        QLineEdit {
+            background: #12182a; color: #e2e8f0;
+            border: 1px solid rgba(255,255,255,0.10);
+            border-radius: 10px; padding: 0 12px; font-size: 12px;
+        }
+        QLineEdit:focus { background: #151c30; border: 1px solid rgba(0,240,255,0.5); }
+    """
+
     def __init__(self, api_client, customer_data, parent=None):
         super().__init__(parent)
         self.api_client = api_client
         self.customer_data = customer_data
         self.setWindowTitle("Mening kabinetim")
         self.setModal(True)
-        self.setFixedSize(520, 580)
+        self.setFixedSize(760, 620)
         self.setStyleSheet("""
-            QDialog { background: #0a0e17; }
+            QDialog { background: #060911; }
             QLabel { color: #e2e8f0; }
         """)
 
@@ -936,76 +974,21 @@ class CustomerCabinetDialog(QDialog):
         self._activity_result_ready.connect(self._apply_activity_result)
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(24, 24, 24, 24)
-        root.setSpacing(14)
+        root.setContentsMargins(24, 24, 24, 20)
+        root.setSpacing(16)
 
-        name = QLabel(customer_data.get('full_name', ''))
-        name.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
-        name.setStyleSheet("color: #ffffff;")
-        root.addWidget(name)
+        root.addWidget(self._build_header_card())
 
-        phone = QLabel(customer_data.get('phone', ''))
-        phone.setStyleSheet("color: #64748b;")
-        root.addWidget(phone)
-
-        stats_row = QHBoxLayout()
-        balance_box = QVBoxLayout()
-        balance_tag = QLabel("BALANS")
-        balance_tag.setStyleSheet("color:#64748b; font-size:10px;")
-        balance_box.addWidget(balance_tag)
-        try:
-            bal = float(customer_data.get('balance', 0))
-        except (TypeError, ValueError):
-            bal = 0
-        balance_val = QLabel(f"{bal:,.0f} UZS")
-        balance_val.setFont(QFont("Consolas", 16, QFont.Weight.Bold))
-        balance_val.setStyleSheet("color:#22c55e;")
-        balance_box.addWidget(balance_val)
-        stats_row.addLayout(balance_box)
-
-        bonus_box = QVBoxLayout()
-        bonus_tag = QLabel("BONUS BALL")
-        bonus_tag.setStyleSheet("color:#64748b; font-size:10px;")
-        bonus_box.addWidget(bonus_tag)
-        bonus_val = QLabel(f"🎁 {customer_data.get('bonus_points', 0)}")
-        bonus_val.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
-        bonus_box.addWidget(bonus_val)
-        stats_row.addLayout(bonus_box)
-        stats_row.addStretch(1)
-        root.addLayout(stats_row)
-
-        tabs = QTabWidget()
-        tabs.setStyleSheet("""
-            QTabWidget::pane { border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; }
-            QTabBar::tab {
-                background: #0e1420; color: #94a3b8; padding: 8px 16px;
-                border-top-left-radius: 8px; border-top-right-radius: 8px;
-            }
-            QTabBar::tab:selected { background: #0a0e17; color: #00f0ff; }
-        """)
-        tabs.addTab(self._build_password_tab(), "Parolni o'zgartirish")
-        tabs.addTab(self._build_activity_tab(), "Jami harakatlar")
-        root.addWidget(tabs, 1)
-
-        bottom_row = QHBoxLayout()
-
-        stop_btn = QPushButton("🛑  Vaqtni to'xtatish")
-        stop_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        stop_btn.setFixedHeight(38)
-        stop_btn.setStyleSheet("""
-            QPushButton {
-                background: rgba(239,68,68,0.12); color: #ef4444;
-                border: 1px solid rgba(239,68,68,0.35); border-radius: 8px;
-                font-weight: bold;
-            }
-            QPushButton:hover { background: rgba(239,68,68,0.22); }
-        """)
-        stop_btn.clicked.connect(self._on_stop_session_clicked)
-        bottom_row.addWidget(stop_btn, 1)
+        columns = QHBoxLayout()
+        columns.setSpacing(16)
+        columns.addWidget(self._build_identity_card(), 1)
+        columns.addWidget(self._build_security_card(), 1)
+        columns.addWidget(self._build_stats_card(), 1)
+        root.addLayout(columns, 1)
 
         close_btn = QPushButton("Yopish")
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        close_btn.setFixedHeight(38)
+        close_btn.setFixedHeight(36)
         close_btn.setStyleSheet("""
             QPushButton {
                 background: rgba(255,255,255,0.06); color: #94a3b8;
@@ -1014,67 +997,245 @@ class CustomerCabinetDialog(QDialog):
             QPushButton:hover { color: #e2e8f0; }
         """)
         close_btn.clicked.connect(self.accept)
-        bottom_row.addWidget(close_btn, 1)
-
-        root.addLayout(bottom_row)
+        root.addWidget(close_btn)
 
         self._load_activity()
 
-    def _build_password_tab(self):
-        w = QWidget()
-        lo = QVBoxLayout(w)
-        lo.setContentsMargins(16, 16, 16, 16)
+    def _build_header_card(self):
+        card = QFrame()
+        card.setObjectName("cabinetCard")
+        card.setFixedHeight(150)
+        card.setStyleSheet(self.CARD_STYLE)
+
+        row = QHBoxLayout(card)
+        row.setContentsMargins(24, 20, 24, 20)
+        row.setSpacing(20)
+
+        # Avatar — haqiqiy rasm yo'q, shuning uchun ismning bosh
+        # harfi bilan gradient "belgi" ko'rsatiladi.
+        initial = (self.customer_data.get('full_name') or '?')[:1].upper()
+        avatar = QLabel(initial)
+        avatar.setFixedSize(84, 84)
+        avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        avatar.setFont(QFont("Georgia", 30, QFont.Weight.Bold))
+        avatar.setStyleSheet("""
+            color: #060911;
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #00f0ff, stop:1 #a855f7);
+            border-radius: 18px;
+        """)
+        row.addWidget(avatar)
+
+        info_col = QVBoxLayout()
+        info_col.setSpacing(4)
+        status_row = QLabel(f"🟢  ONLINE / {self.customer_data.get('station_name', '')}".rstrip(' /'))
+        status_row.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        status_row.setStyleSheet("color: #22c55e; letter-spacing: 1px;")
+        info_col.addWidget(status_row)
+
+        name = QLabel(self.customer_data.get('full_name', ''))
+        name.setFont(QFont("Georgia", 22, QFont.Weight.Bold))
+        name.setStyleSheet("color: #ffffff;")
+        info_col.addWidget(name)
+
+        phone = QLabel(f"📞  {self.customer_data.get('phone', '')}")
+        phone.setStyleSheet("color: #64748b; font-size: 12px;")
+        info_col.addWidget(phone)
+        info_col.addStretch(1)
+        row.addLayout(info_col, 1)
+
+        balance_box = QFrame()
+        balance_box.setStyleSheet("""
+            background: rgba(0,240,255,0.06);
+            border: 1px solid rgba(0,240,255,0.25);
+            border-radius: 12px;
+        """)
+        bb = QVBoxLayout(balance_box)
+        bb.setContentsMargins(18, 10, 18, 10)
+        bb.setSpacing(2)
+        balance_tag = QLabel("JORIY BALANS")
+        balance_tag.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+        balance_tag.setStyleSheet("color: #64748b; letter-spacing: 1px;")
+        balance_tag.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        bb.addWidget(balance_tag)
+        try:
+            bal = float(self.customer_data.get('balance', 0))
+        except (TypeError, ValueError):
+            bal = 0
+        self.header_balance_label = QLabel(f"{bal:,.0f} UZS")
+        self.header_balance_label.setFont(QFont("Consolas", 20, QFont.Weight.Bold))
+        self.header_balance_label.setStyleSheet("color: #00f0ff;")
+        self.header_balance_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        bb.addWidget(self.header_balance_label)
+
+        topup_btn = QPushButton("+  BALANSNI TO'LDIRISH")
+        topup_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        topup_btn.setFixedHeight(32)
+        topup_btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        topup_btn.setStyleSheet("""
+            QPushButton {
+                color: #060911; font-weight: bold;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #00f0ff, stop:1 #a855f7);
+                border: none; border-radius: 10px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #4df6ff, stop:1 #c084fc);
+            }
+        """)
+        topup_btn.clicked.connect(self._on_topup_info_clicked)
+
+        right_col = QVBoxLayout()
+        right_col.setSpacing(8)
+        right_col.addWidget(balance_box)
+        right_col.addWidget(topup_btn)
+        row.addLayout(right_col)
+
+        return card
+
+    def _on_topup_info_clicked(self):
+        QMessageBox.information(
+            self, "Balansni to'ldirish",
+            "Balansni to'ldirish uchun klub administratoriga (kassaga) murojaat qiling."
+        )
+
+    def _build_identity_card(self):
+        card = QFrame()
+        card.setObjectName("cabinetCard")
+        card.setStyleSheet(self.CARD_STYLE)
+        lo = QVBoxLayout(card)
+        lo.setContentsMargins(18, 16, 18, 16)
         lo.setSpacing(10)
 
-        input_style = """
-            QLineEdit {
-                background: #0e1420; color: #e2e8f0;
-                border: 1px solid rgba(255,255,255,0.12);
-                border-radius: 8px; padding: 0 12px; font-size: 13px;
-            }
-            QLineEdit:focus { border: 1px solid rgba(0,240,255,0.5); }
-        """
+        title = QLabel("🪪  IDENTITY")
+        title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        title.setStyleSheet("color: #e2e8f0;")
+        lo.addWidget(title)
+
+        name_tag = QLabel("ISM")
+        name_tag.setStyleSheet("color: #64748b; font-size: 9px; letter-spacing: 1px;")
+        lo.addWidget(name_tag)
+        name_val = QLabel(self.customer_data.get('full_name', ''))
+        name_val.setStyleSheet("color: #e2e8f0; font-size: 13px; font-weight: bold;")
+        lo.addWidget(name_val)
+
+        phone_tag = QLabel("TELEFON RAQAM")
+        phone_tag.setStyleSheet("color: #64748b; font-size: 9px; letter-spacing: 1px;")
+        lo.addWidget(phone_tag)
+        phone_val = QLabel(self.customer_data.get('phone', ''))
+        phone_val.setStyleSheet("color: #e2e8f0; font-size: 13px; font-weight: bold;")
+        lo.addWidget(phone_val)
+
+        hint = QLabel("Ma'lumotlarni o'zgartirish uchun administratorga murojaat qiling.")
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: #475569; font-size: 10px;")
+        lo.addWidget(hint)
+        lo.addStretch(1)
+        return card
+
+    def _build_security_card(self):
+        card = QFrame()
+        card.setObjectName("cabinetCard")
+        card.setStyleSheet(self.CARD_STYLE)
+        lo = QVBoxLayout(card)
+        lo.setContentsMargins(18, 16, 18, 16)
+        lo.setSpacing(10)
+
+        title = QLabel("🔐  SECURITY")
+        title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        title.setStyleSheet("color: #e2e8f0;")
+        lo.addWidget(title)
+
         self.old_pw_input = QLineEdit()
         self.old_pw_input.setPlaceholderText("Joriy parol")
         self.old_pw_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.old_pw_input.setFixedHeight(38)
-        self.old_pw_input.setStyleSheet(input_style)
+        self.old_pw_input.setFixedHeight(36)
+        self.old_pw_input.setStyleSheet(self.INPUT_STYLE)
         lo.addWidget(self.old_pw_input)
 
         self.new_pw_input = QLineEdit()
         self.new_pw_input.setPlaceholderText("Yangi parol")
         self.new_pw_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.new_pw_input.setFixedHeight(38)
-        self.new_pw_input.setStyleSheet(input_style)
+        self.new_pw_input.setFixedHeight(36)
+        self.new_pw_input.setStyleSheet(self.INPUT_STYLE)
         lo.addWidget(self.new_pw_input)
 
         self.pw_status = QLabel("")
         self.pw_status.setWordWrap(True)
-        self.pw_status.setStyleSheet("color: #ef4444; font-size: 11px;")
+        self.pw_status.setStyleSheet("color: #ef4444; font-size: 10px;")
         self.pw_status.hide()
         lo.addWidget(self.pw_status)
 
-        self.pw_submit_btn = QPushButton("Parolni yangilash")
+        self.pw_submit_btn = QPushButton("UPDATE PASSWORD")
         self.pw_submit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.pw_submit_btn.setFixedHeight(38)
+        self.pw_submit_btn.setFixedHeight(36)
+        self.pw_submit_btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
         self.pw_submit_btn.setStyleSheet("""
             QPushButton {
-                background: rgba(0,240,255,0.15); color: #00f0ff;
-                border: 1px solid rgba(0,240,255,0.4); border-radius: 8px;
-                font-weight: bold;
+                background: rgba(255,255,255,0.06); color: #e2e8f0;
+                border: 1px solid rgba(255,255,255,0.15); border-radius: 9px;
             }
-            QPushButton:hover { background: rgba(0,240,255,0.25); }
-            QPushButton:disabled { color: #475569; border-color: rgba(255,255,255,0.1); }
+            QPushButton:hover { background: rgba(255,255,255,0.12); }
+            QPushButton:disabled { color: #475569; }
         """)
         self.pw_submit_btn.clicked.connect(self._on_change_password_clicked)
         lo.addWidget(self.pw_submit_btn)
-        lo.addStretch(1)
-        return w
 
-    def _build_activity_tab(self):
+        lo.addSpacing(6)
+
+        stop_btn = QPushButton("⏻  VAQTNI TO'XTATISH")
+        stop_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        stop_btn.setFixedHeight(36)
+        stop_btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        stop_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(239,68,68,0.10); color: #ef4444;
+                border: 1px solid rgba(239,68,68,0.35); border-radius: 9px;
+            }
+            QPushButton:hover { background: rgba(239,68,68,0.20); }
+        """)
+        stop_btn.clicked.connect(self._on_stop_session_clicked)
+        lo.addWidget(stop_btn)
+
+        lo.addStretch(1)
+        return card
+
+    def _build_stats_card(self):
         w = QWidget()
         lo = QVBoxLayout(w)
-        lo.setContentsMargins(16, 16, 16, 16)
+        lo.setContentsMargins(0, 0, 0, 0)
+        lo.setSpacing(12)
+
+        def _stat_box(tag_text):
+            box = QFrame()
+            box.setObjectName("cabinetCard")
+            box.setStyleSheet(self.CARD_STYLE)
+            bl = QVBoxLayout(box)
+            bl.setContentsMargins(16, 10, 16, 10)
+            bl.setSpacing(2)
+            tag = QLabel(tag_text)
+            tag.setStyleSheet("color: #64748b; font-size: 9px; letter-spacing: 1px;")
+            bl.addWidget(tag)
+            val = QLabel("—")
+            val.setFont(QFont("Segoe UI", 15, QFont.Weight.Bold))
+            val.setStyleSheet("color: #e2e8f0;")
+            bl.addWidget(val)
+            return box, val
+
+        playtime_box, self.playtime_val = _stat_box("TOTAL PLAYTIME")
+        lo.addWidget(playtime_box)
+
+        station_box, self.station_val = _stat_box("FAV STATION")
+        lo.addWidget(station_box)
+
+        history_card = QFrame()
+        history_card.setObjectName("cabinetCard")
+        history_card.setStyleSheet(self.CARD_STYLE)
+        hl = QVBoxLayout(history_card)
+        hl.setContentsMargins(16, 14, 16, 14)
+        hl.setSpacing(8)
+        history_title = QLabel("🕐  HISTORY")
+        history_title.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        hl.addWidget(history_title)
+
         self.activity_area = QScrollArea()
         self.activity_area.setWidgetResizable(True)
         self.activity_area.setStyleSheet("QScrollArea { border: none; background: transparent; }")
@@ -1083,10 +1244,12 @@ class CustomerCabinetDialog(QDialog):
         self.activity_layout.setSpacing(6)
         self.activity_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.activity_loading = QLabel("Yuklanmoqda...")
-        self.activity_loading.setStyleSheet("color: #64748b;")
+        self.activity_loading.setStyleSheet("color: #64748b; font-size: 11px;")
         self.activity_layout.addWidget(self.activity_loading)
         self.activity_area.setWidget(self.activity_container)
-        lo.addWidget(self.activity_area)
+        hl.addWidget(self.activity_area, 1)
+
+        lo.addWidget(history_card, 1)
         return w
 
     def _on_change_password_clicked(self):
@@ -1147,6 +1310,24 @@ class CustomerCabinetDialog(QDialog):
             self.activity_layout.addWidget(err)
             return
 
+        sessions = data.get('sessions', [])
+        total_minutes = 0
+        station_counts = {}
+        for s in sessions:
+            try:
+                total_minutes += int(s.get('duration_minutes') or 0)
+            except (TypeError, ValueError):
+                pass
+            cname = s.get('computer_name')
+            if cname:
+                station_counts[cname] = station_counts.get(cname, 0) + 1
+        if hasattr(self, 'playtime_val'):
+            hours, mins = divmod(total_minutes, 60)
+            self.playtime_val.setText(f"{hours} soat {mins} daq" if total_minutes else "—")
+        if hasattr(self, 'station_val'):
+            fav = max(station_counts, key=station_counts.get) if station_counts else None
+            self.station_val.setText(fav or "—")
+
         rows = []
         for t in data.get('transactions', []):
             sign = '+' if t.get('type') == 'TOPUP' else '−'
@@ -1156,7 +1337,7 @@ class CustomerCabinetDialog(QDialog):
             except (TypeError, ValueError):
                 amount = 0
             rows.append((t.get('created_at', ''), t.get('type_display', ''), f"{sign}{amount:,.0f} UZS", color))
-        for s in data.get('sessions', []):
+        for s in sessions:
             try:
                 price = float(s.get('total_price', 0))
             except (TypeError, ValueError):
@@ -2979,6 +3160,52 @@ def main():
             background-color: #060911;
             color: #e2e8f0;
             font-family: 'Segoe UI', 'Inter', 'SF Pro', -apple-system, sans-serif;
+        }
+
+        /* Zamonaviy, yupqa scrollbar — standart Windows'ning "qalin,
+           tugmali" ko'rinishi o'rniga (butun dastur bo'ylab, barcha
+           QScrollArea'lar uchun amal qiladi). */
+        QScrollBar:vertical {
+            background: transparent;
+            width: 10px;
+            margin: 2px 0;
+        }
+        QScrollBar::handle:vertical {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 5px;
+            min-height: 32px;
+        }
+        QScrollBar::handle:vertical:hover {
+            background: rgba(0, 240, 255, 0.45);
+        }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+            height: 0px;
+            border: none;
+            background: none;
+        }
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+            background: none;
+        }
+        QScrollBar:horizontal {
+            background: transparent;
+            height: 10px;
+            margin: 0 2px;
+        }
+        QScrollBar::handle:horizontal {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 5px;
+            min-width: 32px;
+        }
+        QScrollBar::handle:horizontal:hover {
+            background: rgba(0, 240, 255, 0.45);
+        }
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+            width: 0px;
+            border: none;
+            background: none;
+        }
+        QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+            background: none;
         }
     """)
     if IS_WINDOWS:

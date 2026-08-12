@@ -1431,6 +1431,45 @@ class CustomerCabinetPage(QWidget):
 # ──────────────────────────────────────────────────────────────────────────────
 #  7. RESPONSIVE FLOW GRID (o'yin/mahsulot kartalari uchun)
 # ──────────────────────────────────────────────────────────────────────────────
+class FlowGrid(QWidget):
+    """ResponsiveGrid bilan bir xil moslashuvchan panjara mantig'i,
+    lekin o'zining QScrollArea'siz — BarPage'da bir nechta kategoriya
+    bo'limini (har biri o'z sarlavhasi bilan) BITTA umumiy scroll
+    ichiga ketma-ket joylash uchun ishlatiladi."""
+    def __init__(self, card_min_width=220, spacing=18, margins=(0, 0, 0, 0), parent=None):
+        super().__init__(parent)
+        self.card_min_width = card_min_width
+        self.spacing = spacing
+        self._items = []
+        self.grid_layout = QGridLayout(self)
+        self.grid_layout.setSpacing(spacing)
+        self.grid_layout.setContentsMargins(*margins)
+        self.grid_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+
+    def set_items(self, widgets):
+        while self.grid_layout.count():
+            item = self.grid_layout.takeAt(0)
+            if item and item.widget():
+                item.widget().setParent(None)
+        self._items = widgets
+        self._relayout()
+
+    def _columns_for_width(self, width):
+        col_width = self.card_min_width + self.spacing
+        return max(1, width // col_width)
+
+    def _relayout(self):
+        cols = self._columns_for_width(self.width())
+        for index, widget in enumerate(self._items):
+            row, col = divmod(index, cols)
+            self.grid_layout.addWidget(widget, row, col)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if self._items:
+            self._relayout()
+
+
 class ResponsiveGrid(QScrollArea):
     def __init__(self, card_min_width=260, spacing=20, parent=None):
         super().__init__(parent)
@@ -1438,16 +1477,16 @@ class ResponsiveGrid(QScrollArea):
         self.spacing = spacing
         self._items = []
         self.setWidgetResizable(True)
-        self.setStyleSheet("QScrollArea { border: none; background-color: #060911; }")
+        self.setStyleSheet(f"QScrollArea {{ border: none; background-color: {COLOR_BG}; }}")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         # QScrollArea'ning ichki viewport widget'i alohida bo'lib, yuqoridagi
         # stylesheet uni har doim ham to'liq qamrab olavermaydi (ayniqsa
         # panjara bo'sh bo'lganda, tizim palitrasidagi och rang ko'rinib
         # qolishi mumkin edi) — shuning uchun uni ham aniq belgilaymiz.
-        self.viewport().setStyleSheet("background-color: #060911;")
+        self.viewport().setStyleSheet(f"background-color: {COLOR_BG};")
 
         self.container = QWidget()
-        self.container.setStyleSheet("background-color: #060911;")
+        self.container.setStyleSheet(f"background-color: {COLOR_BG};")
         self.grid_layout = QGridLayout(self.container)
         self.grid_layout.setSpacing(spacing)
         self.grid_layout.setContentsMargins(28, 20, 28, 28)
@@ -1482,23 +1521,23 @@ class ResponsiveGrid(QScrollArea):
 # ──────────────────────────────────────────────────────────────────────────────
 #  8. GAME CARD
 # ──────────────────────────────────────────────────────────────────────────────
-class GameCard(QFrame):
+class GameCard(BracketFrame):
     launch_requested = pyqtSignal(dict)
 
     def __init__(self, game, parent=None):
-        super().__init__(parent)
+        super().__init__(bracket_color=COLOR_CYAN, bracket_len=12)
         self.game = game
         self.setFixedWidth(260)
         self.setObjectName("gameCard")
-        self.setStyleSheet("""
-            QFrame#gameCard {
-                background: #0a0e17;
-                border: 1px solid rgba(255,255,255,0.08);
+        self.setStyleSheet(f"""
+            QFrame#gameCard {{
+                background: {COLOR_PANEL};
+                border: 1px solid {COLOR_PANEL_BORDER};
                 border-radius: 14px;
-            }
-            QFrame#gameCard:hover {
-                border: 1px solid rgba(0,240,255,0.45);
-            }
+            }}
+            QFrame#gameCard:hover {{
+                border: 1px solid {COLOR_CYAN_GLOW};
+            }}
         """)
         lo = QVBoxLayout(self)
         lo.setContentsMargins(0, 0, 0, 0)
@@ -1506,7 +1545,7 @@ class GameCard(QFrame):
 
         self.cover = QLabel()
         self.cover.setFixedSize(258, 150)
-        self.cover.setStyleSheet("background-color: #12172a; border-top-left-radius: 14px; border-top-right-radius: 14px;")
+        self.cover.setStyleSheet("background-color: #16181d; border-top-left-radius: 14px; border-top-right-radius: 14px;")
         self.cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.cover.setText("🎮")
         self.cover.setFont(QFont("Segoe UI", 32))
@@ -1516,37 +1555,43 @@ class GameCard(QFrame):
         if cover_path:
             load_image_async(cover_path, self.cover)
 
-        info = QHBoxLayout()
-        info.setContentsMargins(14, 12, 14, 10)
-        name = QLabel(game.get('name', 'Unknown'))
-        name.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
-        name.setStyleSheet("color: #ffffff;")
-        name.setWordWrap(True)
-        info.addWidget(name, 1)
-
         cat_key = game.get('category', '')
-        badge = QLabel(cat_key.upper() if cat_key else '')
+        badge = QLabel(cat_key.upper() if cat_key else '', self.cover)
         badge.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
-        badge.setStyleSheet("""
-            color: #94a3b8; background: rgba(255,255,255,0.06);
+        badge.setStyleSheet(f"""
+            color: {COLOR_CYAN}; background: rgba(0,243,255,0.12);
+            border: 1px solid rgba(0,243,255,0.3);
             border-radius: 8px; padding: 3px 8px;
         """)
-        info.addWidget(badge, 0, Qt.AlignmentFlag.AlignTop)
+        if cat_key:
+            badge.adjustSize()
+            badge.move(10, 10)
+
+        info = QVBoxLayout()
+        info.setContentsMargins(14, 12, 14, 8)
+        info.setSpacing(2)
+        name = QLabel(game.get('name', 'Unknown'))
+        name.setFont(serif_font(13))
+        name.setStyleSheet("color: #ffffff;")
+        name.setWordWrap(True)
+        info.addWidget(name)
         lo.addLayout(info)
 
         self.launch_btn = QPushButton("▶  ISHGA TUSHIRISH")
         self.launch_btn.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
         self.launch_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.launch_btn.setFixedHeight(42)
-        self.launch_btn.setStyleSheet("""
-            QPushButton {
-                background: rgba(0,240,255,0.10);
-                color: #00f0ff;
+        self.launch_btn.setStyleSheet(f"""
+            QPushButton {{
+                color: {COLOR_BG}; font-weight: bold;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {COLOR_CYAN}, stop:1 {COLOR_VIOLET});
                 border: none;
                 border-bottom-left-radius: 14px;
                 border-bottom-right-radius: 14px;
-            }
-            QPushButton:hover { background: rgba(0,240,255,0.22); }
+            }}
+            QPushButton:hover {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4df6ff, stop:1 #a78bfa);
+            }}
         """)
         self.launch_btn.clicked.connect(lambda: self.launch_requested.emit(self.game))
         lo.addWidget(self.launch_btn)
@@ -1560,7 +1605,7 @@ class GamesPage(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setStyleSheet("background-color: #060911;")
+        self.setStyleSheet(f"background-color: {COLOR_BG};")
         self._all_games = []
         self._active_category = "all"
         self._search_text = ""
@@ -1569,16 +1614,46 @@ class GamesPage(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
+        # Sahifa sarlavhasi
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(28, 20, 28, 4)
+        title_row = QHBoxLayout()
+        title_row.setSpacing(10)
+        dash = QLabel("—")
+        dash.setStyleSheet(f"color: {COLOR_CYAN}; font-size: 20px;")
+        title_row.addWidget(dash)
+        page_title = QLabel("COMMAND CENTER")
+        page_title.setFont(serif_font(26))
+        page_title.setStyleSheet("color: #ffffff; letter-spacing: 1px;")
+        title_row.addWidget(page_title)
+        header_row.addLayout(title_row)
+        header_row.addStretch(1)
+        online_tag = QLabel("SYS.ONLINE")
+        online_tag.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+        online_tag.setStyleSheet("""
+            color: #22c55e; background: rgba(34,197,94,0.10);
+            border: 1px solid rgba(34,197,94,0.3);
+            border-radius: 8px; padding: 4px 10px; letter-spacing: 1px;
+        """)
+        header_row.addWidget(online_tag, 0, Qt.AlignmentFlag.AlignTop)
+        header_widget0 = QWidget()
+        header_widget0.setLayout(header_row)
+        root.addWidget(header_widget0)
+
         # Category filter row
         cat_row = QHBoxLayout()
-        cat_row.setContentsMargins(28, 18, 28, 10)
+        cat_row.setContentsMargins(28, 14, 28, 10)
         cat_row.setSpacing(10)
+        filter_label = QLabel("FILTER BY:")
+        filter_label.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        filter_label.setStyleSheet("color: #64748b; letter-spacing: 1px;")
+        cat_row.addWidget(filter_label)
         self.cat_buttons = {}
         for key, label, icon in GAME_CATEGORIES:
             btn = QPushButton(f"{icon}  {label}")
             btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setFixedHeight(38)
+            btn.setFixedHeight(34)
             btn.clicked.connect(lambda _, k=key: self._select_category(k))
             cat_row.addWidget(btn)
             self.cat_buttons[key] = btn
@@ -1599,16 +1674,10 @@ class GamesPage(QWidget):
         toolbar.addWidget(self.error_banner, 1)
 
         self.search_box = QLineEdit()
-        self.search_box.setPlaceholderText("🔍  O'yin nomini qidirish...")
+        self.search_box.setPlaceholderText("🔍  SEARCH DATABASE...")
         self.search_box.setFixedWidth(280)
         self.search_box.setFixedHeight(38)
-        self.search_box.setStyleSheet("""
-            QLineEdit {
-                background: #0a0e17; color: #e2e8f0;
-                border: 1px solid rgba(255,255,255,0.1);
-                border-radius: 10px; padding: 0 12px;
-            }
-        """)
+        self.search_box.setStyleSheet(INPUT_QSS)
         self.search_box.textChanged.connect(self._on_search_changed)
         toolbar.addWidget(self.search_box)
 
@@ -1640,13 +1709,13 @@ class GamesPage(QWidget):
     def _apply_category_styles(self):
         for key, btn in self.cat_buttons.items():
             if key == self._active_category:
-                btn.setStyleSheet("""
-                    QPushButton { background: #00f0ff; color: #06131a; border: none; border-radius: 10px; padding: 0 16px; }
+                btn.setStyleSheet(f"""
+                    QPushButton {{ background: {COLOR_VIOLET}; color: #ffffff; border: none; border-radius: 17px; padding: 0 16px; }}
                 """)
             else:
-                btn.setStyleSheet("""
-                    QPushButton { background: #0a0e17; color: #94a3b8; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 0 16px; }
-                    QPushButton:hover { border: 1px solid rgba(0,240,255,0.35); color: #e2e8f0; }
+                btn.setStyleSheet(f"""
+                    QPushButton {{ background: {COLOR_PANEL}; color: #94a3b8; border: 1px solid {COLOR_PANEL_BORDER}; border-radius: 17px; padding: 0 16px; }}
+                    QPushButton:hover {{ border: 1px solid {COLOR_CYAN_GLOW}; color: #e2e8f0; }}
                 """)
 
     def _on_search_changed(self, text):
@@ -1671,17 +1740,26 @@ class GamesPage(QWidget):
 # ──────────────────────────────────────────────────────────────────────────────
 #  10. BAR MENU PAGE
 # ──────────────────────────────────────────────────────────────────────────────
-class ProductCard(QFrame):
+def _category_icon_for(name):
+    n = (name or '').lower()
+    if any(k in n for k in ('drink', 'ichim', 'energy', 'sok', 'suv', 'napitok')):
+        return '⚡'
+    if any(k in n for k in ('snack', 'ovqat', 'burger', 'fast', 'taom', 'food')):
+        return '🍔'
+    return '🛒'
+
+
+class ProductCard(BracketFrame):
     qty_changed = pyqtSignal(dict, int)
 
     def __init__(self, product, parent=None):
-        super().__init__(parent)
+        super().__init__(bracket_color=COLOR_CYAN, bracket_len=10)
         self.product = product
         self.qty = 0
         self.setFixedWidth(220)
         self.setObjectName("productCard")
-        self.setStyleSheet("""
-            QFrame#productCard { background: #0a0e17; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; }
+        self.setStyleSheet(f"""
+            QFrame#productCard {{ background: {COLOR_PANEL}; border: 1px solid {COLOR_PANEL_BORDER}; border-radius: 14px; }}
         """)
         lo = QVBoxLayout(self)
         lo.setContentsMargins(0, 0, 0, 0)
@@ -1689,7 +1767,7 @@ class ProductCard(QFrame):
 
         self.cover = QLabel()
         self.cover.setFixedSize(218, 120)
-        self.cover.setStyleSheet("background-color: #12172a; border-top-left-radius: 14px; border-top-right-radius: 14px;")
+        self.cover.setStyleSheet("background-color: #16181d; border-top-left-radius: 14px; border-top-right-radius: 14px;")
         self.cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.cover.setText("🍿")
         self.cover.setFont(QFont("Segoe UI", 26))
@@ -1698,20 +1776,25 @@ class ProductCard(QFrame):
         if img:
             load_image_async(img, self.cover)
 
-        name = QLabel(product.get('name', ''))
-        name.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        name.setStyleSheet("color: #ffffff; padding: 10px 12px 2px 12px;")
-        name.setWordWrap(True)
-        lo.addWidget(name)
-
         try:
             price = float(product.get('price', 0))
         except (TypeError, ValueError):
             price = 0.0
-        price_label = QLabel(f"{price:,.0f} so'm".replace(',', ' '))
-        price_label.setFont(QFont("Segoe UI", 10))
-        price_label.setStyleSheet("color: #00f0ff; padding: 0 12px 8px 12px;")
-        lo.addWidget(price_label)
+        price_badge = QLabel(f"{price:,.0f} UZS".replace(',', ' '), self.cover)
+        price_badge.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+        price_badge.setStyleSheet(f"""
+            color: {COLOR_CYAN}; background: rgba(0,243,255,0.12);
+            border: 1px solid rgba(0,243,255,0.3);
+            border-radius: 8px; padding: 3px 8px;
+        """)
+        price_badge.adjustSize()
+        price_badge.move(218 - price_badge.width() - 8, 8)
+
+        name = QLabel(product.get('name', ''))
+        name.setFont(serif_font(12))
+        name.setStyleSheet("color: #ffffff; padding: 10px 12px 8px 12px;")
+        name.setWordWrap(True)
+        lo.addWidget(name)
 
         stepper = QHBoxLayout()
         stepper.setContentsMargins(12, 0, 12, 12)
@@ -1720,7 +1803,10 @@ class ProductCard(QFrame):
         for b in (minus, plus):
             b.setFixedSize(34, 34)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
-            b.setStyleSheet("QPushButton { background: rgba(255,255,255,0.06); color: #e2e8f0; border-radius: 8px; font-weight: bold; } QPushButton:hover { background: rgba(0,240,255,0.15); }")
+            b.setStyleSheet(f"""
+                QPushButton {{ background: {COLOR_INPUT_BG}; color: #e2e8f0; border: 1px solid {COLOR_INPUT_BORDER}; border-radius: 8px; font-weight: bold; }}
+                QPushButton:hover {{ border: 1px solid {COLOR_CYAN}; color: {COLOR_CYAN}; }}
+            """)
         self.qty_label = QLabel("0")
         self.qty_label.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         self.qty_label.setStyleSheet("color: #ffffff;")
@@ -1749,7 +1835,7 @@ class BarPage(QWidget):
         self.api_client = api_client
         self.pc_name = pc_name
         self.cart = {}  # product_id -> (product, qty)
-        self.setStyleSheet("background-color: #060911;")
+        self.setStyleSheet(f"background-color: {COLOR_BG};")
         self._order_result.connect(self._on_order_done)
 
         root = QVBoxLayout(self)
@@ -1757,25 +1843,25 @@ class BarPage(QWidget):
         root.setSpacing(0)
 
         header = QHBoxLayout()
-        header.setContentsMargins(28, 18, 28, 10)
-        title = QLabel("🍸 BAR MENYUSI")
-        title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
-        title.setStyleSheet("color: #ffffff;")
+        header.setContentsMargins(28, 20, 28, 4)
+        title = QLabel("Provisions")
+        title.setFont(serif_font(26))
+        title.setStyleSheet("color: #ffffff; letter-spacing: 1px;")
         header.addWidget(title)
         header.addStretch(1)
 
         self.total_label = QLabel("Jami: 0 so'm")
         self.total_label.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        self.total_label.setStyleSheet("color: #00f0ff;")
+        self.total_label.setStyleSheet(f"color: {COLOR_CYAN};")
         header.addWidget(self.total_label)
 
         self.order_btn = QPushButton("✅  BUYURTMA BERISH")
         self.order_btn.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
         self.order_btn.setFixedHeight(40)
         self.order_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.order_btn.setStyleSheet("""
-            QPushButton { background: #00f0ff; color: #06131a; border: none; border-radius: 10px; padding: 0 18px; }
-            QPushButton:disabled { background: rgba(255,255,255,0.06); color: #64748b; }
+        self.order_btn.setStyleSheet(f"""
+            {GRADIENT_BTN_QSS}
+            QPushButton {{ padding: 0 18px; }}
         """)
         self.order_btn.clicked.connect(self._place_order)
         self.order_btn.setEnabled(False)
@@ -1791,18 +1877,51 @@ class BarPage(QWidget):
         self.status_label.hide()
         root.addWidget(self.status_label)
 
-        self.grid = ResponsiveGrid(card_min_width=220, spacing=18)
-        root.addWidget(self.grid, 1)
+        self.sections_scroll = QScrollArea()
+        self.sections_scroll.setWidgetResizable(True)
+        self.sections_scroll.setStyleSheet(f"QScrollArea {{ border: none; background-color: {COLOR_BG}; }}")
+        self.sections_scroll.viewport().setStyleSheet(f"background-color: {COLOR_BG};")
+        self.sections_container = QWidget()
+        self.sections_container.setStyleSheet(f"background-color: {COLOR_BG};")
+        self.sections_layout = QVBoxLayout(self.sections_container)
+        self.sections_layout.setContentsMargins(28, 10, 28, 28)
+        self.sections_layout.setSpacing(22)
+        self.sections_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.sections_scroll.setWidget(self.sections_container)
+        root.addWidget(self.sections_scroll, 1)
 
     def set_products(self, products):
         self.cart = {}
         self._update_total()
-        cards = []
+
+        while self.sections_layout.count():
+            item = self.sections_layout.takeAt(0)
+            if item and item.widget():
+                item.widget().setParent(None)
+
+        groups = {}
+        order = []
         for p in products:
-            card = ProductCard(p)
-            card.qty_changed.connect(self._on_qty_changed)
-            cards.append(card)
-        self.grid.set_items(cards)
+            cat = p.get('category_name') or "Boshqa"
+            if cat not in groups:
+                groups[cat] = []
+                order.append(cat)
+            groups[cat].append(p)
+
+        for cat in order:
+            section_title = QLabel(f"{_category_icon_for(cat)}  {cat}")
+            section_title.setFont(serif_font(15))
+            section_title.setStyleSheet("color: #ffffff;")
+            self.sections_layout.addWidget(section_title)
+
+            flow = FlowGrid(card_min_width=220, spacing=18)
+            cards = []
+            for p in groups[cat]:
+                card = ProductCard(p)
+                card.qty_changed.connect(self._on_qty_changed)
+                cards.append(card)
+            flow.set_items(cards)
+            self.sections_layout.addWidget(flow)
 
     def _on_qty_changed(self, product, qty):
         pid = product.get('id')
@@ -1841,7 +1960,7 @@ class BarPage(QWidget):
             self.status_label.setText("✅ Buyurtma qabul qilindi! Bar xodimi tez orada olib keladi.")
             self.cart = {}
             self._update_total()
-            self.grid.set_items([])
+            self.set_products([])
         else:
             self.status_label.setStyleSheet("color: #ef4444;")
             self.status_label.setText("❌ Buyurtma yuborilmadi, qaytadan urinib ko'ring yoki administratorga murojaat qiling.")

@@ -1350,6 +1350,7 @@ class ClientLockerApp:
         self.launched_processes = []
         self.current_status = 'LOCKED'
         self.time_remaining = 0
+        self.is_open_time = False
         self.pc_id = None
         # WebSocket ulangan bo'lsa, u real-vaqtli va aniq tartibda keladi —
         # shu payt heartbeat javobini e'tiborsiz qoldiramiz, aks holda
@@ -1485,6 +1486,7 @@ class ClientLockerApp:
         new_status = data.get('status', 'LOCKED')
         seconds = data.get('time_remaining', 0)
         self.time_remaining = seconds
+        self.is_open_time = data.get('is_open_time', False)
         # EMERGENCY_LOCK_ALL kabi ba'zi xabarlarda 'id' bo'lmaydi —
         # shunday holatda self.pc_id'ni None bilan ustidan yozmaslik kerak,
         # aks holda skrinshot yuklash keyingi haqiqiy status kelgunicha
@@ -1580,7 +1582,14 @@ class ClientLockerApp:
 
     def _tick(self):
         if self.current_status in ('ACTIVE', 'WARNING'):
-            if self.time_remaining > 0:
+            if self.is_open_time:
+                # Open Time seansda vaqt cheklovi yo'q — bu yerda faqat
+                # ko'rsatish uchun soniyani oshirib boramiz (elapsed),
+                # hech qachon o'zi qulflamaydi. Faqat administrator
+                # "Tugatish" bosganda, server orqali haqiqiy LOCK keladi.
+                self.time_remaining += 1
+                self.main_window.update_timer(self.time_remaining)
+            elif self.time_remaining > 0:
                 self.time_remaining -= 1
                 self.main_window.update_timer(self.time_remaining)
             else:

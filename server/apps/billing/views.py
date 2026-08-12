@@ -1,5 +1,8 @@
+from pathlib import Path
 from datetime import timedelta, datetime, time
 import calendar
+from django.conf import settings
+from django.http import FileResponse
 from django.utils import timezone
 from django.shortcuts import render
 from django.views import View
@@ -121,7 +124,7 @@ class ComputerViewSet(viewsets.ModelViewSet):
     serializer_class = ComputerSerializer
 
     def get_permissions(self):
-        if self.action == 'heartbeat':
+        if self.action in ('heartbeat', 'upload_screenshot'):
             return [HasClientApiKey()]
         return super().get_permissions()
 
@@ -448,6 +451,29 @@ class ComputerViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(pc)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'])
+    def upload_screenshot(self, request, pk=None):
+        """Kiosk klienti (client_locker.py) davriy ravishda o'z ekran
+        rasmini shu yerga yuklaydi — masofadan monitoring uchun."""
+        pc = self.get_object()
+        screenshots_dir = Path(settings.MEDIA_ROOT) / 'screenshots'
+        screenshots_dir.mkdir(parents=True, exist_ok=True)
+        path = screenshots_dir / f"{pc.id}.png"
+        with open(path, 'wb') as f:
+            f.write(request.body)
+        return Response({'status': 'ok'})
+
+    @action(detail=True, methods=['get'])
+    def screenshot(self, request, pk=None):
+        """Admin panelidan: shu PC uchun oxirgi yuklangan skrinshotni
+        qaytaradi. Faqat tizimga kirgan xodim uchun (standart
+        IsAuthenticated ruxsati, kiosk API kaliti bu yerga yetarli emas)."""
+        pc = self.get_object()
+        path = Path(settings.MEDIA_ROOT) / 'screenshots' / f"{pc.id}.png"
+        if not path.exists():
+            return Response({'error': "Skrinshot hali mavjud emas"}, status=status.HTTP_404_NOT_FOUND)
+        return FileResponse(open(path, 'rb'), content_type='image/png')
 
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all().order_by('id')

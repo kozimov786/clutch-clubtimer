@@ -714,6 +714,21 @@
     </div>
   </div>
 
+  <!-- Screenshot / Remote Screen View Modal -->
+  <div id="screenshot-modal" class="modal-wrapper fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="modal-sheet-inner glass-panel w-full max-w-3xl rounded-2xl p-6 relative border border-slate-700 shadow-2xl">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+        <h3 class="text-xl font-bold font-orbitron text-white">Ekran — <span id="screenshot-pc-title" class="text-cyan-400">PC-01</span></h3>
+        <button onclick="closeScreenshotModal()" class="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+      </div>
+      <div class="pt-4 flex items-center justify-center min-h-[300px] bg-slate-950/60 rounded-xl border border-slate-800 overflow-hidden">
+        <img id="screenshot-img" src="" alt="Ekran skrinshoti" class="max-w-full max-h-[70vh] rounded-lg" onerror="document.getElementById('screenshot-error').classList.remove('hidden'); this.classList.add('hidden');">
+        <p id="screenshot-error" class="hidden text-slate-500 text-sm p-8 text-center">Bu kompyuterdan hali skrinshot kelmagan (client_locker.py yangi versiyasi ishga tushirilganini tekshiring, ~20 soniya kutish kerak bo'lishi mumkin).</p>
+      </div>
+      <p class="text-[11px] text-slate-500 mt-3 text-center">Har 5 soniyada avtomatik yangilanadi</p>
+    </div>
+  </div>
+
   <!-- Start Session Modal (With VIP Open Time Presets) -->
   <div id="start-modal" class="modal-wrapper fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
     <div class="modal-sheet-inner glass-panel w-full max-w-lg rounded-2xl p-6 relative border border-slate-700 shadow-2xl">

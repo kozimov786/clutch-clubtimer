@@ -38,7 +38,7 @@ import platform
 import threading
 import requests
 
-from PyQt6.QtCore import Qt, QTimer, QEvent, pyqtSignal, QObject, QDate
+from PyQt6.QtCore import Qt, QTimer, QEvent, pyqtSignal, QObject, QDate, QByteArray, QBuffer, QIODevice
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel,
     QPushButton, QFrame, QHBoxLayout, QScrollArea, QGridLayout,
@@ -1284,6 +1284,7 @@ class ClientLockerApp:
         self.launched_processes = []
         self.current_status = 'LOCKED'
         self.time_remaining = 0
+        self.pc_id = None
 
         self.main_window = MainWindow(
             pc_name=self.pc_name, server_url=self.server_url,
@@ -1298,6 +1299,14 @@ class ClientLockerApp:
         self.hotkey_timer = QTimer()
         self.hotkey_timer.timeout.connect(self._check_global_hotkeys)
         self.hotkey_timer.start(250)
+
+        # Masofadan monitoring uchun: admin panelidan har bir PC ekranini
+        # ko'rish imkoniyati (bugungidek uzoq debug jarayonlarini oldini
+        # olish uchun). Har 20 soniyada bir marta ekran rasmi serverga
+        # yuklanadi.
+        self.screenshot_timer = QTimer()
+        self.screenshot_timer.timeout.connect(self._capture_and_upload_screenshot)
+        self.screenshot_timer.start(20000)
 
         install_keyboard_hook()
         if IS_WINDOWS:
@@ -1321,6 +1330,41 @@ class ClientLockerApp:
     def _show_launcher_over_game(self):
         if self.current_status in ('ACTIVE', 'WARNING'):
             self.main_window.force_native_fullscreen()
+
+    def _capture_and_upload_screenshot(self):
+        if not self.pc_id:
+            return
+        # MUHIM: screen.grabWindow() — Qt/GUI operatsiyasi, faqat asosiy
+        # oqimda (shu QTimer callback'ining o'zida) chaqirilishi shart.
+        # Faqat tarmoq so'rovi (requests.post) fon oqimiga o'tkaziladi —
+        # shu farqni chalkashtirish ilgari butun oynani "shaffof"
+        # qilib qo'yadigan jiddiy xatoga sabab bo'lgan edi.
+        try:
+            screen = QGuiApplication.primaryScreen()
+            if not screen:
+                return
+            pixmap = screen.grabWindow(0)
+            byte_array = QByteArray()
+            buffer = QBuffer(byte_array)
+            buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+            pixmap.save(buffer, "PNG")
+            data = bytes(byte_array)
+            buffer.close()
+        except Exception as e:
+            print(f"[Screenshot] Olishda xato: {e}")
+            return
+
+        def _upload():
+            try:
+                requests.post(
+                    f"{self.server_url}/api/computers/{self.pc_id}/upload_screenshot/",
+                    data=data,
+                    headers={"X-API-Key": self.api_key, "Content-Type": "image/png"},
+                    timeout=8
+                )
+            except Exception as e:
+                print(f"[Screenshot] Yuklashda xato: {e}")
+        threading.Thread(target=_upload, daemon=True).start()
 
     def _load_config(self, path):
         cfg = {"server_url": "http://localhost:8001", "websocket_url": "ws://localhost:8001/ws/pc-status/",
@@ -1353,6 +1397,12 @@ class ClientLockerApp:
         new_status = data.get('status', 'LOCKED')
         seconds = data.get('time_remaining', 0)
         self.time_remaining = seconds
+        # EMERGENCY_LOCK_ALL kabi ba'zi xabarlarda 'id' bo'lmaydi —
+        # shunday holatda self.pc_id'ni None bilan ustidan yozmaslik kerak,
+        # aks holda skrinshot yuklash keyingi haqiqiy status kelgunicha
+        # to'xtab qoladi.
+        if data.get('id'):
+            self.pc_id = data.get('id')
         if new_status in ('ACTIVE', 'WARNING'):
             if self.current_status == 'LOCKED':
                 self._unlock()

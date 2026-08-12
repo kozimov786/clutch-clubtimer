@@ -115,4 +115,9 @@ STATICFILES_DIRS = [
 ]
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+# Kiosk klientlari yuklaydigan ekran skrinshotlari shu yerda saqlanadi
+# (masofadan monitoring uchun).
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

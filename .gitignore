@@ -13,6 +13,9 @@ venv.bak/
 # SQLite database (optional, omit if database file shouldn't be tracked)
 *.sqlite3
 
+# Kiosk klientlaridan yuklangan skrinshotlar (runtime-generated)
+server/media/
+
 # macOS
 .DS_Store
 

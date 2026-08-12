@@ -929,54 +929,6 @@ class ParallelogramTabBar(QWidget):
                 """)
 
 
-class OvalTabBar(QWidget):
-    """BarPage sarlavhasidagi ovalsimon "Games Library / Bar & Snacks"
-    almashtirgichi — ParallelogramTabBar bilan bir xil signal ammo
-    ko'proq yumaloqlashtirilgan (referens dizaynda ikkinchi sahifada
-    bu tablar kichikroq/ovalsimon ko'rinishda)."""
-    tab_clicked = pyqtSignal(str)
-    TABS = [("games", "Games Library"), ("bar", "Bar & Snacks")]
-
-    def __init__(self, active_key="bar", parent=None):
-        super().__init__(parent)
-        self._active = active_key
-        lo = QHBoxLayout(self)
-        lo.setContentsMargins(0, 0, 0, 0)
-        lo.setSpacing(8)
-        self._buttons = {}
-        for key, label in self.TABS:
-            btn = QPushButton(label)
-            btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setFixedHeight(32)
-            btn.clicked.connect(lambda _, k=key: self._on_click(k))
-            lo.addWidget(btn)
-            self._buttons[key] = btn
-        self._apply_styles()
-
-    def _on_click(self, key):
-        if key != self._active:
-            self.tab_clicked.emit(key)
-
-    def _apply_styles(self):
-        for key, btn in self._buttons.items():
-            if key == self._active:
-                btn.setStyleSheet(f"""
-                    QPushButton {{
-                        background: {COLOR_PANEL}; color: {COLOR_CYAN};
-                        border: 1px solid {COLOR_CYAN}; border-radius: 16px; padding: 0 16px;
-                    }}
-                """)
-            else:
-                btn.setStyleSheet(f"""
-                    QPushButton {{
-                        background: transparent; color: #64748b;
-                        border: 1px solid {COLOR_PANEL_BORDER}; border-radius: 16px; padding: 0 16px;
-                    }}
-                    QPushButton:hover {{ color: #94a3b8; }}
-                """)
-
-
 class RadarGraphic(QWidget):
     """"COMMAND CENTER"/"Provisions" sarlavhalari ortidagi taktik radar
     dekoratsiyasi — sof bezak, hech qanday funksiyaga ega emas."""
@@ -1008,7 +960,7 @@ class TopBar(QFrame):
     """Referens dizayn bo'yicha: chapda logo + balans + qolgan vaqt,
     o'ngda Yutuqlar havolasi + profil kapsulasi. O'yinlar/Bar orasidagi
     navigatsiya endi bu yerda EMAS — har bir sahifaning o'z sarlavhasida
-    (ParallelogramTabBar/OvalTabBar) joylashgan."""
+    (ParallelogramTabBar) joylashgan."""
     achievements_requested = pyqtSignal()
     resume_requested = pyqtSignal()
     cabinet_requested = pyqtSignal()
@@ -1019,7 +971,7 @@ class TopBar(QFrame):
         self.setFixedHeight(84)
         self.setStyleSheet(f"""
             QFrame#topBar {{
-                background-color: {COLOR_PANEL};
+                background-color: {COLOR_BG};
                 border-bottom: 1px solid {COLOR_PANEL_BORDER};
             }}
         """)
@@ -1700,6 +1652,7 @@ class GameCard(BracketFrame):
         self.game = game
         self.setFixedWidth(260)
         self.setObjectName("gameCard")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setStyleSheet(f"""
             QFrame#gameCard {{
                 background: {COLOR_PANEL};
@@ -1738,34 +1691,17 @@ class GameCard(BracketFrame):
             badge.adjustSize()
             badge.move(10, 10)
 
-        info = QVBoxLayout()
-        info.setContentsMargins(14, 12, 14, 8)
-        info.setSpacing(2)
         name = QLabel(game.get('name', 'Unknown'))
         name.setFont(serif_font(13))
-        name.setStyleSheet("color: #ffffff;")
+        name.setStyleSheet("color: #ffffff; padding: 14px 10px;")
         name.setWordWrap(True)
-        info.addWidget(name)
-        lo.addLayout(info)
+        name.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lo.addWidget(name)
 
-        self.launch_btn = QPushButton("▶  ISHGA TUSHIRISH")
-        self.launch_btn.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        self.launch_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.launch_btn.setFixedHeight(42)
-        self.launch_btn.setStyleSheet(f"""
-            QPushButton {{
-                color: {COLOR_BG}; font-weight: bold;
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {COLOR_CYAN}, stop:1 {COLOR_VIOLET});
-                border: none;
-                border-bottom-left-radius: 14px;
-                border-bottom-right-radius: 14px;
-            }}
-            QPushButton:hover {{
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4df6ff, stop:1 #a78bfa);
-            }}
-        """)
-        self.launch_btn.clicked.connect(lambda: self.launch_requested.emit(self.game))
-        lo.addWidget(self.launch_btn)
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.launch_requested.emit(self.game)
+        super().mousePressEvent(event)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1780,7 +1716,6 @@ class GamesPage(QWidget):
         self.setStyleSheet(f"background-color: {COLOR_BG};")
         self._all_games = []
         self._active_category = "all"
-        self._search_text = ""
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -1794,7 +1729,7 @@ class GamesPage(QWidget):
         dash = QLabel("—")
         dash.setStyleSheet(f"color: {COLOR_CYAN}; font-size: 20px;")
         title_row.addWidget(dash)
-        page_title = QLabel("COMMAND CENTER")
+        page_title = QLabel("CLUTCH ZONE")
         page_title.setFont(serif_font(26))
         page_title.setStyleSheet("color: #ffffff; letter-spacing: 1px;")
         title_row.addWidget(page_title)
@@ -1846,7 +1781,7 @@ class GamesPage(QWidget):
         cat_row_widget.setLayout(cat_row)
         root.addWidget(cat_row_widget)
 
-        # Error banner + search
+        # Error banner
         toolbar = QHBoxLayout()
         toolbar.setContentsMargins(28, 0, 28, 14)
         toolbar.setSpacing(14)
@@ -1856,14 +1791,6 @@ class GamesPage(QWidget):
         self.error_banner.setStyleSheet("color: #ef4444; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); border-radius: 10px; padding: 10px 16px;")
         self.error_banner.hide()
         toolbar.addWidget(self.error_banner, 1)
-
-        self.search_box = QLineEdit()
-        self.search_box.setPlaceholderText("🔍  SEARCH DATABASE...")
-        self.search_box.setFixedWidth(280)
-        self.search_box.setFixedHeight(38)
-        self.search_box.setStyleSheet(INPUT_QSS)
-        self.search_box.textChanged.connect(self._on_search_changed)
-        toolbar.addWidget(self.search_box)
 
         toolbar_widget = QWidget()
         toolbar_widget.setLayout(toolbar)
@@ -1902,16 +1829,10 @@ class GamesPage(QWidget):
                     QPushButton:hover {{ border: 1px solid {COLOR_CYAN_GLOW}; color: #e2e8f0; }}
                 """)
 
-    def _on_search_changed(self, text):
-        self._search_text = text.strip().lower()
-        self._refresh_grid()
-
     def _refresh_grid(self):
         games = self._all_games
         if self._active_category != "all":
             games = [g for g in games if g.get('category') == self._active_category]
-        if self._search_text:
-            games = [g for g in games if self._search_text in g.get('name', '').lower()]
 
         cards = []
         for g in games:
@@ -2039,11 +1960,6 @@ class BarPage(QWidget):
         header.addWidget(dot, 0, Qt.AlignmentFlag.AlignTop)
         header.addStretch(1)
 
-        self.page_tabs = OvalTabBar(active_key="bar")
-        self.page_tabs.tab_clicked.connect(self.tab_switch_requested.emit)
-        header.addWidget(self.page_tabs)
-        header.addSpacing(10)
-
         self.total_label = QLabel("Jami: 0 so'm")
         self.total_label.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         self.total_label.setStyleSheet(f"color: {COLOR_CYAN};")
@@ -2064,6 +1980,18 @@ class BarPage(QWidget):
         header_widget = QWidget()
         header_widget.setLayout(header)
         root.addWidget(header_widget)
+
+        # Sahifa almashtirgichi — GamesPage bilan bir xil joylashuv/dizayn
+        # (chapda, qiya-tab uslubida).
+        switcher_row = QHBoxLayout()
+        switcher_row.setContentsMargins(28, 8, 28, 0)
+        self.page_tabs = ParallelogramTabBar(active_key="bar")
+        self.page_tabs.tab_clicked.connect(self.tab_switch_requested.emit)
+        switcher_row.addWidget(self.page_tabs)
+        switcher_row.addStretch(1)
+        switcher_widget = QWidget()
+        switcher_widget.setLayout(switcher_row)
+        root.addWidget(switcher_widget)
 
         self.status_label = QLabel("")
         self.status_label.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))

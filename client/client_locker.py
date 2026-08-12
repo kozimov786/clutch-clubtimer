@@ -962,11 +962,78 @@ class AchievementsPage(QWidget):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+#  11b. RUNNING APPS BAR (Windows taskbar'ga o'xshash, lekin locker ichida)
+# ──────────────────────────────────────────────────────────────────────────────
+class RunningAppsBar(QFrame):
+    """Hozir ochiq turgan barcha dasturlarni (Steam, undan ichida ochilgan
+    CS2, boshqa ishga tushirilgan o'yin va h.k.) ko'rsatadi. F9 orqali
+    launcherga qaytilganda ham bu ro'yxat saqlanib qoladi — har qanday
+    dasturga qaytish uchun shu yerdan bosiladi. Hech narsa ishlamayotgan
+    bo'lsa butunlay yashirin turadi."""
+    app_clicked = pyqtSignal(str)  # exe_name
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(52)
+        self.setStyleSheet("""
+            QFrame#runningAppsBar {
+                background-color: #0a0e17;
+                border-top: 1px solid rgba(255,255,255,0.06);
+            }
+        """)
+        self.setObjectName("runningAppsBar")
+        self._layout = QHBoxLayout(self)
+        self._layout.setContentsMargins(28, 6, 28, 6)
+        self._layout.setSpacing(10)
+        self._apps = {}
+        self.hide()
+
+    def set_apps(self, apps):
+        """apps: [{'exe': 'steam.exe', 'label': 'Steam'}, ...]"""
+        while self._layout.count():
+            item = self._layout.takeAt(0)
+            if item.widget():
+                item.widget().setParent(None)
+        self._apps = {a['exe']: a for a in apps}
+
+        if not apps:
+            self.hide()
+            return
+
+        tag = QLabel("ISHLAB TURGAN DASTURLAR:")
+        tag.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        tag.setStyleSheet("color: #64748b; letter-spacing: 1px;")
+        self._layout.addWidget(tag)
+
+        for a in apps:
+            btn = QPushButton(f"🎮  {a['label']}")
+            btn.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet("""
+                QPushButton {
+                    color: #e2e8f0;
+                    background: rgba(0,240,255,0.10);
+                    border: 1px solid rgba(0,240,255,0.35);
+                    border-radius: 10px;
+                    padding: 6px 16px;
+                }
+                QPushButton:hover { background: rgba(0,240,255,0.22); }
+            """)
+            exe_key = a['exe']
+            btn.clicked.connect(lambda _, e=exe_key: self.app_clicked.emit(e))
+            self._layout.addWidget(btn)
+
+        self._layout.addStretch(1)
+        self.show()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 #  12. LAUNCHER PAGE (TopBar + ichki sahifalar)
 # ──────────────────────────────────────────────────────────────────────────────
 class LauncherPage(QWidget):
     game_launch_requested = pyqtSignal(dict)
     resume_requested = pyqtSignal()
+    app_switch_requested = pyqtSignal(str)
     # Fon oqimidan (threading.Thread) kelgan natijalarni asosiy GUI oqimiga
     # xavfsiz uzatish uchun — Qt signal/slot mexanizmi thread'lar orasida
     # avtomatik ravishda queued-connection ishlatadi, shuning uchun
@@ -1004,6 +1071,10 @@ class LauncherPage(QWidget):
         self._games_loaded.connect(self.games_page.set_games)
         self._products_loaded.connect(self.bar_page.set_products)
 
+        self.apps_bar = RunningAppsBar()
+        self.apps_bar.app_clicked.connect(self.app_switch_requested.emit)
+        root.addWidget(self.apps_bar)
+
         footer = QHBoxLayout()
         footer.setContentsMargins(28, 8, 28, 10)
         rules = QLabel("Qoidalar   Yordam")
@@ -1028,6 +1099,9 @@ class LauncherPage(QWidget):
 
     def set_running_game(self, name):
         self.top_bar.set_running_game(name)
+
+    def set_running_apps(self, apps):
+        self.apps_bar.set_apps(apps)
 
     def reload_games(self):
         def _fetch():
@@ -1059,6 +1133,7 @@ class LauncherPage(QWidget):
 class MainWindow(FullscreenMixin, QMainWindow):
     game_launched_signal = pyqtSignal(dict)
     resume_game_signal = pyqtSignal()
+    app_switch_requested_signal = pyqtSignal(str)
 
     PAGE_LOCK = 0
     PAGE_LAUNCHER = 1
@@ -1085,6 +1160,7 @@ class MainWindow(FullscreenMixin, QMainWindow):
         )
         self.launcher_page.game_launch_requested.connect(self.game_launched_signal.emit)
         self.launcher_page.resume_requested.connect(self.resume_game_signal.emit)
+        self.launcher_page.app_switch_requested.connect(self.app_switch_requested_signal.emit)
 
         self.stacked.addWidget(self.lock_page)       # PAGE_LOCK
         self.stacked.addWidget(self.launcher_page)    # PAGE_LAUNCHER
@@ -1102,6 +1178,9 @@ class MainWindow(FullscreenMixin, QMainWindow):
 
     def set_running_game(self, name):
         self.launcher_page.set_running_game(name)
+
+    def set_running_apps(self, apps):
+        self.launcher_page.set_running_apps(apps)
 
     def yield_to_app(self):
         """O'yin/dastur ishga tushganda chaqiriladi: launcher minimize
@@ -1392,6 +1471,55 @@ if IS_WINDOWS:
                 user32.AttachThreadInput(fg_thread, current_thread, False)
         print(f"[Launcher] O'yin oynasi (hwnd={hwnd}, pid={pid}) old planga chiqarildi")
 
+    FRIENDLY_APP_NAMES = {
+        'steam.exe': 'Steam', 'cs2.exe': 'CS2', 'valorant.exe': 'Valorant',
+        'gta5.exe': 'GTA 5', 'dota2.exe': 'Dota 2', 'leagueclient.exe': 'League',
+        'tslgame.exe': 'PUBG', 'rdr2.exe': 'RDR 2', 'fc24.exe': 'FC 24',
+        'nfsunbound.exe': 'NFS Unbound', 'nba2k24.exe': 'NBA 2K24',
+        'cyberpunk2077.exe': 'Cyberpunk 2077',
+    }
+
+    def _friendly_app_label(exe_name):
+        name = FRIENDLY_APP_NAMES.get(exe_name.lower())
+        if name:
+            return name
+        base = os.path.splitext(exe_name)[0]
+        return base[:16].upper()
+
+    def enumerate_running_apps(own_hwnd=None):
+        """Ekranda hozir ko'rinadigan barcha top-level oynalarni (bizniki
+        va ma'lum tizim jarayonlaridan tashqari) exe nomi bo'yicha
+        guruhlab qaytaradi — pastki "ishlab turgan dasturlar" panjarasi
+        uchun. Har bir dasturdan faqat bittadan (birinchi topilgan)
+        oyna olinadi."""
+        apps = {}
+
+        def _enum_proc(hwnd, lparam):
+            if not user32.IsWindowVisible(hwnd):
+                return True
+            GW_OWNER = 4
+            if user32.GetWindow(hwnd, GW_OWNER):
+                return True
+            if user32.GetWindowTextLengthW(hwnd) == 0:
+                return True
+            if own_hwnd and hwnd == own_hwnd:
+                return True
+            proc_id = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(proc_id))
+            exe = _get_process_exe_name(proc_id.value)
+            if not exe or exe.lower() in _IGNORED_FALLBACK_EXES:
+                return True
+            if exe not in apps:
+                apps[exe] = {'hwnd': hwnd, 'pid': proc_id.value, 'label': _friendly_app_label(exe)}
+            return True
+
+        WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+        try:
+            user32.EnumWindows(WNDENUMPROC(_enum_proc), 0)
+        except Exception as e:
+            print(f"[Launcher] enumerate_running_apps: {e}")
+        return apps
+
     # ── Windows taskbar'ni yashirish/qaytarish ──
     # To'liq ekranli, "har doim tepada" oyna bo'lsa ham, sichqonchani
     # ekranning eng pastki chetiga olib borilsa, Windows taskbar'ni
@@ -1429,6 +1557,7 @@ else:
     def uninstall_keyboard_hook(): print("[Hook] disabled (sim)")
     def register_global_hotkeys(app): pass
     def bring_process_window_to_front(pid, exe_name=None, own_hwnd=None, timeout=10.0): pass
+    def enumerate_running_apps(own_hwnd=None): return {}
     def hide_taskbar(): pass
     def show_taskbar(): pass
 
@@ -1481,6 +1610,7 @@ class ClientLockerApp:
         )
         self.main_window.game_launched_signal.connect(self._handle_game_launch)
         self.main_window.resume_game_signal.connect(self._handle_resume_game)
+        self.main_window.app_switch_requested_signal.connect(self._handle_app_switch)
 
         self.countdown = QTimer()
         self.countdown.timeout.connect(self._tick)
@@ -1489,6 +1619,15 @@ class ClientLockerApp:
         self.hotkey_timer = QTimer()
         self.hotkey_timer.timeout.connect(self._check_global_hotkeys)
         self.hotkey_timer.start(250)
+
+        # "Ishlab turgan dasturlar" panjarasi: har 3 soniyada ekrandagi
+        # ochiq oynalarni qayta tekshiradi — shu bilan Steam ichidan
+        # ochilgan CS2 kabi biz to'g'ridan-to'g'ri ishga tushirmagan
+        # dasturlar ham avtomatik ro'yxatga qo'shiladi.
+        self.running_apps = {}
+        self.apps_scan_timer = QTimer()
+        self.apps_scan_timer.timeout.connect(self._scan_running_apps)
+        self.apps_scan_timer.start(3000)
 
         # Masofadan monitoring uchun: admin panelidan har bir PC ekranini
         # ko'rish imkoniyati (bugungidek uzoq debug jarayonlarini oldini
@@ -1651,6 +1790,8 @@ class ClientLockerApp:
         self.main_window.switch_to_lock()
         self.main_window.force_native_fullscreen()
         self._kill_games()
+        self.running_apps = {}
+        self.main_window.set_running_apps([])
 
     def _kill_games(self):
         for proc in self.launched_processes:
@@ -1740,6 +1881,44 @@ class ClientLockerApp:
                 target=bring_process_window_to_front,
                 args=(self.current_game_pid,),
                 kwargs={'exe_name': self.current_game_exe, 'own_hwnd': int(self.main_window.winId()), 'timeout': 3.0},
+                daemon=True
+            ).start()
+
+    def _scan_running_apps(self):
+        """Har 3 soniyada ekrandagi ochiq dasturlarni qayta tekshiradi
+        va pastki panjarani yangilaydi — Steam ichidan ochilgan CS2
+        kabi biz to'g'ridan-to'g'ri ishga tushirmagan dasturlar ham
+        shu orqali avtomatik ro'yxatga qo'shiladi."""
+        if not IS_WINDOWS or self.current_status not in ('ACTIVE', 'WARNING'):
+            if self.running_apps:
+                self.running_apps = {}
+                self.main_window.set_running_apps([])
+            return
+        try:
+            own_hwnd = int(self.main_window.winId())
+        except Exception:
+            return
+        found = enumerate_running_apps(own_hwnd=own_hwnd)
+        if set(found.keys()) != set(self.running_apps.keys()):
+            self.running_apps = found
+            apps_list = [{'exe': exe, 'label': info['label']} for exe, info in found.items()]
+            self.main_window.set_running_apps(apps_list)
+        else:
+            self.running_apps = found  # hwnd/pid yangilanishi mumkin
+
+    def _handle_app_switch(self, exe_name):
+        """Pastki 'ishlab turgan dasturlar' panjarasidan bosilgan
+        dasturni old planga chiqaradi."""
+        info = self.running_apps.get(exe_name)
+        if not info:
+            return
+        print(f"[Launcher] Dasturga o'tish so'ralmoqda: {exe_name} (pid={info['pid']})")
+        self.main_window.yield_to_app()
+        if IS_WINDOWS:
+            threading.Thread(
+                target=bring_process_window_to_front,
+                args=(info['pid'],),
+                kwargs={'exe_name': exe_name, 'own_hwnd': int(self.main_window.winId()), 'timeout': 3.0},
                 daemon=True
             ).start()
 

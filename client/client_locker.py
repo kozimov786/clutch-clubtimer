@@ -386,6 +386,7 @@ class LockScreenWidget(QWidget):
 # ──────────────────────────────────────────────────────────────────────────────
 class TopBar(QFrame):
     tab_changed = pyqtSignal(str)  # "games" | "bar" | "achievements"
+    resume_requested = pyqtSignal()
 
     def __init__(self, pc_name="PC-01", parent=None):
         super().__init__(parent)
@@ -437,6 +438,26 @@ class TopBar(QFrame):
 
         lo.addStretch(1)
 
+        # "O'yinga qaytish" — faqat biror o'yin ishga tushirilgan va
+        # F9 orqali launcherga chiqilganda ko'rinadi (odatiy holatda
+        # yashirin).
+        self.resume_btn = QPushButton("▶  O'YINGA QAYTISH")
+        self.resume_btn.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        self.resume_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.resume_btn.setStyleSheet("""
+            QPushButton {
+                color: #060911;
+                background: #00f0ff;
+                border: none;
+                border-radius: 14px;
+                padding: 8px 18px;
+            }
+            QPushButton:hover { background: #4df6ff; }
+        """)
+        self.resume_btn.clicked.connect(self.resume_requested.emit)
+        self.resume_btn.hide()
+        lo.addWidget(self.resume_btn)
+
         # Clock
         clock_box = QVBoxLayout()
         clock_box.setSpacing(0)
@@ -478,6 +499,13 @@ class TopBar(QFrame):
 
     def set_status(self, pc_name, status_text):
         self.status_pill.setText(f"{pc_name} · {status_text}")
+
+    def set_running_game(self, name):
+        if name:
+            self.resume_btn.setText(f"▶  {name.upper()}GA QAYTISH")
+            self.resume_btn.show()
+        else:
+            self.resume_btn.hide()
 
     def _on_tab_clicked(self, key):
         self._active_tab = key
@@ -938,6 +966,7 @@ class AchievementsPage(QWidget):
 # ──────────────────────────────────────────────────────────────────────────────
 class LauncherPage(QWidget):
     game_launch_requested = pyqtSignal(dict)
+    resume_requested = pyqtSignal()
     # Fon oqimidan (threading.Thread) kelgan natijalarni asosiy GUI oqimiga
     # xavfsiz uzatish uchun — Qt signal/slot mexanizmi thread'lar orasida
     # avtomatik ravishda queued-connection ishlatadi, shuning uchun
@@ -959,6 +988,7 @@ class LauncherPage(QWidget):
 
         self.top_bar = TopBar(pc_name=pc_name)
         self.top_bar.tab_changed.connect(self._switch_tab)
+        self.top_bar.resume_requested.connect(self.resume_requested.emit)
         root.addWidget(self.top_bar)
 
         self.inner_stack = QStackedWidget()
@@ -996,6 +1026,9 @@ class LauncherPage(QWidget):
     def set_pc_status(self, pc_name, status_text):
         self.top_bar.set_status(pc_name, status_text)
 
+    def set_running_game(self, name):
+        self.top_bar.set_running_game(name)
+
     def reload_games(self):
         def _fetch():
             api_games = self.api_client.get_games()
@@ -1025,6 +1058,7 @@ class LauncherPage(QWidget):
 # ──────────────────────────────────────────────────────────────────────────────
 class MainWindow(FullscreenMixin, QMainWindow):
     game_launched_signal = pyqtSignal(dict)
+    resume_game_signal = pyqtSignal()
 
     PAGE_LOCK = 0
     PAGE_LAUNCHER = 1
@@ -1050,6 +1084,7 @@ class MainWindow(FullscreenMixin, QMainWindow):
             fallback_games=self.fallback_games
         )
         self.launcher_page.game_launch_requested.connect(self.game_launched_signal.emit)
+        self.launcher_page.resume_requested.connect(self.resume_game_signal.emit)
 
         self.stacked.addWidget(self.lock_page)       # PAGE_LOCK
         self.stacked.addWidget(self.launcher_page)    # PAGE_LAUNCHER
@@ -1064,6 +1099,9 @@ class MainWindow(FullscreenMixin, QMainWindow):
     def switch_to_launcher(self):
         self.stacked.setCurrentIndex(self.PAGE_LAUNCHER)
         self.force_native_fullscreen()
+
+    def set_running_game(self, name):
+        self.launcher_page.set_running_game(name)
 
     def yield_to_app(self):
         """O'yin/dastur ishga tushganda chaqiriladi: launcher minimize
@@ -1244,7 +1282,37 @@ if IS_WINDOWS:
     user32.GetForegroundWindow.restype = ctypes.c_void_p
     user32.GetWindow.restype = ctypes.c_void_p
 
-    def _find_window_for_pid(pid, timeout=10.0):
+    PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+    kernel32.OpenProcess.restype = ctypes.c_void_p
+    kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel32.QueryFullProcessImageNameW.restype = wintypes.BOOL
+    kernel32.QueryFullProcessImageNameW.argtypes = [
+        ctypes.c_void_p, wintypes.DWORD, ctypes.c_wchar_p, ctypes.POINTER(wintypes.DWORD)
+    ]
+    kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+
+    def _get_process_exe_name(pid):
+        """PID'ga tegishli .exe faylining nomini qaytaradi (masalan
+        'steam.exe') — Steam kabi ilovalar ko'pincha yangi ishga
+        tushirilgan jarayonni allaqachon ochiq turgan asosiy nusxaga
+        signal berib, o'zi darhol chiqib ketadi (shuning uchun asl PID
+        bo'yicha oyna qidirish natija bermaydi) — bunday holatda exe
+        nomi bo'yicha qidirish kerak bo'ladi."""
+        h = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not h:
+            return None
+        try:
+            buf = ctypes.create_unicode_buffer(260)
+            size = wintypes.DWORD(260)
+            if kernel32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
+                return os.path.basename(buf.value)
+        except Exception:
+            pass
+        finally:
+            kernel32.CloseHandle(h)
+        return None
+
+    def _find_window_for_pid(pid, exe_name=None, timeout=10.0):
         result = []
 
         def _enum_proc(hwnd, lparam):
@@ -1253,9 +1321,14 @@ if IS_WINDOWS:
             GW_OWNER = 4
             if user32.GetWindow(hwnd, GW_OWNER):
                 return True  # faqat mustaqil (owner'siz) top-level oynalar
+            if user32.GetWindowTextLengthW(hwnd) == 0:
+                return True  # sarlavhasiz (odatda ko'rinmas yordamchi) oynalar
             proc_id = wintypes.DWORD()
             user32.GetWindowThreadProcessId(hwnd, ctypes.byref(proc_id))
             if proc_id.value == pid:
+                result.append(hwnd)
+                return False
+            if exe_name and _get_process_exe_name(proc_id.value) == exe_name:
                 result.append(hwnd)
                 return False
             return True
@@ -1270,11 +1343,11 @@ if IS_WINDOWS:
             time.sleep(0.3)
         return result[0] if result else None
 
-    def bring_process_window_to_front(pid, timeout=10.0):
-        hwnd = _find_window_for_pid(pid, timeout=timeout)
+    def bring_process_window_to_front(pid, exe_name=None, timeout=10.0):
+        hwnd = _find_window_for_pid(pid, exe_name=exe_name, timeout=timeout)
         if not hwnd:
-            print(f"[Launcher] PID {pid} uchun oyna {timeout}s ichida topilmadi — "
-                  f"old planga chiqarib bo'lmadi.")
+            print(f"[Launcher] PID {pid} (exe={exe_name}) uchun oyna {timeout}s ichida "
+                  f"topilmadi — old planga chiqarib bo'lmadi.")
             return
         SW_RESTORE = 9
         current_thread = kernel32.GetCurrentThreadId()
@@ -1328,7 +1401,7 @@ else:
     def install_keyboard_hook():   print("[Hook] enabled (sim)")
     def uninstall_keyboard_hook(): print("[Hook] disabled (sim)")
     def register_global_hotkeys(app): pass
-    def bring_process_window_to_front(pid, timeout=10.0): pass
+    def bring_process_window_to_front(pid, exe_name=None, timeout=10.0): pass
     def hide_taskbar(): pass
     def show_taskbar(): pass
 
@@ -1352,6 +1425,12 @@ class ClientLockerApp:
         self.time_remaining = 0
         self.is_open_time = False
         self.pc_id = None
+        # F9 orqali launcherga qaytilganda "O'yinga qaytish" tugmasi
+        # bilan hozir ishlab turgan o'yinni qayta old planga chiqarish
+        # uchun kuzatiladi.
+        self.current_game_name = None
+        self.current_game_pid = None
+        self.current_game_exe = None
         # WebSocket ulangan bo'lsa, u real-vaqtli va aniq tartibda keladi —
         # shu payt heartbeat javobini e'tiborsiz qoldiramiz, aks holda
         # kechikkan heartbeat javobi WebSocket orqali kelgan yangi holatni
@@ -1364,6 +1443,7 @@ class ClientLockerApp:
             fallback_games=self.fallback_games, api_key=self.api_key
         )
         self.main_window.game_launched_signal.connect(self._handle_game_launch)
+        self.main_window.resume_game_signal.connect(self._handle_resume_game)
 
         self.countdown = QTimer()
         self.countdown.timeout.connect(self._tick)
@@ -1532,6 +1612,10 @@ class ClientLockerApp:
             except Exception as e:
                 print(f"[Cleanup] {e}")
         self.launched_processes.clear()
+        self.current_game_name = None
+        self.current_game_pid = None
+        self.current_game_exe = None
+        self.main_window.set_running_game(None)
         if IS_WINDOWS:
             for exe in ["cs2.exe", "VALORANT.exe", "TslGame.exe", "GTA5.exe", "Cyberpunk2077.exe",
                         "RDR2.exe", "FC24.exe", "NFSUnbound.exe", "NBA2K24.exe", "dota2.exe", "LeagueClient.exe"]:
@@ -1556,6 +1640,15 @@ class ClientLockerApp:
                 self.launched_processes.append(proc)
                 print(f"[Launcher] PID: {proc.pid}")
                 self.main_window.show_launch_success(name)
+
+                # "O'yinga qaytish" tugmasi uchun kuzatiladi — F9 bilan
+                # launcherga qaytilganda, shu ma'lumot bilan o'yin
+                # oynasini qayta old planga chiqarish mumkin bo'ladi.
+                self.current_game_name = name
+                self.current_game_pid = proc.pid
+                self.current_game_exe = os.path.basename(exe)
+                self.main_window.set_running_game(name)
+
                 # Launcher minimize qilinmaydi (bu Windows ish stolini
                 # ochib qo'yardi) — faqat orqa qatlamga o'tadi, shunda
                 # o'yin uning ustida ochiladi, lekin o'yin yopilsa
@@ -1567,11 +1660,15 @@ class ClientLockerApp:
                 # Windows fon jarayonining fokus o'g'irlashini
                 # cheklashini chetlab o'tish uchun. Oyna paydo bo'lishi
                 # bir necha soniya cho'zilishi mumkin, shuning uchun
-                # fon oqimida amalga oshiriladi.
+                # fon oqimida amalga oshiriladi. exe_name ham uzatiladi —
+                # Steam kabi ilovalar yangi jarayonni allaqachon ochiq
+                # nusxaga signal berib, o'zi darhol chiqib ketishi
+                # mumkin, bunday holda faqat PID emas, exe nomi bo'yicha
+                # qidirish kerak bo'ladi.
                 if IS_WINDOWS:
                     threading.Thread(
                         target=bring_process_window_to_front,
-                        args=(proc.pid,), daemon=True
+                        args=(proc.pid,), kwargs={'exe_name': self.current_game_exe}, daemon=True
                     ).start()
             except Exception as e:
                 print(f"[Launcher] Error: {e}")
@@ -1579,6 +1676,20 @@ class ClientLockerApp:
         else:
             print(f"[Launcher] Not found: {exe}")
             self.main_window.show_launch_error("O'yin fayli topilmadi, iltimos admonga murojaat qiling")
+
+    def _handle_resume_game(self):
+        """TopBar'dagi 'O'yinga qaytish' tugmasi bosilganda — F9 orqali
+        launcherga chiqilgandan keyin, hozir ishlayotgan o'yin oynasini
+        qayta old planga chiqaradi."""
+        if not self.current_game_pid:
+            return
+        print(f"[Launcher] O'yinga qaytish so'ralmoqda: {self.current_game_name} (pid={self.current_game_pid})")
+        self.main_window.yield_to_app()
+        if IS_WINDOWS:
+            threading.Thread(
+                target=bring_process_window_to_front,
+                args=(self.current_game_pid,), kwargs={'exe_name': self.current_game_exe}, daemon=True
+            ).start()
 
     def _tick(self):
         if self.current_status in ('ACTIVE', 'WARNING'):

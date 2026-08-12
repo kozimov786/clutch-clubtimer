@@ -1080,6 +1080,20 @@ if IS_WINDOWS:
             ("dwExtraInfo", ctypes.POINTER(wintypes.ULONG))
         ]
     HOOKPROC = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_int, wintypes.WPARAM, ctypes.POINTER(KBDLLHOOKSTRUCT))
+
+    # MUHIM: to'g'ri argtypes/restype (ayniqsa c_void_p qaytish qiymati)
+    # aniq belgilanmasa, ctypes SetWindowsHookExA'ning 64-bit HHOOK
+    # qaytish qiymatini standart bo'yicha 32-bit c_int sifatida talqin
+    # qilib, uni KESIB TASHLASHI mumkin — bu haqiqatda hook muvaffaqiyatli
+    # o'rnatilgan bo'lsa ham, natija 0 (xato) bo'lib ko'rinishiga olib
+    # kelishi mumkin.
+    user32.SetWindowsHookExA.restype = ctypes.c_void_p
+    user32.SetWindowsHookExA.argtypes = [ctypes.c_int, HOOKPROC, ctypes.c_void_p, wintypes.DWORD]
+    user32.CallNextHookEx.restype = ctypes.c_long
+    user32.CallNextHookEx.argtypes = [ctypes.c_void_p, ctypes.c_int, wintypes.WPARAM, ctypes.POINTER(KBDLLHOOKSTRUCT)]
+    user32.UnhookWindowsHookEx.restype = wintypes.BOOL
+    user32.UnhookWindowsHookEx.argtypes = [ctypes.c_void_p]
+
     hook_id = None; is_hook_enabled = False
 
     def low_level_keyboard_proc(nCode, wParam, lParam):
@@ -1145,10 +1159,69 @@ if IS_WINDOWS:
         else:
             print(f"[Hotkey] OGOHLANTIRISH: ba'zi hotkeylar ro'yxatdan o'tmadi: {results} "
                   f"GetLastError={ctypes.get_last_error()}")
+
+    # ── Ishga tushirilgan o'yin/dastur oynasini majburan old planga
+    #    chiqarish. yield_to_app() bizning oynamizni orqaga o'tkazadi,
+    #    lekin bu yangi ishga tushgan dastur AVTOMATIK old planga
+    #    chiqishini kafolatlamaydi — Windows fon jarayonining fokusni
+    #    o'g'irlashini standart ravishda cheklaydi. SetForegroundWindow'ni
+    #    shu cheklovni chetlab o'tib ishlatish uchun AttachThreadInput
+    #    triki qo'llaniladi (rasmiy, keng qo'llaniladigan Win32 usuli).
+    user32.GetForegroundWindow.restype = ctypes.c_void_p
+    user32.GetWindow.restype = ctypes.c_void_p
+
+    def _find_window_for_pid(pid, timeout=10.0):
+        result = []
+
+        def _enum_proc(hwnd, lparam):
+            if not user32.IsWindowVisible(hwnd):
+                return True
+            GW_OWNER = 4
+            if user32.GetWindow(hwnd, GW_OWNER):
+                return True  # faqat mustaqil (owner'siz) top-level oynalar
+            proc_id = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(proc_id))
+            if proc_id.value == pid:
+                result.append(hwnd)
+                return False
+            return True
+
+        WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+        enum_cb = WNDENUMPROC(_enum_proc)
+        start = time.time()
+        while time.time() - start < timeout and not result:
+            user32.EnumWindows(enum_cb, 0)
+            if result:
+                break
+            time.sleep(0.3)
+        return result[0] if result else None
+
+    def bring_process_window_to_front(pid, timeout=10.0):
+        hwnd = _find_window_for_pid(pid, timeout=timeout)
+        if not hwnd:
+            print(f"[Launcher] PID {pid} uchun oyna {timeout}s ichida topilmadi — "
+                  f"old planga chiqarib bo'lmadi.")
+            return
+        SW_RESTORE = 9
+        current_thread = kernel32.GetCurrentThreadId()
+        fg_hwnd = user32.GetForegroundWindow()
+        fg_thread = user32.GetWindowThreadProcessId(fg_hwnd, None)
+        attached = False
+        if fg_thread and fg_thread != current_thread:
+            attached = bool(user32.AttachThreadInput(fg_thread, current_thread, True))
+        try:
+            user32.ShowWindow(hwnd, SW_RESTORE)
+            user32.SetForegroundWindow(hwnd)
+            user32.BringWindowToTop(hwnd)
+        finally:
+            if attached:
+                user32.AttachThreadInput(fg_thread, current_thread, False)
+        print(f"[Launcher] O'yin oynasi (hwnd={hwnd}, pid={pid}) old planga chiqarildi")
 else:
     def install_keyboard_hook():   print("[Hook] enabled (sim)")
     def uninstall_keyboard_hook(): print("[Hook] disabled (sim)")
     def register_global_hotkeys(app): pass
+    def bring_process_window_to_front(pid, timeout=10.0): pass
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1293,6 +1366,18 @@ class ClientLockerApp:
                 # o'yin uning ustida ochiladi, lekin o'yin yopilsa
                 # mijoz baribir launcherni ko'radi, ish stolini emas.
                 self.main_window.yield_to_app()
+                # Bu ikkitasi birga ishlaydi: launcherni orqaga
+                # o'tkazish + yangi ishga tushgan o'yin oynasini
+                # (topilgan zahoti) majburan old planga chiqarish —
+                # Windows fon jarayonining fokus o'g'irlashini
+                # cheklashini chetlab o'tish uchun. Oyna paydo bo'lishi
+                # bir necha soniya cho'zilishi mumkin, shuning uchun
+                # fon oqimida amalga oshiriladi.
+                if IS_WINDOWS:
+                    threading.Thread(
+                        target=bring_process_window_to_front,
+                        args=(proc.pid,), daemon=True
+                    ).start()
             except Exception as e:
                 print(f"[Launcher] Error: {e}")
                 self.main_window.show_launch_error(f"Xatolik: {e}")

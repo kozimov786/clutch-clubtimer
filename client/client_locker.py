@@ -1351,6 +1351,12 @@ class ClientLockerApp:
         self.current_status = 'LOCKED'
         self.time_remaining = 0
         self.pc_id = None
+        # WebSocket ulangan bo'lsa, u real-vaqtli va aniq tartibda keladi —
+        # shu payt heartbeat javobini e'tiborsiz qoldiramiz, aks holda
+        # kechikkan heartbeat javobi WebSocket orqali kelgan yangi holatni
+        # eskisi bilan qayta yozib, ekranda qisqa "miltillash" (masalan
+        # ACTIVE -> LOCKED -> ACTIVE) keltirib chiqarishi mumkin edi.
+        self.ws_connected = False
 
         self.main_window = MainWindow(
             pc_name=self.pc_name, server_url=self.server_url,
@@ -1603,7 +1609,12 @@ class ClientLockerApp:
                     headers=headers, timeout=4
                 )
                 if r.status_code == 200:
-                    self.signals.status_updated.emit(r.json())
+                    # WebSocket ulangan bo'lsa, holat yangilanishlari shu
+                    # yerdan emas, real-vaqtli push orqali keladi — aks
+                    # holda kechikkan heartbeat javobi eski holatni qayta
+                    # tiklab, ekranda miltillashga sabab bo'lishi mumkin edi.
+                    if not self.ws_connected:
+                        self.signals.status_updated.emit(r.json())
                 elif r.status_code in (401, 403):
                     print(f"[Heartbeat] Ruxsat rad etildi ({r.status_code}) — "
                           f"config.json'dagi api_key server bilan mos kelmayapti.")
@@ -1634,16 +1645,24 @@ class ClientLockerApp:
                         self.signals.status_updated.emit({'status': 'LOCKED', 'time_remaining': 0})
             except Exception as e:
                 print(f"[WS] {e}")
-        def on_open(ws): print("[WS] Connected")
-        def on_error(ws, e): print(f"[WS] Error: {e}")
+        def on_open(ws):
+            self.ws_connected = True
+            print("[WS] Connected")
+        def on_error(ws, e):
+            self.ws_connected = False
+            print(f"[WS] Error: {e}")
+        def on_close(ws, code, msg):
+            self.ws_connected = False
+            print(f"[WS] Closed ({code})")
         separator = '&' if '?' in self.ws_url else '?'
         ws_url_with_key = f"{self.ws_url}{separator}api_key={self.api_key}" if self.api_key else self.ws_url
         while True:
             try:
-                ws = websocket.WebSocketApp(ws_url_with_key, on_message=on_message, on_error=on_error)
+                ws = websocket.WebSocketApp(ws_url_with_key, on_message=on_message, on_error=on_error, on_close=on_close)
                 ws.run_forever()
             except Exception as e:
                 print(f"[WS] Failed: {e}")
+            self.ws_connected = False
             time.sleep(3)
 
 

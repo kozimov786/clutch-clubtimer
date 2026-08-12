@@ -46,7 +46,7 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel,
     QPushButton, QFrame, QHBoxLayout, QScrollArea, QGridLayout,
     QLineEdit, QGraphicsDropShadowEffect, QSizePolicy, QStackedWidget,
-    QSpacerItem, QDialog, QTabWidget
+    QSpacerItem, QDialog, QTabWidget, QMessageBox
 )
 from PyQt6.QtGui import QFont, QColor, QPixmap, QGuiApplication, QIcon
 
@@ -393,6 +393,27 @@ class ApiClient:
                     on_done(ok, r.json() if r.content else {})
             except Exception as e:
                 print(f"[API] change_password: {e}")
+                if on_done:
+                    on_done(False, {"error": "Server bilan aloqa yo'q"})
+        threading.Thread(target=_post, daemon=True).start()
+
+    def customer_stop_session_async(self, pc_id, session_token, on_done=None):
+        """Mijoz "Kabinet" oynasidan o'zi balansidan ochgan seansni
+        o'zi to'xtatganda. Muvaffaqiyatli bo'lsa, PC odatdagi
+        status-sinxronlash orqali o'zi qulflanadi."""
+        def _post():
+            try:
+                r = requests.post(
+                    f"{self.server_url}/api/computers/{pc_id}/customer_stop_session/",
+                    json={"session_token": session_token},
+                    headers=self._headers(),
+                    timeout=10
+                )
+                ok = r.status_code == 200
+                if on_done:
+                    on_done(ok, r.json() if r.content else {})
+            except Exception as e:
+                print(f"[API] customer_stop_session: {e}")
                 if on_done:
                     on_done(False, {"error": "Server bilan aloqa yo'q"})
         threading.Thread(target=_post, daemon=True).start()
@@ -894,6 +915,10 @@ class CustomerCabinetDialog(QDialog):
     # xavfsiz yangilash uchun signal orqali asosiy oqimga uzatiladi.
     _pw_result_ready = pyqtSignal(bool, dict)
     _activity_result_ready = pyqtSignal(bool, dict)
+    # "Vaqtni to'xtatish" — bu dialog o'zi pc_id'ni bilmaydi (uni faqat
+    # ClientLockerApp biladi), shuning uchun so'rov yuqoriga
+    # (LauncherPage -> MainWindow -> ClientLockerApp) uzatiladi.
+    stop_session_requested = pyqtSignal(str)
 
     def __init__(self, api_client, customer_data, parent=None):
         super().__init__(parent)
@@ -962,6 +987,22 @@ class CustomerCabinetDialog(QDialog):
         tabs.addTab(self._build_activity_tab(), "Jami harakatlar")
         root.addWidget(tabs, 1)
 
+        bottom_row = QHBoxLayout()
+
+        stop_btn = QPushButton("🛑  Vaqtni to'xtatish")
+        stop_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        stop_btn.setFixedHeight(38)
+        stop_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(239,68,68,0.12); color: #ef4444;
+                border: 1px solid rgba(239,68,68,0.35); border-radius: 8px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background: rgba(239,68,68,0.22); }
+        """)
+        stop_btn.clicked.connect(self._on_stop_session_clicked)
+        bottom_row.addWidget(stop_btn, 1)
+
         close_btn = QPushButton("Yopish")
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         close_btn.setFixedHeight(38)
@@ -973,7 +1014,9 @@ class CustomerCabinetDialog(QDialog):
             QPushButton:hover { color: #e2e8f0; }
         """)
         close_btn.clicked.connect(self.accept)
-        root.addWidget(close_btn)
+        bottom_row.addWidget(close_btn, 1)
+
+        root.addLayout(bottom_row)
 
         self._load_activity()
 
@@ -1079,6 +1122,18 @@ class CustomerCabinetDialog(QDialog):
         self.api_client.fetch_my_activity_async(
             token, on_done=lambda ok, data: self._activity_result_ready.emit(ok, data)
         )
+
+    def _on_stop_session_clicked(self):
+        reply = QMessageBox.question(
+            self, "Tasdiqlash",
+            "Haqiqatan ham vaqtni to'xtatmoqchimisiz? Kompyuter darhol qulflanadi.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        self.stop_session_requested.emit(self.customer_data.get('session_token', ''))
+        self.accept()
 
     def _apply_activity_result(self, ok, data):
         while self.activity_layout.count():
@@ -1654,6 +1709,7 @@ class LauncherPage(QWidget):
     game_launch_requested = pyqtSignal(dict)
     resume_requested = pyqtSignal()
     app_switch_requested = pyqtSignal(str)
+    cabinet_stop_requested = pyqtSignal(str)
     # Fon oqimidan (threading.Thread) kelgan natijalarni asosiy GUI oqimiga
     # xavfsiz uzatish uchun — Qt signal/slot mexanizmi thread'lar orasida
     # avtomatik ravishda queued-connection ishlatadi, shuning uchun
@@ -1733,6 +1789,7 @@ class LauncherPage(QWidget):
         if not self.logged_in_customer:
             return
         dialog = CustomerCabinetDialog(self.api_client, self.logged_in_customer, parent=self)
+        dialog.stop_session_requested.connect(self.cabinet_stop_requested.emit)
         dialog.exec()
 
     def reload_games(self):
@@ -1768,6 +1825,7 @@ class MainWindow(FullscreenMixin, QMainWindow):
     app_switch_requested_signal = pyqtSignal(str)
     customer_login_signal = pyqtSignal(dict)
     customer_unlock_signal = pyqtSignal(str)
+    customer_stop_signal = pyqtSignal(str)
 
     PAGE_LOCK = 0
     PAGE_LAUNCHER = 1
@@ -1801,6 +1859,7 @@ class MainWindow(FullscreenMixin, QMainWindow):
         self.launcher_page.game_launch_requested.connect(self.game_launched_signal.emit)
         self.launcher_page.resume_requested.connect(self.resume_game_signal.emit)
         self.launcher_page.app_switch_requested.connect(self.app_switch_requested_signal.emit)
+        self.launcher_page.cabinet_stop_requested.connect(self.customer_stop_signal.emit)
 
         self.stacked.addWidget(self.lock_page)       # PAGE_LOCK
         self.stacked.addWidget(self.launcher_page)    # PAGE_LAUNCHER
@@ -2382,6 +2441,7 @@ class ClientLockerApp:
         self.main_window.app_switch_requested_signal.connect(self._handle_app_switch)
         self.main_window.customer_login_signal.connect(self._handle_customer_login)
         self.main_window.customer_unlock_signal.connect(self._handle_customer_unlock_request)
+        self.main_window.customer_stop_signal.connect(self._handle_customer_stop_request)
 
         self.countdown = QTimer()
         self.countdown.timeout.connect(self._tick)
@@ -2737,6 +2797,14 @@ class ClientLockerApp:
             self.pc_id, session_token,
             on_done=lambda ok, data: self.main_window.lock_page.unlock_result_ready.emit(ok, data)
         )
+
+    def _handle_customer_stop_request(self, session_token):
+        """Mijoz "Kabinet"dan "Vaqtni to'xtatish"ni bosganda — o'zi
+        balansidan ochgan seansni to'xtatishni so'raydi. Muvaffaqiyatli
+        bo'lsa, PC odatdagi status-sinxronlash orqali o'zi qulflanadi."""
+        if not self.pc_id:
+            return
+        self.main_window.api_client.customer_stop_session_async(self.pc_id, session_token)
 
     def _tick(self):
         if self.current_status in ('ACTIVE', 'WARNING'):

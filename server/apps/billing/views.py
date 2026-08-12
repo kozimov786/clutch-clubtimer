@@ -191,7 +191,7 @@ class ComputerViewSet(viewsets.ModelViewSet):
     serializer_class = ComputerSerializer
 
     def get_permissions(self):
-        if self.action in ('heartbeat', 'upload_screenshot', 'customer_start_session'):
+        if self.action in ('heartbeat', 'upload_screenshot', 'customer_start_session', 'customer_stop_session'):
             return [HasClientApiKey()]
         return super().get_permissions()
 
@@ -346,6 +346,31 @@ class ComputerViewSet(viewsets.ModelViewSet):
             'pc': serializer.data
         })
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'])
+    def customer_stop_session(self, request, pk=None):
+        """Kiosk'dan: "Kabinet" oynasidan mijoz o'zi balansidan ochgan
+        seansni o'zi to'xtatadi. Faqat shu mijozga tegishli, BALANCE
+        to'lov usulidagi faol seans uchun ishlaydi — xodim boshlagan
+        naqd/plastik seansni mijoz o'zi yopa olmaydi (xodim to'lovni
+        yig'ib, rasmiylashtirishi shart)."""
+        pc = self.get_object()
+        customer, error_response = _resolve_kiosk_session_customer(request)
+        if error_response:
+            return error_response
+
+        session = Session.objects.filter(computer=pc, is_active=True).first()
+        if not session or session.customer_id != customer.id:
+            return Response({'error': "Sizga tegishli faol seans topilmadi."}, status=status.HTTP_400_BAD_REQUEST)
+        if session.payment_method != 'BALANCE':
+            return Response(
+                {'error': "Bu seansni faqat xodim to'xtata oladi (naqd/plastik to'lov kerak)."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from . import balance_worker
+        balance_worker.stop_balance_session(pc, session, customer, timezone.now(), reason="mijoz o'zi to'xtatdi:")
+        return Response({'success': True})
 
     @action(detail=True, methods=['post'])
     def add_time(self, request, pk=None):
@@ -1248,7 +1273,14 @@ class CustomerViewSet(viewsets.ModelViewSet):
         customer, error_response = _resolve_kiosk_session_customer(request)
         if error_response:
             return error_response
-        transactions = customer.transactions.all()[:50]
+        # balance_worker.py har 30 soniyada avtomatik yechgan mayda-
+        # mayda tranzaksiyalarni bu yerda KO'RSATMAYMIZ (balans
+        # hisob-kitobiga ta'sir qilmaydi, faqat ro'yxatni "to'ldirib"
+        # yuborishining oldi olinadi) — buning o'rniga har bir tugagan
+        # seans pastdagi `sessions`da BITTA qator (jami narxi bilan)
+        # sifatida ko'rinadi. Qo'lda to'ldirish va xodim tomonidan
+        # yechilgan summalar odatdagidek ko'rinaveradi.
+        transactions = customer.transactions.exclude(type='SPEND', note__icontains='(avtomatik)')[:50]
         sessions = customer.sessions.exclude(is_active=True).order_by('-start_time')[:50]
         return Response({
             'transactions': CustomerTransactionSerializer(transactions, many=True).data,

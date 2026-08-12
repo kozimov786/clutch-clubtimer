@@ -59,7 +59,7 @@ def _process_once():
         available = float(customer.balance)
 
         if available <= 0:
-            _stop_session_for_depletion(pc, session, customer, now)
+            stop_balance_session(pc, session, customer, now, reason="balans tugagani uchun")
             continue
 
         charge = min(increment, available)
@@ -86,10 +86,14 @@ def _process_once():
         )
 
         if customer.balance <= 0:
-            _stop_session_for_depletion(pc, session, customer, now)
+            stop_balance_session(pc, session, customer, now, reason="balans tugagani uchun")
 
 
-def _stop_session_for_depletion(pc, session, customer, now):
+def stop_balance_session(pc, session, customer, now, reason="mijoz o'zi to'xtatdi"):
+    """BALANCE seansni yakunlaydi va PC'ni qulflaydi — ham balans
+    tugagan (worker orqali), ham mijoz "Kabinet"dan o'zi to'xtatgan
+    holatlar uchun umumiy funksiya (server bilan BIR XIL jarayonda
+    chaqirilishi shart — modul boshidagi izohga qarang)."""
     from .models import AuditLog
     from .serializers import ComputerSerializer
     from .consumers import notify_pc_status_change
@@ -110,14 +114,14 @@ def _stop_session_for_depletion(pc, session, customer, now):
 
     AuditLog.objects.create(
         action='CUSTOMER_SPEND',
-        description=f"{customer.full_name} ({customer.phone}): balans tugagani uchun {pc.name} avtomatik to'xtatildi"
+        description=f"{customer.full_name} ({customer.phone}): {reason} {pc.name} to'xtatildi"
     )
 
     notify_pc_status_change({
         'action': 'SESSION_STOPPED',
         'pc': ComputerSerializer(pc).data
     })
-    print(f"[BalanceWorker] {pc.name}: {customer.full_name} balansi tugadi, seans avtomatik to'xtatildi")
+    print(f"[BalanceWorker] {pc.name}: {customer.full_name} — {reason}")
 
 
 def _run_forever():

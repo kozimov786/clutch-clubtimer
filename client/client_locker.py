@@ -2741,7 +2741,9 @@ if IS_WINDOWS:
     kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
     WH_KEYBOARD_LL = 13
     VK_TAB = 0x09; VK_LWIN = 0x5B; VK_RWIN = 0x5C; VK_F4 = 0x73; VK_ESCAPE = 0x1B
-    VK_U = 0x55; VK_F9 = 0x78; VK_P = 0x50
+    VK_U = 0x55; VK_F9 = 0x78; VK_P = 0x50; VK_CONTROL = 0x11
+    user32.GetAsyncKeyState.restype = ctypes.c_short
+    user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
 
     class KBDLLHOOKSTRUCT(ctypes.Structure):
         _fields_ = [
@@ -2783,22 +2785,27 @@ if IS_WINDOWS:
             if (alt and vk == VK_TAB) or (vk in (VK_LWIN, VK_RWIN)) or \
                (alt and vk == VK_F4) or (alt and vk == VK_ESCAPE):
                 return 1
-            # F9 uchun IKKINCHI, mustaqil aniqlash yo'li — pastdagi
-            # RegisterHotKey (WM_HOTKEY) ba'zi eski, eksklyuziv
-            # to'liq ekran (DirectInput) o'yinlarda (masalan Prince of
-            # Persia, Pro Evolution Soccer) klaviaturani o'zi
-            # "yutib" yuborib, WM_HOTKEY xabarini hech qachon
-            # yetkazmasligi mumkin edi — shu sababli F9 vaqti-vaqti
-            # bilan ishlamay qolar edi. Past darajali hook esa
-            # o'yindan OLDINROQ, xom (raw) darajada ishlaydi, shuning
-            # uchun ancha ishonchli. Bu yerda F9 ONCHA Ctrl bosilgan-
-            # bosilmaganidan qat'iy nazar aniqlanadi (pastdagi
-            # RegisterHotKey esa alohida "faqat F9" va "Ctrl+F9"
-            # kombinatsiyalarini ro'yxatdan o'tkazadi — ikkalasi ham
-            # shu yerga, xuddi shu natijaga olib keladi).
+            # F9 (Ctrl bosilmagan holda) — past darajali hook orqali
+            # DARHOL aniqlanadi va yutib yuboriladi (ba'zi eski,
+            # eksklyuziv to'liq ekran (DirectInput) o'yinlarda —
+            # masalan Prince of Persia, Pro Evolution Soccer —
+            # RegisterHotKey'ning WM_HOTKEY xabari yetib bormasligi
+            # mumkin, past darajali hook esa o'yindan OLDINROQ, xom
+            # darajada ishlaydi).
+            #
+            # MUHIM: Ctrl+F9 ATAYLAB shu yerda YUTILMAYDI (pastga —
+            # CallNextHookEx'ga — o'tkazib yuboriladi). Avval bu yerda
+            # F9 Ctrl holatidan qat'iy nazar ushlanardi — natijada
+            # Ctrl+F9 "zaxira" bo'lishi kerak bo'lsa-da, aslida XUDDI
+            # SHU kod yo'liga (va demak xuddi shu zaif tomonga) tayanib
+            # qolgan, haqiqiy mustaqil ikkinchi yo'l bo'lmagan edi.
+            # Endi Ctrl+F9 pastdagi RegisterHotKey/WM_HOTKEY orqali —
+            # butunlay boshqa, mustaqil mexanizm orqali — aniqlanadi.
             if vk == VK_F9 and wParam in (WM_KEYDOWN, WM_SYSKEYDOWN):
-                SHOW_LAUNCHER_REQUESTED = True
-                return 1
+                ctrl_held = bool(user32.GetAsyncKeyState(VK_CONTROL) & 0x8000)
+                if not ctrl_held:
+                    SHOW_LAUNCHER_REQUESTED = True
+                    return 1
         return user32.CallNextHookEx(hook_id, nCode, wParam, lParam)
     pointer_proc = HOOKPROC(low_level_keyboard_proc)
 

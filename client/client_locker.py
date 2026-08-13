@@ -1388,13 +1388,14 @@ class CustomerCabinetPage(QWidget):
         row.addLayout(info_col, 1)
 
         balance_box = QFrame()
+        balance_box.setMinimumWidth(150)
         balance_box.setStyleSheet("""
             background: rgba(0,243,255,0.05);
             border: none;
             border-radius: 10px;
         """)
         bb = QVBoxLayout(balance_box)
-        bb.setContentsMargins(18, 10, 18, 10)
+        bb.setContentsMargins(18, 8, 18, 8)
         bb.setSpacing(2)
         balance_tag = QLabel("JORIY BALANS")
         balance_tag.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
@@ -1407,26 +1408,30 @@ class CustomerCabinetPage(QWidget):
         self.header_balance_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         bb.addWidget(self.header_balance_label)
 
-        stop_btn = QPushButton("⏻  VAQTNI TO'XTATISH")
-        stop_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        stop_btn.setFixedHeight(32)
-        stop_btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-        stop_btn.setStyleSheet(CRIMSON_BTN_QSS)
-        stop_btn.clicked.connect(self._on_stop_session_clicked)
-
         topup_btn = QPushButton("+  BALANSNI TO'LDIRISH")
         topup_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        topup_btn.setFixedHeight(32)
+        topup_btn.setFixedHeight(48)
         topup_btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
         topup_btn.setStyleSheet(GRADIENT_BTN_QSS)
         topup_btn.clicked.connect(self._on_topup_info_clicked)
 
-        right_col = QVBoxLayout()
-        right_col.setSpacing(8)
-        right_col.addWidget(balance_box)
-        right_col.addWidget(stop_btn)
-        right_col.addWidget(topup_btn)
-        row.addLayout(right_col)
+        stop_btn = QPushButton("⏻  VAQTNI TO'XTATISH")
+        stop_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        stop_btn.setFixedHeight(48)
+        stop_btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        stop_btn.setStyleSheet(CRIMSON_BTN_QSS)
+        stop_btn.clicked.connect(self._on_stop_session_clicked)
+
+        # Joriy Balans - Balans To'ldirish - Vaqtni To'xtatish — bitta
+        # gorizontal qatorda (avval vertikal 3-qavatli edi: balance_box
+        # kartaning 150px fixed balandligiga sig'may, ustki tag+summa
+        # matnlari bir-birining ustiga chiqib qolar edi).
+        right_row = QHBoxLayout()
+        right_row.setSpacing(14)
+        right_row.addWidget(balance_box)
+        right_row.addWidget(topup_btn)
+        right_row.addWidget(stop_btn)
+        row.addLayout(right_row)
 
         return card
 
@@ -1659,8 +1664,9 @@ class CustomerCabinetPage(QWidget):
 
         rows = []
         for t in data.get('transactions', []):
-            sign = '+' if t.get('type') == 'TOPUP' else '−'
-            color = '#22c55e' if t.get('type') == 'TOPUP' else '#ef4444'
+            is_credit = t.get('type') in ('TOPUP', 'BONUS')
+            sign = '+' if is_credit else '−'
+            color = '#22c55e' if is_credit else '#ef4444'
             try:
                 amount = float(t.get('amount', 0))
             except (TypeError, ValueError):

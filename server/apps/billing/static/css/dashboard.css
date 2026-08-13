@@ -152,6 +152,15 @@ body {
   border-color: rgba(0, 240, 255, 0.4);
 }
 
+/* Language switcher active state */
+.lang-switch-btn {
+  color: #64748b;
+}
+.lang-switch-active {
+  background: rgba(0, 240, 255, 0.2);
+  color: #22d3ee;
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

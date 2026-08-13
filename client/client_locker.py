@@ -39,6 +39,7 @@ import threading
 import zipfile
 import shutil
 import tempfile
+import types
 import requests
 
 from PyQt6.QtCore import Qt, QTimer, QEvent, pyqtSignal, QObject, QDate, QByteArray, QBuffer, QIODevice, QPointF
@@ -3070,6 +3071,61 @@ if IS_WINDOWS:
             set_mouse_acceleration(True)
         except Exception as e:
             print(f"[Mouse] Standart holatga qaytarishda xato: {e}")
+
+    # ── Administrator huquqi talab qiladigan o'yinlar (masalan ICCup
+    # Launcher) uchun — oddiy CreateProcess (subprocess.Popen) ularni
+    # ISHGA TUSHIRA OLMAYDI, "WinError 740: The requested operation
+    # requires elevation" bilan darhol muvaffaqiyatsiz tugaydi (Windows
+    # UAC oynasini o'zi ko'rsatmaydi, chunki bu jarayon o'zi elevatsiya
+    # so'ramagan). ShellExecuteEx "runas" fe'li bilan xuddi foydalanuvchi
+    # faylni qo'lda ikki marta bosib, "Ha"ni tanlagandagidek UAC
+    # so'rovini chiqaradi.
+    SEE_MASK_NOCLOSEPROCESS = 0x00000040
+    SW_SHOWNORMAL = 1
+
+    class SHELLEXECUTEINFOW(ctypes.Structure):
+        _fields_ = [
+            ("cbSize", wintypes.DWORD),
+            ("fMask", ctypes.c_ulong),
+            ("hwnd", wintypes.HWND),
+            ("lpVerb", wintypes.LPCWSTR),
+            ("lpFile", wintypes.LPCWSTR),
+            ("lpParameters", wintypes.LPCWSTR),
+            ("lpDirectory", wintypes.LPCWSTR),
+            ("nShow", ctypes.c_int),
+            ("hInstApp", wintypes.HINSTANCE),
+            ("lpIDList", ctypes.c_void_p),
+            ("lpClass", wintypes.LPCWSTR),
+            ("hKeyClass", wintypes.HANDLE),
+            ("dwHotKey", wintypes.DWORD),
+            ("hIcon", wintypes.HANDLE),
+            ("hProcess", wintypes.HANDLE),
+        ]
+
+    shell32 = ctypes.WinDLL('shell32', use_last_error=True)
+    shell32.ShellExecuteExW.restype = wintypes.BOOL
+    shell32.ShellExecuteExW.argtypes = [ctypes.POINTER(SHELLEXECUTEINFOW)]
+    kernel32.GetProcessId.restype = wintypes.DWORD
+    kernel32.GetProcessId.argtypes = [wintypes.HANDLE]
+
+    def launch_elevated(exe, cwd=None):
+        """UAC "Ha/Yo'q" so'rovini chiqarib, dasturni administrator
+        huquqida ishga tushiradi. Muvaffaqiyatli bo'lsa (pid, hProcess)
+        qaytaradi — mijoz "Ha"ni bosmasa yoki xato bo'lsa, None."""
+        sei = SHELLEXECUTEINFOW()
+        sei.cbSize = ctypes.sizeof(sei)
+        sei.fMask = SEE_MASK_NOCLOSEPROCESS
+        sei.hwnd = None
+        sei.lpVerb = "runas"
+        sei.lpFile = exe
+        sei.lpParameters = None
+        sei.lpDirectory = cwd
+        sei.nShow = SW_SHOWNORMAL
+        ok = shell32.ShellExecuteExW(ctypes.byref(sei))
+        if not ok or not sei.hProcess:
+            return None
+        pid = kernel32.GetProcessId(sei.hProcess)
+        return pid, sei.hProcess
 else:
     def install_keyboard_hook():   print("[Hook] enabled (sim)")
     def uninstall_keyboard_hook(): print("[Hook] disabled (sim)")
@@ -3084,6 +3140,7 @@ else:
     def get_mouse_acceleration(): return True
     def set_mouse_acceleration(enabled): pass
     def reset_mouse_settings(): pass
+    def launch_elevated(exe, cwd=None): return None
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -3402,7 +3459,29 @@ class ClientLockerApp:
                     # cmd.exe orqali bajaradi.
                     proc = subprocess.Popen(["cmd.exe", "/c", exe], cwd=cwd)
                 else:
-                    proc = subprocess.Popen([exe], cwd=cwd)
+                    try:
+                        proc = subprocess.Popen([exe], cwd=cwd)
+                    except OSError as e:
+                        # WinError 740 = ERROR_ELEVATION_REQUIRED — bu exe
+                        # (masalan ICCup Launcher) administrator huquqini
+                        # talab qiladi. Oddiy CreateProcess (Popen) buni
+                        # umuman boshqara olmaydi va UAC oynasini
+                        # ko'rsatmasdan darhol shu xato bilan tugaydi —
+                        # ShellExecuteEx "runas" fe'li bilan qayta
+                        # urinamiz, bu esa qo'lda ikki marta bosilganda
+                        # chiqadigan xuddi shu UAC "Ha/Yo'q" so'rovini
+                        # chiqaradi.
+                        if IS_WINDOWS and getattr(e, 'winerror', None) == 740:
+                            result = launch_elevated(exe, cwd)
+                            if not result:
+                                self.main_window.show_launch_error(
+                                    "Administrator ruxsati berilmadi (UAC oynasida 'Ha' bosilmadi), qayta urinib ko'ring."
+                                )
+                                return
+                            pid, _hproc = result
+                            proc = types.SimpleNamespace(pid=pid)
+                        else:
+                            raise
                 self.launched_processes.append(proc)
                 print(f"[Launcher] PID: {proc.pid}")
                 self.main_window.show_launch_success(name)

@@ -2042,6 +2042,10 @@ class ProductCard(BracketFrame):
         super().__init__(bracket_color=COLOR_CYAN, bracket_len=10)
         self.product = product
         self.qty = 0
+        try:
+            self.stock = max(0, int(product.get('stock', 0)))
+        except (TypeError, ValueError):
+            self.stock = 0
         self.setFixedWidth(220)
         self.setObjectName("productCard")
         self.setStyleSheet(f"""
@@ -2082,32 +2086,55 @@ class ProductCard(BracketFrame):
         name.setWordWrap(True)
         lo.addWidget(name)
 
+        self.stock_label = QLabel(self._stock_hint_text())
+        self.stock_label.setFont(QFont("Segoe UI", 9))
+        self.stock_label.setStyleSheet("color: #64748b; padding: 0 12px 6px 12px;")
+        lo.addWidget(self.stock_label)
+
         stepper = QHBoxLayout()
         stepper.setContentsMargins(12, 0, 12, 12)
-        minus = QPushButton("−")
-        plus = QPushButton("+")
-        for b in (minus, plus):
+        self.minus_btn = QPushButton("−")
+        self.plus_btn = QPushButton("+")
+        for b in (self.minus_btn, self.plus_btn):
             b.setFixedSize(34, 34)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             b.setStyleSheet(f"""
                 QPushButton {{ background: {COLOR_INPUT_BG}; color: #e2e8f0; border: 1px solid {COLOR_INPUT_BORDER}; border-radius: 8px; font-weight: bold; }}
                 QPushButton:hover {{ border: 1px solid {COLOR_CYAN}; color: {COLOR_CYAN}; }}
+                QPushButton:disabled {{ color: #334155; border: 1px solid {COLOR_INPUT_BORDER}; }}
             """)
         self.qty_label = QLabel("0")
         self.qty_label.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         self.qty_label.setStyleSheet("color: #ffffff;")
         self.qty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.qty_label.setFixedWidth(30)
-        minus.clicked.connect(lambda: self._change_qty(-1))
-        plus.clicked.connect(lambda: self._change_qty(1))
-        stepper.addWidget(minus)
+        self.minus_btn.clicked.connect(lambda: self._change_qty(-1))
+        self.plus_btn.clicked.connect(lambda: self._change_qty(1))
+        stepper.addWidget(self.minus_btn)
         stepper.addWidget(self.qty_label, 1)
-        stepper.addWidget(plus)
+        stepper.addWidget(self.plus_btn)
         lo.addLayout(stepper)
 
+        self._update_stepper_state()
+
+    def _stock_hint_text(self):
+        if self.stock <= 0:
+            return "Omborda yo'q"
+        return f"Omborda: {self.stock}"
+
+    def _update_stepper_state(self):
+        remaining = self.stock - self.qty
+        self.stock_label.setText(f"Omborda: {remaining}" if self.stock > 0 else "Omborda yo'q")
+        self.minus_btn.setEnabled(self.qty > 0)
+        self.plus_btn.setEnabled(self.qty < self.stock)
+
     def _change_qty(self, delta):
-        self.qty = max(0, self.qty + delta)
+        # Dashboarddagi (server) mavjud stock miqdoridan oshirib
+        # buyurtma qilib bo'lmaydi — "+" tugmasi oxirgi qoldiqqa
+        # yetganda o'zi to'xtaydi.
+        self.qty = max(0, min(self.stock, self.qty + delta))
         self.qty_label.setText(str(self.qty))
+        self._update_stepper_state()
         self.qty_changed.emit(self.product, self.qty)
 
 

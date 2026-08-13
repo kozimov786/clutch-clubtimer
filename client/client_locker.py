@@ -2222,7 +2222,8 @@ class BarPage(QWidget):
             self.set_products([])
         else:
             self.status_label.setStyleSheet("color: #ef4444;")
-            self.status_label.setText("❌ Buyurtma yuborilmadi, qaytadan urinib ko'ring yoki administratorga murojaat qiling.")
+            server_error = data.get('error') if isinstance(data, dict) else None
+            self.status_label.setText(f"❌ {server_error}" if server_error else "❌ Buyurtma yuborilmadi, qaytadan urinib ko'ring yoki administratorga murojaat qiling.")
             self.order_btn.setEnabled(len(self.cart) > 0)
         QTimer.singleShot(6000, self.status_label.hide)
 

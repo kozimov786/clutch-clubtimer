@@ -421,16 +421,19 @@ class ComputerViewSet(viewsets.ModelViewSet):
         bar_items = []
         bar_total_price = 0.0
 
+        # BALANCE buyurtmalar yaratilgan zahoti mijoz balansidan
+        # yechilgan — xodim yakunlashda ularni QAYTA "to'lanishi kerak"
+        # deb ko'rmasligi uchun bu yerdan chiqarib tashlanadi.
         if start_time:
             orders = Order.objects.filter(
                 computer=pc,
                 created_at__gte=start_time - timedelta(seconds=30)
-            ).exclude(status='CANCELLED')
+            ).exclude(status='CANCELLED').exclude(payment_method='BALANCE')
         else:
             orders = Order.objects.filter(
                 computer=pc,
                 status__in=['PENDING', 'APPROVED', 'DELIVERED']
-            ).exclude(status='CANCELLED')
+            ).exclude(status='CANCELLED').exclude(payment_method='BALANCE')
 
         items_map = {}
         for order in orders:
@@ -485,10 +488,15 @@ class ComputerViewSet(viewsets.ModelViewSet):
 
         duration_minutes, time_price = _calculate_session_duration_and_price(pc, active_session, start_time, tariff, now)
 
+        # payment_method='BALANCE' buyurtmalar bar buyurtma yaratilgan
+        # zahoti mijoz balansidan allaqachon yechilgan (OrderViewSet.create)
+        # — shuning uchun bu yerda xodimga QAYTA naqd/plastik sifatida
+        # hisoblanmasligi kerak (aks holda mijoz ikki marta to'lagan
+        # bo'lib chiqardi).
         if start_time:
-            session_orders = Order.objects.filter(computer=pc, created_at__gte=start_time - timedelta(seconds=30)).exclude(status='CANCELLED')
+            session_orders = Order.objects.filter(computer=pc, created_at__gte=start_time - timedelta(seconds=30)).exclude(status='CANCELLED').exclude(payment_method='BALANCE')
         else:
-            session_orders = Order.objects.filter(computer=pc).exclude(status='CANCELLED')
+            session_orders = Order.objects.filter(computer=pc).exclude(status='CANCELLED').exclude(payment_method='BALANCE')
 
         bar_total_price = float(sum(o.total_price for o in session_orders))
 
@@ -825,11 +833,37 @@ class OrderViewSet(viewsets.ModelViewSet):
         if is_direct_sale:
             order_status = 'DELIVERED'
 
-        cash_amt, card_amt = _split_payment(
-            payment_method, float(total_price),
-            float(request.data.get('cash_amount', 0.0)),
-            float(request.data.get('card_amount', 0.0))
-        )
+        # Agar bu PC'da hozir mijoz o'z balansidan ochgan (BALANCE) seans
+        # faol bo'lsa — bar buyurtmasi ham darhol o'sha mijozning
+        # balansidan yechiladi (naqd/plastik emas), xuddi vaqt kabi.
+        # Buning sababi: mijoz o'zi Kabinetdan seansni tugatib ketganda,
+        # xodim hech qachon "ko'rmagan" holda to'lanmagan bar buyurtmasi
+        # osilib qolmasligi kerak — mijoz allaqachon jismonan ketgan
+        # bo'lishi mumkin.
+        balance_session = None
+        if computer:
+            balance_session = Session.objects.filter(
+                computer=computer, is_active=True, payment_method='BALANCE', customer__isnull=False
+            ).select_related('customer').first()
+
+        if balance_session:
+            customer = balance_session.customer
+            charge = float(total_price)
+            updated = Customer.objects.filter(pk=customer.pk, balance__gte=charge).update(balance=F('balance') - charge)
+            if not updated:
+                return Response(
+                    {'error': f"Balansda yetarli mablag' yo'q (kerak: {charge:,.0f} UZS)."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            customer.refresh_from_db(fields=['balance'])
+            payment_method = 'BALANCE'
+            cash_amt, card_amt = 0.0, 0.0
+        else:
+            cash_amt, card_amt = _split_payment(
+                payment_method, float(total_price),
+                float(request.data.get('cash_amount', 0.0)),
+                float(request.data.get('card_amount', 0.0))
+            )
 
         order = Order.objects.create(
             computer=computer,
@@ -852,6 +886,13 @@ class OrderViewSet(viewsets.ModelViewSet):
             for oi in order_items_to_create:
                 oi['product'].stock = max(0, oi['product'].stock - oi['quantity'])
                 oi['product'].save()
+
+        if balance_session:
+            CustomerTransaction.objects.create(
+                customer=balance_session.customer, type='SPEND', amount=total_price,
+                balance_after=balance_session.customer.balance,
+                note=f"{computer.name}: bar buyurtma #{order.id} uchun"
+            )
 
         serializer = self.get_serializer(order)
         notify_bar_order_change({

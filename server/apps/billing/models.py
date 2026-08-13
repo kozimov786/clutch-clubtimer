@@ -292,6 +292,8 @@ AUDIT_ACTION_CHOICES = [
     ('CUSTOMER_PASSWORD_RESET', 'Mijoz paroli tozalandi'),
     ('EXPENSE_CREATED', "Rasxod qo'shildi"),
     ('STOCK_SUPPLY', 'Tovar kirim qilindi'),
+    ('REMOTE_SHUTDOWN', 'Kompyuter uzoqdan o\'chirildi'),
+    ('FORCE_CLOSE_APP', 'Dastur majburan yopildi'),
     ('OTHER', 'Boshqa'),
 ]
 

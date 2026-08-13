@@ -434,6 +434,12 @@ function generatePCCardHTML(pc) {
             <button onclick="openScreenshotModal(${pc.id}, '${pc.name}')" title="Ekranni ko'rish" class="w-7 h-7 rounded-lg bg-slate-800/80 hover:bg-cyan-500/20 border border-slate-700 hover:border-cyan-500/40 text-slate-400 hover:text-cyan-400 flex items-center justify-center transition-all">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
             </button>
+            <button onclick="forceCloseApp(${pc.id}, '${pc.name}')" title="Muzlab qolgan dasturni majburan yopish" class="w-7 h-7 rounded-lg bg-slate-800/80 hover:bg-amber-500/20 border border-slate-700 hover:border-amber-500/40 text-slate-400 hover:text-amber-400 flex items-center justify-center transition-all">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+            <button onclick="remoteShutdownPc(${pc.id}, '${pc.name}')" title="Kompyuterni o'chirish" class="w-7 h-7 rounded-lg bg-slate-800/80 hover:bg-rose-500/20 border border-slate-700 hover:border-rose-500/40 text-slate-400 hover:text-rose-400 flex items-center justify-center transition-all">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.636 5.636a9 9 0 1012.728 0M12 3v9"/></svg>
+            </button>
             ${statusBadge}
           </div>
         </div>
@@ -1022,6 +1028,50 @@ async function emergencyLockAll() {
     }
   } catch (err) {
     console.error("Error in emergency lock:", err);
+  }
+}
+
+async function shutdownAllPcs() {
+  if (!confirm("DIQQAT: Bu BARCHA kompyuterlarni butunlay o'chiradi (Windows shutdown). Davom etasizmi?")) return;
+
+  try {
+    const res = await fetch(`/api/computers/shutdown_all_pcs/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (res.ok) {
+      playSound('alert');
+    } else {
+      alert("Kompyuterlarni o'chirishda xatolik!");
+    }
+  } catch (err) {
+    console.error("Error in shutdown all:", err);
+  }
+}
+
+async function remoteShutdownPc(pcId, pcName) {
+  if (!confirm(`"${pcName}" kompyuterini o'chirmoqchimisiz?`)) return;
+  try {
+    const res = await fetch(`/api/computers/${pcId}/remote_shutdown/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!res.ok) alert("Kompyuterni o'chirishda xatolik!");
+  } catch (err) {
+    console.error("Error in remote shutdown:", err);
+  }
+}
+
+async function forceCloseApp(pcId, pcName) {
+  if (!confirm(`"${pcName}"da muzlab qolgan dasturni majburan yopmoqchimisiz?`)) return;
+  try {
+    const res = await fetch(`/api/computers/${pcId}/force_close_app/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!res.ok) alert("Dasturni yopishda xatolik!");
+  } catch (err) {
+    console.error("Error in force close app:", err);
   }
 }
 

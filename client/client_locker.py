@@ -3228,6 +3228,7 @@ class SyncSignals(QObject):
     status_updated = pyqtSignal(dict)
     status_resync = pyqtSignal(dict)
     bar_order_updated = pyqtSignal(dict)
+    remote_command = pyqtSignal(str)
 
 
 class ClientLockerApp:
@@ -3237,6 +3238,7 @@ class ClientLockerApp:
         self.signals.status_updated.connect(self._handle_status)
         self.signals.status_resync.connect(self._handle_status_resync)
         self.signals.bar_order_updated.connect(self._handle_bar_order)
+        self.signals.remote_command.connect(self._handle_remote_command)
         self.launched_processes = []
         self.current_status = 'LOCKED'
         self.time_remaining = 0
@@ -3472,6 +3474,22 @@ class ClientLockerApp:
             self.pc_id = data.get('id')
 
     def _handle_bar_order(self, data): pass
+
+    def _handle_remote_command(self, command):
+        """Dashboarddan WebSocket orqali kelgan masofaviy buyruq
+        (ComputerViewSet.remote_shutdown/shutdown_all_pcs/force_close_app).
+        MUHIM: bu faqat mijoz/o'yin dasturi muzlab qolganda ishlaydi —
+        agar butun Windows qotib qolgan bo'lsa, shu kod ham
+        ishlamayotgan bo'lardi (chunki u ham o'sha qotib qolgan
+        kompyuterda ishlaydi)."""
+        print(f"[Remote] Buyruq qabul qilindi: {command}")
+        if command == 'SHUTDOWN':
+            if IS_WINDOWS:
+                subprocess.run(["shutdown", "/s", "/t", "3"], capture_output=True)
+            else:
+                print("[Remote] SHUTDOWN — faqat Windows'da ishlaydi (sim)")
+        elif command == 'FORCE_CLOSE_APP':
+            self._kill_games()
 
     def _unlock(self):
         # Alt+Tab/Win/Alt+F4/Alt+Esc bloklash ENDI ACTIVE holatda ham
@@ -3776,6 +3794,10 @@ class ClientLockerApp:
                     obj = o.get('order', o)
                     if obj.get('computer_name') == self.pc_name:
                         self.signals.bar_order_updated.emit(obj)
+                elif d.get('action') == 'REMOTE_COMMAND':
+                    target = d.get('target')
+                    if target == 'ALL' or target == self.pc_name:
+                        self.signals.remote_command.emit(d.get('command', ''))
                 else:
                     pc = d.get('pc', {})
                     if pc.get('name') == self.pc_name:

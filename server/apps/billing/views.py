@@ -662,6 +662,49 @@ class ComputerViewSet(viewsets.ModelViewSet):
         })
         return Response({'status': 'All PCs emergency locked'}, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=['post'])
+    def remote_shutdown(self, request, pk=None):
+        """Dashboarddan: shu kompyuterni Windows darajasida o'chiradi.
+        Buyruq WebSocket orqali kiosk klientiga yuboriladi — klient
+        o'zi "shutdown" buyrug'ini bajaradi (server kompyuterni
+        to'g'ridan-to'g'ri o'chira olmaydi, faqat signal beradi)."""
+        pc = self.get_object()
+        _log_action(request, 'REMOTE_SHUTDOWN', f"{pc.name}: uzoqdan o'chirish buyrug'i yuborildi")
+        notify_pc_status_change({
+            'action': 'REMOTE_COMMAND',
+            'command': 'SHUTDOWN',
+            'target': pc.name
+        })
+        return Response({'success': True})
+
+    @action(detail=False, methods=['post'])
+    def shutdown_all_pcs(self, request):
+        """Barcha kiosk kompyuterlarni birdaniga o'chiradi (klub
+        yopilganda)."""
+        _log_action(request, 'REMOTE_SHUTDOWN', "Barcha kompyuterlarga uzoqdan o'chirish buyrug'i yuborildi")
+        notify_pc_status_change({
+            'action': 'REMOTE_COMMAND',
+            'command': 'SHUTDOWN',
+            'target': 'ALL'
+        })
+        return Response({'success': True})
+
+    @action(detail=True, methods=['post'])
+    def force_close_app(self, request, pk=None):
+        """Dashboarddan: shu kompyuterda muzlab/qotib qolgan
+        o'yin/dasturni majburan yopadi (kompyuterning o'zi, Windows'i
+        ishlab tursa — butunlay qotib qolgan kompyuterni bu buyruq
+        qutqara olmaydi, chunki klientning o'zi ham javob bermay
+        qoladi)."""
+        pc = self.get_object()
+        _log_action(request, 'FORCE_CLOSE_APP', f"{pc.name}: dasturni majburan yopish buyrug'i yuborildi")
+        notify_pc_status_change({
+            'action': 'REMOTE_COMMAND',
+            'command': 'FORCE_CLOSE_APP',
+            'target': pc.name
+        })
+        return Response({'success': True})
+
     @action(detail=False, methods=['post'])
     def heartbeat(self, request):
         pc_name = request.data.get('pc_name')

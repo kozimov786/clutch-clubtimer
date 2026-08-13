@@ -1083,7 +1083,6 @@ class TopBar(QFrame):
     (ParallelogramTabBar) joylashgan."""
     achievements_requested = pyqtSignal()
     mouse_settings_requested = pyqtSignal()
-    resume_requested = pyqtSignal()
     cabinet_requested = pyqtSignal()
 
     def __init__(self, pc_name="PC-01", parent=None):
@@ -1136,26 +1135,6 @@ class TopBar(QFrame):
         lo.addWidget(self.time_badge)
 
         lo.addStretch(1)
-
-        # "O'yinga qaytish" — faqat biror o'yin ishga tushirilgan va
-        # F9 orqali launcherga chiqilganda ko'rinadi (odatiy holatda
-        # yashirin).
-        self.resume_btn = QPushButton("▶  O'YINGA QAYTISH")
-        self.resume_btn.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        self.resume_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.resume_btn.setStyleSheet(f"""
-            QPushButton {{
-                color: {COLOR_BG};
-                background: {COLOR_CYAN};
-                border: none;
-                border-radius: 14px;
-                padding: 8px 18px;
-            }}
-            QPushButton:hover {{ background: #4df6ff; }}
-        """)
-        self.resume_btn.clicked.connect(self.resume_requested.emit)
-        self.resume_btn.hide()
-        lo.addWidget(self.resume_btn)
 
         # Yutuqlar — referens dizaynda alohida ko'rsatilmagan, lekin
         # mavjud funksiyani yo'qotmaslik uchun kichik ikonka-tugma
@@ -1214,13 +1193,6 @@ class TopBar(QFrame):
 
     def set_time_remaining(self, text):
         self.time_badge.setText(f"⏱  {text}" if text else "")
-
-    def set_running_game(self, name):
-        if name:
-            self.resume_btn.setText(f"▶  {name.upper()}GA QAYTISH")
-            self.resume_btn.show()
-        else:
-            self.resume_btn.hide()
 
     def set_logged_in_customer(self, data):
         if data:
@@ -1883,6 +1855,10 @@ class GamesPage(QWidget):
         header_row.addWidget(online_tag, 0, Qt.AlignmentFlag.AlignTop)
         header_widget0 = QWidget()
         header_widget0.setLayout(header_row)
+        # Games/Bar sahifalari o'rtasida almashishda tarkib "sakramasligi"
+        # uchun — ikkala sahifaning sarlavha bloki bir xil balandlikda
+        # bo'lishi shart (BarPage'da xuddi shu qiymatlar ishlatiladi).
+        header_widget0.setFixedHeight(94)
         root.addWidget(header_widget0)
 
         # Sahifa almashtirgichi (GAMES LIBRARY / BAR & SNACKS)
@@ -1894,6 +1870,7 @@ class GamesPage(QWidget):
         switcher_row.addStretch(1)
         switcher_widget = QWidget()
         switcher_widget.setLayout(switcher_row)
+        switcher_widget.setFixedHeight(46)
         root.addWidget(switcher_widget)
 
         # Category filter row
@@ -1916,6 +1893,7 @@ class GamesPage(QWidget):
         cat_row.addStretch(1)
         cat_row_widget = QWidget()
         cat_row_widget.setLayout(cat_row)
+        cat_row_widget.setFixedHeight(58)
         root.addWidget(cat_row_widget)
 
         # Error banner
@@ -2116,6 +2094,10 @@ class BarPage(QWidget):
 
         header_widget = QWidget()
         header_widget.setLayout(header)
+        # GamesPage bilan bir xil balandlik — sahifalar orasida almashishda
+        # tarkib "sakramasligi" uchun (GamesPage'dagi header_widget0 bilan
+        # bir xil qiymat).
+        header_widget.setFixedHeight(94)
         root.addWidget(header_widget)
 
         # Sahifa almashtirgichi — GamesPage bilan bir xil joylashuv/dizayn
@@ -2128,7 +2110,14 @@ class BarPage(QWidget):
         switcher_row.addStretch(1)
         switcher_widget = QWidget()
         switcher_widget.setLayout(switcher_row)
+        switcher_widget.setFixedHeight(46)
         root.addWidget(switcher_widget)
+
+        # GamesPage'da shu joyda "FILTER BY" kategoriya qatori bor (58px) —
+        # Bar sahifasida unga mos funksiya yo'q, lekin bo'sh joy sahifalar
+        # orasida almashishda tarkib bir xil balandlikdan boshlanishi
+        # uchun saqlanadi.
+        root.addSpacing(58)
 
         self.status_label = QLabel("")
         self.status_label.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
@@ -2350,7 +2339,6 @@ class RunningAppsBar(QFrame):
 # ──────────────────────────────────────────────────────────────────────────────
 class LauncherPage(QWidget):
     game_launch_requested = pyqtSignal(dict)
-    resume_requested = pyqtSignal()
     app_switch_requested = pyqtSignal(str)
     cabinet_stop_requested = pyqtSignal(str)
     # Fon oqimidan (threading.Thread) kelgan natijalarni asosiy GUI oqimiga
@@ -2376,7 +2364,6 @@ class LauncherPage(QWidget):
         self.top_bar = TopBar(pc_name=pc_name)
         self.top_bar.achievements_requested.connect(lambda: self._switch_tab("achievements"))
         self.top_bar.mouse_settings_requested.connect(self._open_mouse_settings)
-        self.top_bar.resume_requested.connect(self.resume_requested.emit)
         self.top_bar.cabinet_requested.connect(self._open_cabinet)
         root.addWidget(self.top_bar)
 
@@ -2429,9 +2416,6 @@ class LauncherPage(QWidget):
 
     def set_time_remaining(self, text):
         self.top_bar.set_time_remaining(text)
-
-    def set_running_game(self, name):
-        self.top_bar.set_running_game(name)
 
     def set_running_apps(self, apps):
         self.apps_bar.set_apps(apps)
@@ -2487,7 +2471,6 @@ class LauncherPage(QWidget):
 # ──────────────────────────────────────────────────────────────────────────────
 class MainWindow(FullscreenMixin, QMainWindow):
     game_launched_signal = pyqtSignal(dict)
-    resume_game_signal = pyqtSignal()
     app_switch_requested_signal = pyqtSignal(str)
     customer_login_signal = pyqtSignal(dict)
     customer_unlock_signal = pyqtSignal(str)
@@ -2523,7 +2506,6 @@ class MainWindow(FullscreenMixin, QMainWindow):
         # "Kabinet" ko'rinib turishi kerak.
         self.lock_page.login_succeeded.connect(self.launcher_page.set_logged_in_customer)
         self.launcher_page.game_launch_requested.connect(self.game_launched_signal.emit)
-        self.launcher_page.resume_requested.connect(self.resume_game_signal.emit)
         self.launcher_page.app_switch_requested.connect(self.app_switch_requested_signal.emit)
         self.launcher_page.cabinet_stop_requested.connect(self.customer_stop_signal.emit)
 
@@ -2540,9 +2522,6 @@ class MainWindow(FullscreenMixin, QMainWindow):
     def switch_to_launcher(self):
         self.stacked.setCurrentIndex(self.PAGE_LAUNCHER)
         self.force_native_fullscreen()
-
-    def set_running_game(self, name):
-        self.launcher_page.set_running_game(name)
 
     def set_running_apps(self, apps):
         self.launcher_page.set_running_apps(apps)
@@ -3156,7 +3135,6 @@ class ClientLockerApp:
             fallback_games=self.fallback_games, api_key=self.api_key
         )
         self.main_window.game_launched_signal.connect(self._handle_game_launch)
-        self.main_window.resume_game_signal.connect(self._handle_resume_game)
         self.main_window.app_switch_requested_signal.connect(self._handle_app_switch)
         self.main_window.customer_login_signal.connect(self._handle_customer_login)
         self.main_window.customer_unlock_signal.connect(self._handle_customer_unlock_request)
@@ -3391,7 +3369,6 @@ class ClientLockerApp:
         self.current_game_name = None
         self.current_game_pid = None
         self.current_game_exe = None
-        self.main_window.set_running_game(None)
         if IS_WINDOWS:
             # Qo'shimcha xavfsizlik to'ri — Steam kabi ba'zi ilovalar
             # yangi jarayonni butunlay mustaqil (bizning jarayon
@@ -3430,13 +3407,12 @@ class ClientLockerApp:
                 print(f"[Launcher] PID: {proc.pid}")
                 self.main_window.show_launch_success(name)
 
-                # "O'yinga qaytish" tugmasi uchun kuzatiladi — F9 bilan
-                # launcherga qaytilganda, shu ma'lumot bilan o'yin
-                # oynasini qayta old planga chiqarish mumkin bo'ladi.
+                # Yangi ishga tushirilgan o'yin oynasini old planga
+                # chiqarish uchun kuzatiladi (pastdagi thread'da
+                # ishlatiladi).
                 self.current_game_name = name
                 self.current_game_pid = proc.pid
                 self.current_game_exe = os.path.basename(exe)
-                self.main_window.set_running_game(name)
 
                 # Launcher minimize qilinmaydi (bu Windows ish stolini
                 # ochib qo'yardi) — faqat orqa qatlamga o'tadi, shunda
@@ -3467,22 +3443,6 @@ class ClientLockerApp:
         else:
             print(f"[Launcher] Not found: {exe}")
             self.main_window.show_launch_error("O'yin fayli topilmadi, iltimos admonga murojaat qiling")
-
-    def _handle_resume_game(self):
-        """TopBar'dagi 'O'yinga qaytish' tugmasi bosilganda — F9 orqali
-        launcherga chiqilgandan keyin, hozir ishlayotgan o'yin oynasini
-        qayta old planga chiqaradi."""
-        if not self.current_game_pid:
-            return
-        print(f"[Launcher] O'yinga qaytish so'ralmoqda: {self.current_game_name} (pid={self.current_game_pid})")
-        self.main_window.yield_to_app()
-        if IS_WINDOWS:
-            threading.Thread(
-                target=bring_process_window_to_front,
-                args=(self.current_game_pid,),
-                kwargs={'exe_name': self.current_game_exe, 'own_hwnd': int(self.main_window.winId()), 'timeout': 3.0},
-                daemon=True
-            ).start()
 
     def _scan_running_apps(self):
         """Har 3 soniyada ekrandagi ochiq dasturlarni qayta tekshiradi

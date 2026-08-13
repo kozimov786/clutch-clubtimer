@@ -3318,8 +3318,13 @@ class ClientLockerApp:
             # sabab bo'lardi. Shuning uchun bir necha yuz millisoniyadan
             # keyin qayta tekshirib, haqiqiy monitor o'lchamiga moslab
             # qo'yamiz.
-            QTimer.singleShot(400, self.main_window.force_native_fullscreen)
-            QTimer.singleShot(1200, self.main_window.force_native_fullscreen)
+            # Eski, DirectX EKSKLYUZIV to'liq ekran rejimidagi o'yinlar
+            # (masalan Prince of Persia, Pro Evolution Soccer) ekranni
+            # ancha sekinroq "bo'shatishi" mumkin — shuning uchun
+            # qo'shimcha, uzoqroq muddatli qayta urinishlar ham
+            # qo'shilgan (2.5s/4s gacha).
+            for delay_ms in (400, 1200, 2500, 4000):
+                QTimer.singleShot(delay_ms, self.main_window.force_native_fullscreen)
 
     def _capture_and_upload_screenshot(self):
         if not self.pc_id:

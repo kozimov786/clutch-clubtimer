@@ -3425,8 +3425,18 @@ class ClientLockerApp:
         new_status = data.get('status', 'LOCKED')
         if self.current_status not in ('ACTIVE', 'WARNING') or new_status not in ('ACTIVE', 'WARNING'):
             return
-        self.time_remaining = data.get('time_remaining', self.time_remaining)
         self.is_open_time = data.get('is_open_time', self.is_open_time)
+        server_seconds = data.get('time_remaining', self.time_remaining)
+        # Har heartbeat siklida (5s) tarmoq kechikishi/millisekund farqi
+        # tufayli server qiymati mahalliy hisoblagichdan deyarli doim
+        # 1-2 soniyaga farq qiladi — buni SO'ZSIZ qabul qilaversak,
+        # ekranda vaqt sekundlari "sakrab" turgandek ko'rinar edi.
+        # Faqat sezilarli (haqiqiy) farq bo'lsa tuzatiladi, mayda
+        # tebranishlar esa mahalliy soniyalik hisoblagichga (_tick)
+        # qoldiriladi — u baribir har heartbeat'da qayta tekshirilib
+        # turadi.
+        if abs(server_seconds - self.time_remaining) > 2:
+            self.time_remaining = server_seconds
         self.main_window.update_timer(self.time_remaining)
         if data.get('id'):
             self.pc_id = data.get('id')

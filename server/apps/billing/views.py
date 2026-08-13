@@ -35,6 +35,16 @@ from .serializers import (
 from .consumers import notify_pc_status_change, notify_bar_order_change
 from .permissions import HasClientApiKey, IsStaffOrHasApiKey
 
+# Balans to'ldirish bonus bosqichlari — (chegara, bonus) juftliklari,
+# chegara BO'YICHA KAMAYISH tartibida. Mijoz to'ldirgan summa eng
+# yuqori mos keladigan chegaraga yetsa/oshsa, o'sha bonus qo'shiladi
+# (masalan 150,000 UZS to'ldirilsa — faqat 100,000'lik bosqich
+# qo'llaniladi, ikkalasi qo'shilmaydi).
+TOPUP_BONUS_TIERS = [
+    (200_000, 50_000),
+    (100_000, 20_000),
+]
+
 
 def _log_action(request, action_key, description):
     """Muhim admin/xodim amallarini AuditLog'ga yozadi (kim, qachon, nima qildi)."""
@@ -1463,6 +1473,31 @@ class CustomerViewSet(viewsets.ModelViewSet):
             request, 'CUSTOMER_TOPUP',
             f"{customer.full_name} ({customer.phone}) balansiga {amount:,.0f} UZS qo'shildi (yangi balans: {customer.balance:,.0f} UZS)"
         )
+
+        # Balans to'ldirish bonusi — TOPUP_BONUS_TIERS'dagi eng yuqori
+        # mos keladigan bosqich (masalan 100,000+ UZS -> +20,000 UZS,
+        # 200,000+ UZS -> +50,000 UZS) qo'llaniladi. Asosiy to'ldirishdan
+        # ALOHIDA tranzaksiya sifatida yoziladi — Kabinet/dashboard
+        # tarixida bonus aniq ko'rinib tursin uchun.
+        bonus = 0
+        for threshold, bonus_amount in TOPUP_BONUS_TIERS:
+            if amount >= threshold:
+                bonus = bonus_amount
+                break
+        if bonus > 0:
+            Customer.objects.filter(pk=customer.pk).update(balance=F('balance') + bonus)
+            customer.refresh_from_db()
+            CustomerTransaction.objects.create(
+                customer=customer, type='TOPUP', amount=bonus, balance_after=customer.balance,
+                note=f"Balans to'ldirish bonusi ({amount:,.0f} UZS to'ldirilgani uchun)",
+                created_by=request.user if request.user.is_authenticated else None
+            )
+            _log_action(
+                request, 'CUSTOMER_TOPUP',
+                f"{customer.full_name} ({customer.phone}) balansiga bonus {bonus:,.0f} UZS qo'shildi "
+                f"({amount:,.0f} UZS to'ldirilgani uchun, yangi balans: {customer.balance:,.0f} UZS)"
+            )
+
         return Response(self.get_serializer(customer).data)
 
     @action(detail=True, methods=['post'])

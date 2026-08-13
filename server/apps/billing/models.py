@@ -81,6 +81,7 @@ PAYMENT_METHOD_CHOICES = [
     ('CARD', 'Plastik'),
     ('SPLIT', 'Aralash (Naqd + Card)'),
     ('BALANCE', 'Mijoz balansi'),
+    ('FREE', 'Bepul (Comp)'),
 ]
 
 class Customer(models.Model):

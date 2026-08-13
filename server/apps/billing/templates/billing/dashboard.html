@@ -1018,12 +1018,15 @@
         <!-- Payment Method Selection -->
         <div>
           <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">To'lov Usulini Tanlang</label>
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-3 gap-3">
             <button type="button" onclick="setStartPaymentMethod('CASH')" id="start-pm-btn-cash" class="py-2.5 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 bg-emerald-500/20 text-emerald-400 border-emerald-500/50">
-              💵 NAQD (CASH)
+              💵 NAQD
             </button>
             <button type="button" onclick="setStartPaymentMethod('CARD')" id="start-pm-btn-card" class="py-2.5 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 bg-slate-900 text-slate-400 border-slate-800">
-              💳 PLASTIK (CARD)
+              💳 PLASTIK
+            </button>
+            <button type="button" onclick="setStartPaymentMethod('FREE')" id="start-pm-btn-free" title="Egasi/tanish/xodim uchun bepul o'ynash — kassaga pul qo'shilmaydi" class="py-2.5 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 bg-slate-900 text-slate-400 border-slate-800">
+              🎁 BEPUL
             </button>
           </div>
           <input type="hidden" id="start-payment-method" value="CASH">
@@ -1224,7 +1227,7 @@
         <!-- Payment Method Selection -->
         <div>
           <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">To'lov Turini Tanlang</label>
-          <div class="grid grid-cols-3 gap-2">
+          <div class="grid grid-cols-4 gap-2">
             <button type="button" onclick="setFinishPaymentMethod('CASH')" id="finish-pm-btn-cash" class="py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-emerald-500/20 text-emerald-400 border-emerald-500/50 shadow-md">
               💵 NAQD
             </button>
@@ -1233,6 +1236,9 @@
             </button>
             <button type="button" onclick="setFinishPaymentMethod('SPLIT')" id="finish-pm-btn-split" class="py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-slate-900 text-slate-400 border-slate-800">
               🔀 ARALASH
+            </button>
+            <button type="button" onclick="setFinishPaymentMethod('FREE')" id="finish-pm-btn-free" title="Egasi/tanish/xodim uchun bepul — kassaga pul qo'shilmaydi" class="py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-slate-900 text-slate-400 border-slate-800">
+              🎁 BEPUL
             </button>
           </div>
           <input type="hidden" id="finish-payment-method" value="CASH">

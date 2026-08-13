@@ -88,6 +88,7 @@ def _payment_method_display(payment_method):
         'CARD': '💳 Plastik',
         'SPLIT': '🔀 Aralash',
         'BALANCE': '👛 Balansdan',
+        'FREE': '🎁 Bepul (Comp)',
     }.get(payment_method, payment_method)
 
 
@@ -163,7 +164,7 @@ def _calculate_session_duration_and_price(pc, active_session, start_time, tariff
 
 
 def _split_payment(payment_method, grand_total, req_cash, req_card):
-    """Shared CASH/CARD/SPLIT reconciliation used by session stop and bar-order creation."""
+    """Shared CASH/CARD/SPLIT/FREE reconciliation used by session stop and bar-order creation."""
     if payment_method == 'CASH':
         return grand_total, 0.0
     elif payment_method == 'CARD':
@@ -174,6 +175,13 @@ def _split_payment(payment_method, grand_total, req_cash, req_card):
         if abs((final_cash + final_card) - grand_total) > 0.01:
             final_card = max(0.0, grand_total - final_cash)
         return final_cash, final_card
+    elif payment_method == 'FREE':
+        # Bepul (comp) seans/buyurtma — xodim yoki egasi, do'sti va h.k.
+        # bepul o'ynagan/olgan holat. Hech qanday pul olinmagan, shuning
+        # uchun kassaga (naqd ham, plastik ham) HECH NARSA qo'shilmasligi
+        # kerak — aks holda kassa hisobotida bo'lmagan pul "bo'lishi kerak"
+        # bo'lib chiqib, kunlik hisob-kitobda kamomad ko'rinardi.
+        return 0.0, 0.0
     else:
         return grand_total, 0.0
 
@@ -1268,7 +1276,7 @@ class ExpenseViewSet(viewsets.ModelViewSet):
                 'amount': float(s.total_price),
                 'payment_method': s.payment_method,
                 'payment_method_display': _payment_method_display(s.payment_method),
-                'from_balance': s.payment_method == 'BALANCE',
+                'from_balance': s.payment_method in ('BALANCE', 'FREE'),
                 'created_at': (s.end_time or s.start_time).strftime('%Y-%m-%d %H:%M:%S'),
                 'details': f"{s.tariff.name if s.tariff else 'Tarif'} ({s.duration_minutes} min)"
             })
@@ -1284,7 +1292,7 @@ class ExpenseViewSet(viewsets.ModelViewSet):
                 'amount': float(o.total_price),
                 'payment_method': o.payment_method,
                 'payment_method_display': _payment_method_display(o.payment_method),
-                'from_balance': o.payment_method == 'BALANCE',
+                'from_balance': o.payment_method in ('BALANCE', 'FREE'),
                 'created_at': o.created_at.strftime('%Y-%m-%d %H:%M:%S'),
                 'details': items_str or 'Bar xaridi'
             })

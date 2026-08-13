@@ -616,14 +616,12 @@ function setStartPaymentMethod(method) {
 
   const btnCash = document.getElementById('start-pm-btn-cash');
   const btnCard = document.getElementById('start-pm-btn-card');
+  const btnFree = document.getElementById('start-pm-btn-free');
+  const inactive = "py-2.5 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 bg-slate-900 text-slate-400 border-slate-800";
 
-  if (method === 'CASH') {
-    if (btnCash) btnCash.className = "py-2.5 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 bg-emerald-500/20 text-emerald-400 border-emerald-500/50";
-    if (btnCard) btnCard.className = "py-2.5 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 bg-slate-900 text-slate-400 border-slate-800";
-  } else {
-    if (btnCash) btnCash.className = "py-2.5 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 bg-slate-900 text-slate-400 border-slate-800";
-    if (btnCard) btnCard.className = "py-2.5 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 bg-cyan-500/20 text-cyan-400 border-cyan-500/50";
-  }
+  if (btnCash) btnCash.className = method === 'CASH' ? "py-2.5 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 bg-emerald-500/20 text-emerald-400 border-emerald-500/50" : inactive;
+  if (btnCard) btnCard.className = method === 'CARD' ? "py-2.5 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 bg-cyan-500/20 text-cyan-400 border-cyan-500/50" : inactive;
+  if (btnFree) btnFree.className = method === 'FREE' ? "py-2.5 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 bg-pink-500/20 text-pink-300 border-pink-500/50" : inactive;
 }
 
 // Modal Handlers & Presets
@@ -901,32 +899,27 @@ function setFinishPaymentMethod(method) {
   const btnCash = document.getElementById('finish-pm-btn-cash');
   const btnCard = document.getElementById('finish-pm-btn-card');
   const btnSplit = document.getElementById('finish-pm-btn-split');
+  const btnFree = document.getElementById('finish-pm-btn-free');
   const splitContainer = document.getElementById('finish-split-container');
   const cashInput = document.getElementById('finish-split-cash');
   const cardInput = document.getElementById('finish-split-card');
+  const inactive = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-slate-900 text-slate-400 border-slate-800";
 
   if (input) input.value = method;
 
-  if (method === 'CASH') {
-    if (btnCash) btnCash.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-emerald-500/20 text-emerald-400 border-emerald-500/50 shadow-md";
-    if (btnCard) btnCard.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-slate-900 text-slate-400 border-slate-800";
-    if (btnSplit) btnSplit.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-slate-900 text-slate-400 border-slate-800";
-    if (splitContainer) splitContainer.classList.add('hidden');
-  } else if (method === 'CARD') {
-    if (btnCash) btnCash.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-slate-900 text-slate-400 border-slate-800";
-    if (btnCard) btnCard.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-sky-500/20 text-sky-400 border-sky-500/50 shadow-md";
-    if (btnSplit) btnSplit.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-slate-900 text-slate-400 border-slate-800";
-    if (splitContainer) splitContainer.classList.add('hidden');
-  } else if (method === 'SPLIT') {
-    if (btnCash) btnCash.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-slate-900 text-slate-400 border-slate-800";
-    if (btnCard) btnCard.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-slate-900 text-slate-400 border-slate-800";
-    if (btnSplit) btnSplit.className = "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-purple-500/20 text-purple-400 border-purple-500/50 shadow-md";
-    if (splitContainer) splitContainer.classList.remove('hidden');
+  if (btnCash) btnCash.className = method === 'CASH' ? "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-emerald-500/20 text-emerald-400 border-emerald-500/50 shadow-md" : inactive;
+  if (btnCard) btnCard.className = method === 'CARD' ? "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-sky-500/20 text-sky-400 border-sky-500/50 shadow-md" : inactive;
+  if (btnSplit) btnSplit.className = method === 'SPLIT' ? "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-purple-500/20 text-purple-400 border-purple-500/50 shadow-md" : inactive;
+  if (btnFree) btnFree.className = method === 'FREE' ? "py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 bg-pink-500/20 text-pink-300 border-pink-500/50 shadow-md" : inactive;
 
+  if (method === 'SPLIT') {
+    if (splitContainer) splitContainer.classList.remove('hidden');
     const halfCash = Math.round(currentFinishGrandTotal / 2);
     if (cashInput) cashInput.value = halfCash;
     if (cardInput) cardInput.value = currentFinishGrandTotal - halfCash;
     updateFinishSplitCalc('cash');
+  } else {
+    if (splitContainer) splitContainer.classList.add('hidden');
   }
 }
 
@@ -988,6 +981,9 @@ async function confirmFinishSession() {
       alert(`Naqd va Plastik to'lovlar yig'indisi Jami Summa (${formatMoney(currentFinishGrandTotal)}) ga teng bo'lishi kerak!`);
       return;
     }
+  } else if (paymentMethod === 'FREE') {
+    cashAmt = 0;
+    cardAmt = 0;
   }
 
   if (submitBtn) {
@@ -1945,6 +1941,7 @@ function renderFinanceDashboard(data) {
           CARD: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
           SPLIT: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
           BALANCE: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+          FREE: 'bg-pink-500/20 text-pink-300 border-pink-500/30',
         };
         const pmClass = pmColors[s.payment_method] || pmColors.SPLIT;
         const pmBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold border ${pmClass}">${s.payment_method_display || s.payment_method}</span>`;
@@ -1954,9 +1951,11 @@ function renderFinanceDashboard(data) {
           TOPUP: `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">👛 To'ldirish</span>`,
         };
         const typeBadge = typeBadges[s.type] || typeBadges.BAR;
-        const balanceNote = s.from_balance
-          ? `<div class="text-[9px] text-indigo-400 font-semibold mt-0.5">Balansdan — kassaga yangi pul qo'shilmaydi</div>`
-          : '';
+        const balanceNote = s.payment_method === 'FREE'
+          ? `<div class="text-[9px] text-pink-400 font-semibold mt-0.5">Bepul (Comp) — kassaga yangi pul qo'shilmaydi</div>`
+          : s.from_balance
+            ? `<div class="text-[9px] text-indigo-400 font-semibold mt-0.5">Balansdan — kassaga yangi pul qo'shilmaydi</div>`
+            : '';
 
         return `
           <tr class="border-b border-slate-800/60 hover:bg-slate-900/50 transition-all text-xs">

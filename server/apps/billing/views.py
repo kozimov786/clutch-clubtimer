@@ -24,7 +24,7 @@ from rest_framework.throttling import ScopedRateThrottle
 
 from .models import (
     Computer, Tariff, Session, Category, Product, Order, OrderItem, Expense, Game, StockSupply,
-    Customer, CustomerTransaction, ClientBuild, AuditLog
+    Customer, CustomerTransaction, ClientBuild, AuditLog, award_balance_spend_points
 )
 from .serializers import (
     ComputerSerializer, TariffSerializer, SessionSerializer,
@@ -955,6 +955,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 balance_after=balance_session.customer.balance,
                 note=item_summary or f"{computer.name}: bar buyurtma #{order.id}"
             )
+            award_balance_spend_points(balance_session.customer.pk, float(total_price))
 
         serializer = self.get_serializer(order)
         notify_bar_order_change({

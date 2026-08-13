@@ -25,7 +25,7 @@ CHECK_INTERVAL_SECONDS = 30
 
 
 def _process_once():
-    from .models import Session, Customer, CustomerTransaction
+    from .models import Session, Customer, CustomerTransaction, award_balance_spend_points
 
     close_old_connections()
     now = timezone.now()
@@ -84,6 +84,7 @@ def _process_once():
             customer=customer, type='SPEND', amount=charge, balance_after=customer.balance,
             note=f"{pc.name}: balansdan seans uchun (avtomatik)"
         )
+        award_balance_spend_points(customer.pk, charge)
 
         if customer.balance <= 0:
             stop_balance_session(pc, session, customer, now, reason="balans tugagani uchun")

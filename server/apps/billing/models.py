@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import F
 from django.utils import timezone
 import math
 
@@ -89,6 +90,11 @@ class Customer(models.Model):
     phone = models.CharField(max_length=20, unique=True)
     balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     bonus_points = models.IntegerField(default=0)
+    # Balansdan HAR QACHON sarflangan (vaqt + bar) jami summa — ball
+    # doim shu maydondan QAYTA hisoblanadi (award_balance_spend_points
+    # ga qarang), shunda mayda-mayda (masalan har 30 soniyalik) sarflar
+    # yaxlitlashda yo'qolib ketmaydi.
+    lifetime_balance_spent = models.DecimalField(max_digits=14, decimal_places=2, default=0.00)
     notes = models.TextField(blank=True, null=True)
     # Mijoz kiosk qulf ekranida o'zi tanlagan parol (birinchi kirishda
     # avtomatik o'rnatiladi) — Django'ning standart parol xeshlash
@@ -100,6 +106,30 @@ class Customer(models.Model):
 
     def __str__(self):
         return f"{self.full_name} ({self.phone}) - Balans: {self.balance:,.0f} UZS"
+
+
+BONUS_POINTS_PER_UZS = 1000  # balansdan har 1000 UZS sarflansa -> 1 ball
+
+
+def award_balance_spend_points(customer_pk, charge):
+    """Balansdan sarflangan (vaqt yoki bar) HAR 1000 UZS uchun 1 ball
+    beriladi — balance_worker.py (vaqt) va OrderViewSet.create (bar)
+    ikkalasidan ham chaqiriladi. Ball doim customer.lifetime_balance_spent
+    (jami sarflangan summa) asosida QAYTA hisoblanadi, ustiga
+    QO'SHILMAYDI — aks holda har 30 soniyada kelib turadigan kichik
+    (masalan 100-200 UZS) miqdorlar butun songa yaxlitlashda doim
+    0 ball bo'lib, hech qachon to'planmagan bo'lardi."""
+    if not charge or charge <= 0:
+        return
+    Customer.objects.filter(pk=customer_pk).update(
+        lifetime_balance_spent=F('lifetime_balance_spent') + charge
+    )
+    customer = Customer.objects.filter(pk=customer_pk).only('lifetime_balance_spent', 'bonus_points').first()
+    if not customer:
+        return
+    new_points = int(customer.lifetime_balance_spent // BONUS_POINTS_PER_UZS)
+    if new_points != customer.bonus_points:
+        Customer.objects.filter(pk=customer_pk).update(bonus_points=new_points)
 
 CUSTOMER_TRANSACTION_CHOICES = [
     ('TOPUP', "To'ldirish"),

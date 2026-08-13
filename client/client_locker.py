@@ -46,7 +46,7 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel,
     QPushButton, QFrame, QHBoxLayout, QScrollArea, QGridLayout,
     QLineEdit, QGraphicsDropShadowEffect, QSizePolicy, QStackedWidget,
-    QSpacerItem, QMessageBox
+    QSpacerItem, QMessageBox, QDialog, QSlider, QCheckBox
 )
 from PyQt6.QtGui import QFont, QColor, QPixmap, QGuiApplication, QIcon, QPainter, QPen
 
@@ -959,6 +959,120 @@ class RadarGraphic(QWidget):
         painter.end()
 
 
+class MouseSettingsDialog(QDialog):
+    """Sichqoncha sezgirligi — Windows darajasida (SystemParametersInfo
+    orqali), shuning uchun har qanday sichqoncha bilan ishlaydi, alohida
+    drayver kerak emas. Login talab qilinmaydi — istalgan o'yinchi
+    (naqd/karta bilan boshlangan seansda ham) sozlashi mumkin. PC
+    qulflanganda standart holatga avtomatik qaytariladi (ClientLockerApp
+    tomonidan) — bir mijozning sezgirligi keyingisiga o'tib qolmasligi
+    uchun."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Sichqoncha sozlamalari")
+        self.setModal(True)
+        self.setFixedSize(380, 300)
+        self.setStyleSheet(f"QDialog {{ background: {COLOR_BG}; }} QLabel {{ color: #e2e8f0; border: none; background: transparent; }}")
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(24, 22, 24, 20)
+        root.setSpacing(14)
+
+        title = QLabel("🖱️  SICHQONCHA SOZLAMALARI")
+        title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        root.addWidget(title)
+
+        row1 = QHBoxLayout()
+        row1.addWidget(QLabel("Sezgirlik (sensitivity)"))
+        row1.addStretch(1)
+        self.speed_val_label = QLabel("10")
+        self.speed_val_label.setFont(QFont("Consolas", 12, QFont.Weight.Bold))
+        self.speed_val_label.setStyleSheet(f"color: {COLOR_CYAN};")
+        row1.addWidget(self.speed_val_label)
+        root.addLayout(row1)
+
+        self.speed_slider = QSlider(Qt.Orientation.Horizontal)
+        self.speed_slider.setMinimum(1)
+        self.speed_slider.setMaximum(20)
+        self.speed_slider.setStyleSheet(f"""
+            QSlider::groove:horizontal {{ height: 6px; background: {COLOR_INPUT_BG}; border-radius: 3px; }}
+            QSlider::handle:horizontal {{
+                width: 18px; margin: -6px 0; border-radius: 9px;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {COLOR_CYAN}, stop:1 {COLOR_VIOLET});
+            }}
+            QSlider::sub-page:horizontal {{ background: {COLOR_CYAN}; border-radius: 3px; }}
+        """)
+        self.speed_slider.valueChanged.connect(self._on_speed_changed)
+        root.addWidget(self.speed_slider)
+
+        low_high_row = QHBoxLayout()
+        low = QLabel("Past")
+        low.setStyleSheet("color: #64748b; font-size: 10px;")
+        low_high_row.addWidget(low)
+        low_high_row.addStretch(1)
+        high = QLabel("Yuqori")
+        high.setStyleSheet("color: #64748b; font-size: 10px;")
+        low_high_row.addWidget(high)
+        root.addLayout(low_high_row)
+
+        root.addSpacing(6)
+
+        self.accel_checkbox = QCheckBox("Sichqoncha tezlashishi (Enhance pointer precision)")
+        self.accel_checkbox.setStyleSheet("color: #e2e8f0;")
+        self.accel_checkbox.toggled.connect(self._on_accel_toggled)
+        root.addWidget(self.accel_checkbox)
+        accel_hint = QLabel("FPS o'yinlarda ko'pchilik o'yinchilar buni o'chirib qo'yadi (aim uchun barqaror sezgirlik).")
+        accel_hint.setWordWrap(True)
+        accel_hint.setStyleSheet("color: #475569; font-size: 10px;")
+        root.addWidget(accel_hint)
+
+        root.addStretch(1)
+
+        btn_row = QHBoxLayout()
+        reset_btn = QPushButton("Standartga qaytarish")
+        reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        reset_btn.setFixedHeight(36)
+        reset_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255,255,255,0.06); color: #94a3b8;
+                border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;
+            }
+            QPushButton:hover { color: #e2e8f0; }
+        """)
+        reset_btn.clicked.connect(self._on_reset_clicked)
+        btn_row.addWidget(reset_btn)
+
+        close_btn = QPushButton("Yopish")
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.setFixedHeight(36)
+        close_btn.setStyleSheet(GRADIENT_BTN_QSS)
+        close_btn.clicked.connect(self.accept)
+        btn_row.addWidget(close_btn)
+        root.addLayout(btn_row)
+
+        # Joriy qiymatlar bilan boshlanadi (oldingi mijoz o'zgartirgan
+        # bo'lsa ham, hozirgi haqiqiy holat ko'rsatiladi).
+        self.speed_slider.blockSignals(True)
+        self.speed_slider.setValue(get_mouse_speed())
+        self.speed_slider.blockSignals(False)
+        self.speed_val_label.setText(str(get_mouse_speed()))
+        self.accel_checkbox.blockSignals(True)
+        self.accel_checkbox.setChecked(get_mouse_acceleration())
+        self.accel_checkbox.blockSignals(False)
+
+    def _on_speed_changed(self, value):
+        self.speed_val_label.setText(str(value))
+        set_mouse_speed(value)
+
+    def _on_accel_toggled(self, checked):
+        set_mouse_acceleration(checked)
+
+    def _on_reset_clicked(self):
+        self.speed_slider.setValue(MOUSE_DEFAULT_SPEED)  # valueChanged -> set_mouse_speed
+        self.accel_checkbox.setChecked(True)              # toggled -> set_mouse_acceleration
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 #  6. TOP BAR
 # ──────────────────────────────────────────────────────────────────────────────
@@ -968,6 +1082,7 @@ class TopBar(QFrame):
     navigatsiya endi bu yerda EMAS — har bir sahifaning o'z sarlavhasida
     (ParallelogramTabBar) joylashgan."""
     achievements_requested = pyqtSignal()
+    mouse_settings_requested = pyqtSignal()
     resume_requested = pyqtSignal()
     cabinet_requested = pyqtSignal()
 
@@ -1058,6 +1173,22 @@ class TopBar(QFrame):
         """)
         self.achievements_btn.clicked.connect(self.achievements_requested.emit)
         lo.addWidget(self.achievements_btn)
+
+        # Sichqoncha sozlamalari — login shart emas, istalgan o'yinchi
+        # (naqd/karta seansida ham) sezgirlikni o'zgartira olishi kerak.
+        self.mouse_settings_btn = QPushButton("🖱️")
+        self.mouse_settings_btn.setFont(QFont("Segoe UI", 13))
+        self.mouse_settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.mouse_settings_btn.setFixedSize(38, 38)
+        self.mouse_settings_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {COLOR_INPUT_BG}; border: 1px solid {COLOR_INPUT_BORDER};
+                border-radius: 19px;
+            }}
+            QPushButton:hover {{ border: 1px solid {COLOR_CYAN}; }}
+        """)
+        self.mouse_settings_btn.clicked.connect(self.mouse_settings_requested.emit)
+        lo.addWidget(self.mouse_settings_btn)
 
         # Mijoz kabineti — faqat kimdir qulf ekranida tizimga kirgan
         # bo'lsa ko'rinadi (odatiy holatda yashirin).
@@ -2243,6 +2374,7 @@ class LauncherPage(QWidget):
 
         self.top_bar = TopBar(pc_name=pc_name)
         self.top_bar.achievements_requested.connect(lambda: self._switch_tab("achievements"))
+        self.top_bar.mouse_settings_requested.connect(self._open_mouse_settings)
         self.top_bar.resume_requested.connect(self.resume_requested.emit)
         self.top_bar.cabinet_requested.connect(self._open_cabinet)
         root.addWidget(self.top_bar)
@@ -2320,6 +2452,10 @@ class LauncherPage(QWidget):
 
     def _close_cabinet(self):
         self.inner_stack.setCurrentIndex(self._pre_cabinet_index)
+
+    def _open_mouse_settings(self):
+        dialog = MouseSettingsDialog(parent=self)
+        dialog.exec()
 
     def reload_games(self):
         def _fetch():
@@ -2908,6 +3044,52 @@ if IS_WINDOWS:
         for hwnd in hwnds:
             user32.ShowWindow(hwnd, SW_SHOW)
         print(f"[Taskbar] Qaytarildi ({len(hwnds)} ta oyna)")
+
+    # ── Sichqoncha sezgirligi (Windows OS darajasida — har qanday
+    # sichqoncha bilan ishlaydi, alohida drayver/dastur kerak emas) ──
+    SPI_GETMOUSE = 0x0003
+    SPI_SETMOUSE = 0x0004
+    SPI_GETMOUSESPEED = 0x0070
+    SPI_SETMOUSESPEED = 0x0071
+    SPIF_UPDATEINIFILE = 0x01
+    SPIF_SENDCHANGE = 0x02
+    MOUSE_DEFAULT_SPEED = 10
+    _Int3 = ctypes.c_int * 3
+
+    def get_mouse_speed():
+        """1-20 oralig'ida, standart qiymat 10."""
+        val = wintypes.UINT()
+        user32.SystemParametersInfoW(SPI_GETMOUSESPEED, 0, ctypes.byref(val), 0)
+        return val.value
+
+    def set_mouse_speed(value):
+        value = max(1, min(20, int(value)))
+        user32.SystemParametersInfoW(SPI_SETMOUSESPEED, 0, ctypes.c_void_p(value),
+                                      SPIF_UPDATEINIFILE | SPIF_SENDCHANGE)
+
+    def get_mouse_acceleration():
+        arr = _Int3()
+        user32.SystemParametersInfoW(SPI_GETMOUSE, 0, ctypes.byref(arr), 0)
+        return arr[2] != 0
+
+    def set_mouse_acceleration(enabled):
+        # Windows standart qiymatlari: [6, 10, 1] (yoqilgan). O'chirilganda
+        # uchchalasi ham 0 — bu "Enhance pointer precision"ni
+        # o'chirishga teng, ko'p FPS o'yinchilar "xom" (1:1) sezgirlikni
+        # afzal ko'radi.
+        arr = _Int3(6, 10, 1) if enabled else _Int3(0, 0, 0)
+        user32.SystemParametersInfoW(SPI_SETMOUSE, 0, ctypes.byref(arr),
+                                      SPIF_UPDATEINIFILE | SPIF_SENDCHANGE)
+
+    def reset_mouse_settings():
+        """Har bir seans tugab, PC qulflanganda chaqiriladi — keyingi
+        mijoz oldingi o'yinchining sezgirligi bilan qolib ketmasligi
+        uchun standart holatga qaytaradi."""
+        try:
+            set_mouse_speed(MOUSE_DEFAULT_SPEED)
+            set_mouse_acceleration(True)
+        except Exception as e:
+            print(f"[Mouse] Standart holatga qaytarishda xato: {e}")
 else:
     def install_keyboard_hook():   print("[Hook] enabled (sim)")
     def uninstall_keyboard_hook(): print("[Hook] disabled (sim)")
@@ -2916,6 +3098,12 @@ else:
     def enumerate_running_apps(own_hwnd=None): return {}
     def hide_taskbar(): pass
     def show_taskbar(): pass
+    MOUSE_DEFAULT_SPEED = 10
+    def get_mouse_speed(): return MOUSE_DEFAULT_SPEED
+    def set_mouse_speed(value): pass
+    def get_mouse_acceleration(): return True
+    def set_mouse_acceleration(enabled): pass
+    def reset_mouse_settings(): pass
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -3176,6 +3364,9 @@ class ClientLockerApp:
         # mijozga ko'rinib qolmasligi uchun tozalanadi.
         self.main_window.lock_page.reset_login_state()
         self.main_window.launcher_page.set_logged_in_customer(None)
+        # Oldingi o'yinchi sozlagan sichqoncha sezgirligi keyingisiga
+        # o'tib qolmasligi uchun standart holatga qaytariladi.
+        reset_mouse_settings()
 
     def _kill_games(self):
         for proc in self.launched_processes:

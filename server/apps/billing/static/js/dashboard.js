@@ -1935,22 +1935,31 @@ function renderFinanceDashboard(data) {
       salesTbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-xs text-slate-500">Ushbu davrda savdolar mavjud emas</td></tr>`;
     } else {
       salesTbody.innerHTML = recentSales.map(s => {
-        const pmBadge = s.payment_method === 'CASH'
-          ? `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">💵 Naqd</span>`
-          : `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">💳 Plastik</span>`;
+        const pmColors = {
+          CASH: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+          CARD: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+          SPLIT: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+          BALANCE: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+        };
+        const pmClass = pmColors[s.payment_method] || pmColors.SPLIT;
+        const pmBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold border ${pmClass}">${s.payment_method_display || s.payment_method}</span>`;
         const typeBadge = s.type === 'SESSION'
           ? `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">🎮 Seans</span>`
           : `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">🍸 Bar</span>`;
-        
+        const balanceNote = s.from_balance
+          ? `<div class="text-[9px] text-indigo-400 font-semibold mt-0.5">Balansdan — kassaga yangi pul qo'shilmaydi</div>`
+          : '';
+
         return `
           <tr class="border-b border-slate-800/60 hover:bg-slate-900/50 transition-all text-xs">
             <td class="py-2.5 px-3 font-bold text-white font-orbitron whitespace-nowrap">${s.client_name}</td>
             <td class="py-2.5 px-3 whitespace-nowrap">${typeBadge}</td>
             <td class="py-2.5 px-3 whitespace-nowrap">${pmBadge}</td>
-            <td class="py-2.5 px-3 font-bold text-emerald-400 font-orbitron whitespace-nowrap">+${formatMoney(s.amount)}</td>
+            <td class="py-2.5 px-3 font-bold ${s.from_balance ? 'text-indigo-300' : 'text-emerald-400'} font-orbitron whitespace-nowrap">+${formatMoney(s.amount)}</td>
             <td class="py-2.5 px-3 text-slate-400 whitespace-nowrap">
               <div class="font-mono text-[11px] text-slate-300">${s.created_at}</div>
               <div class="text-[10px] text-slate-500 truncate max-w-[160px]">${s.details}</div>
+              ${balanceNote}
             </td>
           </tr>
         `;

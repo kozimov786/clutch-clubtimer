@@ -79,6 +79,18 @@ def _resolve_period_range(request):
     return period, start_dt, end_dt
 
 
+def _payment_method_display(payment_method):
+    """To'lov usuli uchun o'qiladigan yorliq. BALANCE alohida ko'rsatiladi —
+    bu sessiya/buyurtma kassaga YANGI pul qo'shmaydi, chunki pul mijoz
+    balansini to'ldirgan paytda allaqachon kassaga tushgan edi."""
+    return {
+        'CASH': '💵 Naqd',
+        'CARD': '💳 Plastik',
+        'SPLIT': '🔀 Aralash',
+        'BALANCE': '👛 Balansdan',
+    }.get(payment_method, payment_method)
+
+
 def _log_action(request, action_key, description):
     """Muhim admin/xodim amallarini AuditLog'ga yozadi (kim, qachon, nima qildi)."""
     user = request.user if getattr(request, 'user', None) and request.user.is_authenticated else None
@@ -1247,7 +1259,8 @@ class ExpenseViewSet(viewsets.ModelViewSet):
                 'client_name': s.computer.name if s.computer else 'PC',
                 'amount': float(s.total_price),
                 'payment_method': s.payment_method,
-                'payment_method_display': '💵 Naqd' if s.payment_method == 'CASH' else '💳 Plastik' if s.payment_method == 'CARD' else '🔀 Aralash',
+                'payment_method_display': _payment_method_display(s.payment_method),
+                'from_balance': s.payment_method == 'BALANCE',
                 'created_at': (s.end_time or s.start_time).strftime('%Y-%m-%d %H:%M:%S'),
                 'details': f"{s.tariff.name if s.tariff else 'Tarif'} ({s.duration_minutes} min)"
             })
@@ -1262,7 +1275,8 @@ class ExpenseViewSet(viewsets.ModelViewSet):
                 'client_name': pc_name,
                 'amount': float(o.total_price),
                 'payment_method': o.payment_method,
-                'payment_method_display': '💵 Naqd' if o.payment_method == 'CASH' else '💳 Plastik' if o.payment_method == 'CARD' else '🔀 Aralash',
+                'payment_method_display': _payment_method_display(o.payment_method),
+                'from_balance': o.payment_method == 'BALANCE',
                 'created_at': o.created_at.strftime('%Y-%m-%d %H:%M:%S'),
                 'details': items_str or 'Bar xaridi'
             })

@@ -1053,6 +1053,7 @@ class StockSupplyViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         product_id = request.data.get('product_id')
         product_name = request.data.get('product_name', '').strip()
+        product_image = request.data.get('product_image', '').strip()
         quantity = int(request.data.get('quantity', 1))
         cost_price = float(request.data.get('cost_price', 0.0))
         selling_price = float(request.data.get('selling_price', 0.0))
@@ -1072,7 +1073,7 @@ class StockSupplyViewSet(viewsets.ModelViewSet):
                 return Response({'error': 'Iltimos, mahsulotni tanlang yoki yangi mahsulot nomini kiriting!'}, status=status.HTTP_400_BAD_REQUEST)
             
             default_category = Category.objects.first()
-            product = Product.objects.create(
+            product_kwargs = dict(
                 name=product_name,
                 cost_price=cost_price,
                 price=selling_price,
@@ -1080,6 +1081,12 @@ class StockSupplyViewSet(viewsets.ModelViewSet):
                 category=default_category,
                 is_available=True
             )
+            # Rasm URL kiritilmasa, Product modelining standart (umumiy
+            # "placeholder") rasmi ishlatiladi — shuning uchun bu maydon
+            # faqat foydalanuvchi haqiqatan URL kiritganda beriladi.
+            if product_image:
+                product_kwargs['image'] = product_image
+            product = Product.objects.create(**product_kwargs)
 
         product.stock += quantity
         if cost_price > 0:

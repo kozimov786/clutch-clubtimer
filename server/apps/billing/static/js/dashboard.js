@@ -2073,6 +2073,8 @@ function openRestockModal(productId = null) {
 
   if (newNameInput) newNameInput.value = '';
   if (nameInput) nameInput.value = '';
+  const newImageInput = document.getElementById('restock-new-product-image');
+  if (newImageInput) newImageInput.value = '';
 
   if (productId) {
     toggleRestockProductMode('existing');
@@ -2145,6 +2147,7 @@ async function handleRestockSubmit(e) {
 
   const selectVal = document.getElementById('restock-product-select')?.value || '';
   const newNameInputVal = document.getElementById('restock-new-product-name')?.value.trim() || '';
+  const newImageInputVal = document.getElementById('restock-new-product-image')?.value.trim() || '';
 
   let productId = null;
   let productName = '';
@@ -2185,6 +2188,7 @@ async function handleRestockSubmit(e) {
       body: JSON.stringify({
         product_id: productId,
         product_name: productName,
+        product_image: newImageInputVal,
         quantity: quantity,
         cost_price: costPrice,
         selling_price: sellingPrice,

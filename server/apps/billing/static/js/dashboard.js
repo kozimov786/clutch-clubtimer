@@ -417,40 +417,36 @@ function switchTab(tabName) {
 // Ultra Sleek Modern PC Card Generator
 function generatePCCardHTML(pc) {
   let statusClass = 'card-status-locked';
-  let statusBadge = `<span class="px-2.5 py-1 text-[10px] font-extrabold rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> LOCKED</span>`;
-  
+  let statusBadge = `<span class="px-2.5 py-1 text-[10px] font-extrabold rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center gap-1.5 whitespace-nowrap"><span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> LOCKED</span>`;
+
   if (pc.status === 'ACTIVE') {
     if (pc.is_open_time) {
       statusClass = 'card-status-active';
-      statusBadge = `<span class="px-2.5 py-1 text-[10px] font-extrabold rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center gap-1.5 animate-pulse"><span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span> OPEN TIME</span>`;
+      statusBadge = `<span class="px-2.5 py-1 text-[10px] font-extrabold rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center gap-1.5 animate-pulse whitespace-nowrap"><span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span> OPEN TIME</span>`;
     } else {
       statusClass = 'card-status-active';
-      statusBadge = `<span class="px-2.5 py-1 text-[10px] font-extrabold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> ACTIVE</span>`;
+      statusBadge = `<span class="px-2.5 py-1 text-[10px] font-extrabold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 whitespace-nowrap"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> ACTIVE</span>`;
     }
   } else if (pc.status === 'WARNING') {
     statusClass = 'card-status-warning';
-    statusBadge = `<span class="px-2.5 py-1 text-[10px] font-extrabold rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce"></span> LOW TIME</span>`;
+    statusBadge = `<span class="px-2.5 py-1 text-[10px] font-extrabold rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1.5 whitespace-nowrap"><span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce"></span> LOW TIME</span>`;
   }
 
-  const pcNum = pc.name.replace('PC-', '');
   const timerText = formatTime(pc.time_remaining) + (pc.is_open_time ? " ♾️" : "");
   const tariffName = pc.is_open_time ? "VIP Open Time" : (pc.current_tariff_name || 'Standard Plan');
 
   return `
     <div class="glass-card ${statusClass} rounded-2xl p-4 border border-slate-800/80 bg-slate-900/60 hover:border-cyan-500/40 hover:shadow-xl hover:shadow-cyan-500/5 transition-all duration-300 flex flex-col justify-between group">
       <div>
-        <!-- Top Row: Station Icon Badge, PC Name, Zone & Status -->
-        <div class="flex items-center justify-between mb-3">
-          <div class="flex items-center gap-2.5">
-            <div class="w-9 h-9 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center font-orbitron font-black text-sm text-cyan-400 group-hover:border-cyan-500/50 group-hover:text-cyan-300 transition-colors shadow-inner">
-              ${pcNum}
+        <!-- Top Row: Station Badge (name + zone caption) & Status -->
+        <div class="flex items-start justify-between mb-3 gap-2">
+          <div class="flex flex-col items-start gap-1 min-w-0">
+            <div class="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center font-orbitron font-black text-base text-cyan-400 group-hover:border-cyan-500/50 group-hover:text-cyan-300 transition-colors shadow-inner whitespace-nowrap">
+              ${pc.name}
             </div>
-            <div>
-              <h3 class="text-base font-extrabold font-orbitron text-white group-hover:text-cyan-400 transition-colors leading-tight">${pc.name}</h3>
-              <span class="text-[10px] font-bold text-slate-400 font-mono">${pc.zone}</span>
-            </div>
+            <span class="text-[10px] font-bold text-slate-400 font-mono pl-1 truncate">${pc.zone}</span>
           </div>
-          <div class="flex items-center gap-1.5">
+          <div class="flex items-center gap-1.5 shrink-0">
             ${statusBadge}
           </div>
         </div>
@@ -493,12 +489,12 @@ function generatePCCardHTML(pc) {
             SEANS BOSHLASH
           </button>
         ` : `
-          <div class="flex items-center gap-2">
-            <button onclick="openAddTimeModal(${pc.id})" class="flex-1 py-2 px-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 text-xs font-extrabold flex items-center justify-center gap-1 transition-all">
+          <div class="flex items-center justify-center gap-2">
+            <button onclick="openAddTimeModal(${pc.id})" class="py-2 px-3.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 text-xs font-extrabold flex items-center justify-center gap-1 transition-all">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
               + Vaqt
             </button>
-            <button onclick="stopSession(${pc.id})" class="py-2 px-3 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/40 text-xs font-extrabold flex items-center justify-center gap-1 transition-all">
+            <button onclick="stopSession(${pc.id})" class="py-2 px-3.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/40 text-xs font-extrabold flex items-center justify-center gap-1 transition-all">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/></svg>
               Tugatish
             </button>

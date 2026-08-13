@@ -2088,7 +2088,7 @@ class BarPage(QWidget):
         header = QHBoxLayout()
         header.setContentsMargins(28, 20, 28, 4)
         header.setSpacing(10)
-        title = QLabel("Provisions")
+        title = QLabel("CLUTCH ZONE BAR")
         title.setFont(serif_font(26))
         title.setStyleSheet("color: #ffffff; letter-spacing: 1px;")
         header.addWidget(title)

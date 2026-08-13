@@ -135,6 +135,7 @@ CUSTOMER_TRANSACTION_CHOICES = [
     ('TOPUP', "To'ldirish"),
     ('SPEND', 'Sarflash'),
     ('ADJUST', 'Tuzatish'),
+    ('BONUS', "To'ldirish bonusi"),
 ]
 
 class CustomerTransaction(models.Model):
@@ -144,6 +145,10 @@ class CustomerTransaction(models.Model):
     type = models.CharField(max_length=10, choices=CUSTOMER_TRANSACTION_CHOICES)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     balance_after = models.DecimalField(max_digits=12, decimal_places=2)
+    # Faqat haqiqiy naqd/plastik pul qabul qilingan TOPUP tranzaksiyalarida
+    # to'ldiriladi (kassa hisobotlarida hisobga olish uchun). BONUS/SPEND/
+    # ADJUST'da bo'sh qoladi — ular haqiqiy yangi pul emas.
+    payment_method = models.CharField(max_length=10, choices=PAYMENT_METHOD_CHOICES, blank=True, null=True)
     note = models.CharField(max_length=255, blank=True, null=True)
     created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

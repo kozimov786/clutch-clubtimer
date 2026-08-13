@@ -664,7 +664,7 @@
       </div>
 
       <!-- Detailed Revenue Sources Breakdown Pills -->
-      <div class="glass-panel p-3 rounded-xl border border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+      <div class="glass-panel p-3 rounded-xl border border-slate-800 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-center">
         <div class="bg-slate-900/80 p-2 rounded-lg border border-slate-800/80">
           <div class="text-[10px] text-slate-400 font-semibold uppercase">Vaqt (Naqd)</div>
           <div id="breakdown-session-cash" class="text-xs font-bold font-orbitron text-emerald-400 mt-0.5">0 UZS</div>
@@ -680,6 +680,14 @@
         <div class="bg-slate-900/80 p-2 rounded-lg border border-slate-800/80">
           <div class="text-[10px] text-slate-400 font-semibold uppercase">Bar (Plastik)</div>
           <div id="breakdown-bar-card" class="text-xs font-bold font-orbitron text-cyan-400 mt-0.5">0 UZS</div>
+        </div>
+        <div class="bg-slate-900/80 p-2 rounded-lg border border-indigo-500/20">
+          <div class="text-[10px] text-slate-400 font-semibold uppercase">Balans To'ldirish (Naqd)</div>
+          <div id="breakdown-topup-cash" class="text-xs font-bold font-orbitron text-indigo-300 mt-0.5">0 UZS</div>
+        </div>
+        <div class="bg-slate-900/80 p-2 rounded-lg border border-indigo-500/20">
+          <div class="text-[10px] text-slate-400 font-semibold uppercase">Balans To'ldirish (Plastik)</div>
+          <div id="breakdown-topup-card" class="text-xs font-bold font-orbitron text-indigo-300 mt-0.5">0 UZS</div>
         </div>
       </div>
 
@@ -953,9 +961,14 @@
           </div>
           <div class="flex items-center gap-2 mt-3">
             <input type="number" id="customer-tx-amount" placeholder="Summa" class="flex-1 bg-slate-900/90 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500 font-mono">
+            <select id="customer-topup-method" title="To'ldirish qanday pulda qabul qilindi — kassa hisobotiga shu bo'yicha yoziladi" class="bg-slate-900/90 border border-slate-700 rounded-xl px-2 py-2 text-xs text-white focus:outline-none focus:border-pink-500 font-mono shrink-0">
+              <option value="CASH">💵 Naqd</option>
+              <option value="CARD">💳 Plastik</option>
+            </select>
             <button onclick="customerTopUp()" class="px-3 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-400 text-xs font-bold shrink-0">+ To'ldirish</button>
             <button onclick="customerSpend()" class="px-3 py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-400 text-xs font-bold shrink-0">− Sarflash</button>
           </div>
+          <p class="text-[10px] text-slate-500 mt-1.5">To'ldirish uchun qabul qilingan pul turini tanlang — bu summa kassa hisobotiga (Kassa bo'limi) shu turdagi kirim sifatida qo'shiladi.</p>
         </div>
 
         <!-- So'nggi tranzaksiyalar -->

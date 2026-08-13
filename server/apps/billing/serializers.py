@@ -104,7 +104,7 @@ class CustomerTransactionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CustomerTransaction
-        fields = ['id', 'customer', 'type', 'type_display', 'amount', 'balance_after', 'note', 'created_by_username', 'created_at']
+        fields = ['id', 'customer', 'type', 'type_display', 'amount', 'balance_after', 'payment_method', 'note', 'created_by_username', 'created_at']
 
 
 class CustomerSerializer(serializers.ModelSerializer):

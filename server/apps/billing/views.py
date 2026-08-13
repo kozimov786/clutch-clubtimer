@@ -1238,15 +1238,23 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         bar_margin = total_bar - bar_cogs
         bar_margin_percent = round((bar_margin / total_bar * 100), 1) if total_bar > 0 else 0.0
 
+        # Mijozlar balansini haqiqiy naqd/plastik pul bilan to'ldirishi ham
+        # kassaga kirim — bu pul boshqa hech qayerda (Session/Order) qayd
+        # etilmaydi, shuning uchun alohida hisoblanadi. Bonus (type=BONUS)
+        # esa hisobga OLINMAYDI — u haqiqiy qabul qilingan pul emas.
+        topups_qs = CustomerTransaction.objects.filter(type='TOPUP', created_at__range=(start_dt, end_dt))
+        topup_cash = float(topups_qs.filter(payment_method='CASH').aggregate(Sum('amount'))['amount__sum'] or 0.0)
+        topup_card = float(topups_qs.filter(payment_method='CARD').aggregate(Sum('amount'))['amount__sum'] or 0.0)
+
         expenses_qs = Expense.objects.filter(created_at__range=(start_dt, end_dt)).order_by('-created_at')
         expense_cash = float(expenses_qs.filter(payment_method='CASH').aggregate(Sum('amount'))['amount__sum'] or 0.0)
         expense_card = float(expenses_qs.filter(payment_method='CARD').aggregate(Sum('amount'))['amount__sum'] or 0.0)
 
-        cash_balance = (session_cash + bar_cash) - expense_cash
-        card_balance = (session_card + bar_card) - expense_card
+        cash_balance = (session_cash + bar_cash + topup_cash) - expense_cash
+        card_balance = (session_card + bar_card + topup_card) - expense_card
         total_balance = cash_balance + card_balance
         total_expenses = expense_cash + expense_card
-        total_revenue = session_cash + session_card + bar_cash + bar_card
+        total_revenue = session_cash + session_card + bar_cash + bar_card + topup_cash + topup_card
 
         expense_serializer = ExpenseSerializer(expenses_qs, many=True)
 
@@ -1281,6 +1289,20 @@ class ExpenseViewSet(viewsets.ModelViewSet):
                 'details': items_str or 'Bar xaridi'
             })
 
+        for tx in topups_qs.select_related('customer').order_by('-created_at')[:15]:
+            recent_sales.append({
+                'id': f"topup_{tx.id}",
+                'type': 'TOPUP',
+                'type_display': '👛 Balans to\'ldirish',
+                'client_name': tx.customer.full_name if tx.customer else 'Mijoz',
+                'amount': float(tx.amount),
+                'payment_method': tx.payment_method,
+                'payment_method_display': _payment_method_display(tx.payment_method),
+                'from_balance': False,
+                'created_at': tx.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                'details': tx.note or "Balans to'ldirish"
+            })
+
         recent_sales.sort(key=lambda x: x['created_at'], reverse=True)
         recent_sales = recent_sales[:20]
 
@@ -1292,6 +1314,9 @@ class ExpenseViewSet(viewsets.ModelViewSet):
             'session_card': session_card,
             'bar_cash': bar_cash,
             'bar_card': bar_card,
+            'topup_cash': topup_cash,
+            'topup_card': topup_card,
+            'total_topup': topup_cash + topup_card,
             'total_session': session_cash + session_card,
             'total_bar': total_bar,
             'bar_cogs': bar_cogs,
@@ -1331,10 +1356,13 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         opening_bar_cash = float(Order.objects.filter(
             status__in=['APPROVED', 'DELIVERED'], created_at__lt=start_dt
         ).aggregate(total=Sum(cash_expr))['total'] or 0.0)
+        opening_topup_cash = float(CustomerTransaction.objects.filter(
+            type='TOPUP', payment_method='CASH', created_at__lt=start_dt
+        ).aggregate(total=Sum('amount'))['total'] or 0.0)
         opening_expense_cash = float(Expense.objects.filter(
             payment_method='CASH', created_at__lt=start_dt
         ).aggregate(total=Sum('amount'))['total'] or 0.0)
-        opening_balance = opening_session_cash + opening_bar_cash - opening_expense_cash
+        opening_balance = opening_session_cash + opening_bar_cash + opening_topup_cash - opening_expense_cash
 
         # Tanlangan davr ichida kunlik jamlangan Bar+Savdo naqd kirimi
         session_daily = Session.objects.filter(start_time__range=(start_dt, end_dt)).annotate(
@@ -1350,6 +1378,15 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         for row in order_daily:
             daily_income[row['day']] = daily_income.get(row['day'], 0.0) + float(row['total'] or 0.0)
 
+        # Mijozlar balansini naqd to'ldirishi — Bar+Savdo'dan ALOHIDA kunlik
+        # qatorda ko'rsatiladi (aralashtirilmaydi, manbasi aniq bo'lsin uchun)
+        topup_daily = CustomerTransaction.objects.filter(
+            type='TOPUP', payment_method='CASH', created_at__range=(start_dt, end_dt)
+        ).annotate(day=TruncDate('created_at')).values('day').annotate(total=Sum('amount')).order_by('day')
+        daily_topup = {}
+        for row in topup_daily:
+            daily_topup[row['day']] = daily_topup.get(row['day'], 0.0) + float(row['total'] or 0.0)
+
         # Davr ichidagi har bir naqd rasxod — alohida qator
         expenses_cash_qs = Expense.objects.filter(
             payment_method='CASH', created_at__range=(start_dt, end_dt)
@@ -1362,6 +1399,15 @@ class ExpenseViewSet(viewsets.ModelViewSet):
                     'sort_key': timezone.make_aware(datetime.combine(day, time.min)),
                     'date': day.strftime('%Y-%m-%d'),
                     'detail': "Bar + Savdo daromadi",
+                    'income': round(amount, 2),
+                    'expense': 0.0,
+                })
+        for day, amount in daily_topup.items():
+            if amount:
+                events.append({
+                    'sort_key': timezone.make_aware(datetime.combine(day, time.min)) + timedelta(seconds=1),
+                    'date': day.strftime('%Y-%m-%d'),
+                    'detail': "Balans to'ldirish (naqd)",
                     'income': round(amount, 2),
                     'expense': 0.0,
                 })
@@ -1397,10 +1443,13 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         current_bar_cash = float(Order.objects.filter(
             status__in=['APPROVED', 'DELIVERED']
         ).aggregate(total=Sum(cash_expr))['total'] or 0.0)
+        current_topup_cash = float(CustomerTransaction.objects.filter(
+            type='TOPUP', payment_method='CASH'
+        ).aggregate(total=Sum('amount'))['total'] or 0.0)
         current_expense_cash = float(Expense.objects.filter(
             payment_method='CASH'
         ).aggregate(total=Sum('amount'))['total'] or 0.0)
-        current_kassa = round(current_session_cash + current_bar_cash - current_expense_cash, 2)
+        current_kassa = round(current_session_cash + current_bar_cash + current_topup_cash - current_expense_cash, 2)
 
         return Response({
             'period': period,
@@ -1586,6 +1635,10 @@ class CustomerViewSet(viewsets.ModelViewSet):
             return Response({'error': "Summani to'g'ri kiriting!"}, status=status.HTTP_400_BAD_REQUEST)
 
         note = request.data.get('note', '')
+        payment_method = request.data.get('payment_method', 'CASH')
+        if payment_method not in ('CASH', 'CARD'):
+            payment_method = 'CASH'
+
         # F() ifodasi orqali bitta atom SQL UPDATE — bir vaqtda boshqa
         # so'rov (masalan balance_worker.py yoki boshqa xodim) balansni
         # o'zgartirayotgan bo'lsa ham, hech qanday yangilanish yo'qolmaydi
@@ -1595,20 +1648,30 @@ class CustomerViewSet(viewsets.ModelViewSet):
         Customer.objects.filter(pk=customer.pk).update(balance=F('balance') + amount)
         customer.refresh_from_db()
 
+        # payment_method shu yerda MUHIM: xodim mijozdan haqiqiy naqd/plastik
+        # pul qabul qiladi va shuni balansga "kiritadi" — bu pul kassaga
+        # boshqa hech qayerda (Session/Order) yozilmaydi, shu sababli
+        # ExpenseViewSet.cashflow/kassa_report shu TOPUP yozuvini o'qib,
+        # kassa hisobiga qo'shadi. Bu maydonsiz balans to'ldirishlar
+        # avval umuman kassaga tushmay qolar edi.
         CustomerTransaction.objects.create(
             customer=customer, type='TOPUP', amount=amount, balance_after=customer.balance,
-            note=note, created_by=request.user if request.user.is_authenticated else None
+            payment_method=payment_method, note=note, created_by=request.user if request.user.is_authenticated else None
         )
         _log_action(
             request, 'CUSTOMER_TOPUP',
-            f"{customer.full_name} ({customer.phone}) balansiga {amount:,.0f} UZS qo'shildi (yangi balans: {customer.balance:,.0f} UZS)"
+            f"{customer.full_name} ({customer.phone}) balansiga {amount:,.0f} UZS qo'shildi "
+            f"({_payment_method_display(payment_method)}, yangi balans: {customer.balance:,.0f} UZS)"
         )
 
         # Balans to'ldirish bonusi — TOPUP_BONUS_TIERS'dagi eng yuqori
         # mos keladigan bosqich (masalan 100,000+ UZS -> +20,000 UZS,
         # 200,000+ UZS -> +50,000 UZS) qo'llaniladi. Asosiy to'ldirishdan
         # ALOHIDA tranzaksiya sifatida yoziladi — Kabinet/dashboard
-        # tarixida bonus aniq ko'rinib tursin uchun.
+        # tarixida bonus aniq ko'rinib tursin uchun. type='BONUS' (TOPUP
+        # EMAS) va payment_method=None — bu haqiqiy qabul qilingan pul
+        # emas (klub hisobidan berilgan sovg'a), shuning uchun kassa
+        # hisobotlariga kirim sifatida qo'shilmaydi.
         bonus = 0
         for threshold, bonus_amount in TOPUP_BONUS_TIERS:
             if amount >= threshold:
@@ -1618,7 +1681,7 @@ class CustomerViewSet(viewsets.ModelViewSet):
             Customer.objects.filter(pk=customer.pk).update(balance=F('balance') + bonus)
             customer.refresh_from_db()
             CustomerTransaction.objects.create(
-                customer=customer, type='TOPUP', amount=bonus, balance_after=customer.balance,
+                customer=customer, type='BONUS', amount=bonus, balance_after=customer.balance,
                 note=f"Balans to'ldirish bonusi ({amount:,.0f} UZS to'ldirilgani uchun)",
                 created_by=request.user if request.user.is_authenticated else None
             )

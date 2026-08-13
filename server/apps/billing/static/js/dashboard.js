@@ -1926,6 +1926,11 @@ function renderFinanceDashboard(data) {
   if (barCashEl) barCashEl.textContent = (data.bar_cash > 0 ? '+' : '') + formatMoney(data.bar_cash || 0);
   if (barCardEl) barCardEl.textContent = (data.bar_card > 0 ? '+' : '') + formatMoney(data.bar_card || 0);
 
+  const topupCashEl = document.getElementById('breakdown-topup-cash');
+  const topupCardEl = document.getElementById('breakdown-topup-card');
+  if (topupCashEl) topupCashEl.textContent = (data.topup_cash > 0 ? '+' : '') + formatMoney(data.topup_cash || 0);
+  if (topupCardEl) topupCardEl.textContent = (data.topup_card > 0 ? '+' : '') + formatMoney(data.topup_card || 0);
+
   // Render Recent Sales Table
   const salesTbody = document.getElementById('sales-table-body');
   const recentSales = data.recent_sales || [];
@@ -1943,9 +1948,12 @@ function renderFinanceDashboard(data) {
         };
         const pmClass = pmColors[s.payment_method] || pmColors.SPLIT;
         const pmBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold border ${pmClass}">${s.payment_method_display || s.payment_method}</span>`;
-        const typeBadge = s.type === 'SESSION'
-          ? `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">🎮 Seans</span>`
-          : `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">🍸 Bar</span>`;
+        const typeBadges = {
+          SESSION: `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">🎮 Seans</span>`,
+          BAR: `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">🍸 Bar</span>`,
+          TOPUP: `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">👛 To'ldirish</span>`,
+        };
+        const typeBadge = typeBadges[s.type] || typeBadges.BAR;
         const balanceNote = s.from_balance
           ? `<div class="text-[9px] text-indigo-400 font-semibold mt-0.5">Balansdan — kassaga yangi pul qo'shilmaydi</div>`
           : '';
@@ -2486,11 +2494,15 @@ async function customerBalanceOp(action) {
     alert("Summani to'g'ri kiriting!");
     return;
   }
+  const body = { amount };
+  if (action === 'top_up') {
+    body.payment_method = document.getElementById('customer-topup-method')?.value || 'CASH';
+  }
   try {
     const res = await fetch(`/api/customers/${activeCustomerId}/${action}/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount })
+      body: JSON.stringify(body)
     });
     const data = await res.json();
     if (!res.ok) {
@@ -2523,8 +2535,8 @@ async function loadCustomerTransactions(customerId) {
           <div class="text-slate-300 font-semibold truncate">${t.note || t.type_display || ''}</div>
           <div class="text-slate-500 text-[10px]">${new Date(t.created_at).toLocaleString('uz-UZ')}</div>
         </div>
-        <span class="font-mono font-bold shrink-0 ${t.type === 'TOPUP' ? 'text-emerald-400' : 'text-rose-400'}">
-          ${t.type === 'TOPUP' ? '+' : '−'}${formatMoney(t.amount)}
+        <span class="font-mono font-bold shrink-0 ${(t.type === 'TOPUP' || t.type === 'BONUS') ? 'text-emerald-400' : 'text-rose-400'}">
+          ${(t.type === 'TOPUP' || t.type === 'BONUS') ? '+' : '−'}${formatMoney(t.amount)}
         </span>
       </div>
     `).join('');

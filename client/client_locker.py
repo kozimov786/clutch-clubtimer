@@ -365,6 +365,27 @@ class ApiClient:
                     on_done(False, {"error": "Server bilan aloqa yo'q"})
         threading.Thread(target=_post, daemon=True).start()
 
+    def whoami_async(self, session_token, pc_name, on_done=None):
+        """Dastur qayta ishga tushganda (masalan xatolik/yangilanishdan
+        keyin) — bu PC'da hali ham BALANCE seansi ochib turgan mijozning
+        "Kabinet" holatini tiklash uchun."""
+        def _post():
+            try:
+                r = requests.post(
+                    f"{self.server_url}/api/customers/whoami/",
+                    json={"session_token": session_token, "pc_name": pc_name},
+                    headers=self._headers(),
+                    timeout=8
+                )
+                ok = r.status_code == 200
+                if on_done:
+                    on_done(ok, r.json() if r.content else {})
+            except Exception as e:
+                print(f"[API] whoami: {e}")
+                if on_done:
+                    on_done(False, {"error": "Server bilan aloqa yo'q"})
+        threading.Thread(target=_post, daemon=True).start()
+
     def fetch_my_activity_async(self, session_token, on_done=None):
         """Mijozning "Kabinet" oynasidagi "Jami harakatlar" ro'yxati
         uchun — o'z tranzaksiyalari va seanslar tarixi."""
@@ -3265,6 +3286,7 @@ class SyncSignals(QObject):
     status_resync = pyqtSignal(dict)
     bar_order_updated = pyqtSignal(dict)
     remote_command = pyqtSignal(str)
+    customer_session_restored = pyqtSignal(dict)
 
 
 class ClientLockerApp:
@@ -3275,6 +3297,7 @@ class ClientLockerApp:
         self.signals.status_resync.connect(self._handle_status_resync)
         self.signals.bar_order_updated.connect(self._handle_bar_order)
         self.signals.remote_command.connect(self._handle_remote_command)
+        self.signals.customer_session_restored.connect(self._apply_restored_customer_session)
         self.launched_processes = []
         self.current_status = 'LOCKED'
         self.time_remaining = 0
@@ -3307,6 +3330,10 @@ class ClientLockerApp:
         # holatda abadiy qolib ketishi mumkin edi. Shu bayroq — hech
         # bo'lmasa BITTA haqiqiy sinxronlash sodir bo'lishini kafolatlaydi.
         self._got_initial_sync = False
+        # Dastur ishga tushgach, birinchi ACTIVE holatda BIR MARTA
+        # mijoz "Kabinet" holatini tiklashga urinadi (pastga qarang:
+        # _try_restore_customer_session).
+        self._tried_session_restore = False
 
         self.main_window = MainWindow(
             pc_name=self.pc_name, server_url=self.server_url,
@@ -3476,6 +3503,9 @@ class ClientLockerApp:
                 self._unlock()
             self.current_status = new_status
             self.main_window.update_timer(self.time_remaining)
+            if not self._tried_session_restore:
+                self._tried_session_restore = True
+                self._try_restore_customer_session()
         else:
             if self.current_status != 'LOCKED':
                 self._lock()
@@ -3552,6 +3582,7 @@ class ClientLockerApp:
         # mijozga ko'rinib qolmasligi uchun tozalanadi.
         self.main_window.lock_page.reset_login_state()
         self.main_window.launcher_page.set_logged_in_customer(None)
+        self._clear_session_state()
         # Oldingi o'yinchi sozlagan sichqoncha sezgirligi keyingisiga
         # o'tib qolmasligi uchun standart holatga qaytariladi.
         reset_mouse_settings()
@@ -3719,10 +3750,64 @@ class ClientLockerApp:
             ).start()
 
     def _handle_customer_login(self, data):
-        """Mijoz qulf ekranida o'z telefon/paroli bilan kirganda —
-        faqat loglash uchun, PC holatiga (qulflanganligiga) hech
-        qanday ta'sir qilmaydi."""
+        """Mijoz qulf ekranida o'z telefon/paroli bilan kirganda — PC
+        holatiga (qulflanganligiga) hech qanday ta'sir qilmaydi.
+        session_token mahalliy faylga ham saqlanadi — dastur
+        (masalan yangilanish/qulashdan keyin) qayta ishga tushsa,
+        "Kabinet" holati shu orqali tiklanadi (pastga qarang:
+        _try_restore_customer_session)."""
         print(f"[Customer] {data.get('full_name')} ({data.get('phone')}) tizimga kirdi")
+        self._save_session_state(data)
+
+    SESSION_STATE_PATH = os.path.join(CLIENT_DIR, "session_state.json")
+
+    def _save_session_state(self, data):
+        try:
+            with open(self.SESSION_STATE_PATH, "w", encoding="utf-8") as f:
+                json.dump({"session_token": data.get("session_token")}, f)
+        except Exception as e:
+            print(f"[Session] Holatni saqlashda xato: {e}")
+
+    def _clear_session_state(self):
+        try:
+            if os.path.exists(self.SESSION_STATE_PATH):
+                os.remove(self.SESSION_STATE_PATH)
+        except Exception as e:
+            print(f"[Session] Holatni tozalashda xato: {e}")
+
+    def _try_restore_customer_session(self):
+        """Dastur endigina ishga tushdi va PC ACTIVE ekan — agar
+        oldingi ishga tushishda mijoz balansidan seans ochib, dastur
+        keyin (masalan yangilanish yoki xatolik tufayli) qayta ishga
+        tushirilgan bo'lsa, "Kabinet" ko'rinishi yo'qolib qolar edi
+        (chunki bu holat faqat xotirada saqlanardi). Bu — bir martalik
+        urinish: mahalliy faylda token bormi, va u hali ham shu PC'da
+        haqiqiy BALANCE seansiga tegishlimi — server tekshiradi."""
+        token = None
+        try:
+            if os.path.exists(self.SESSION_STATE_PATH):
+                with open(self.SESSION_STATE_PATH, "r", encoding="utf-8") as f:
+                    token = json.load(f).get("session_token")
+        except Exception as e:
+            print(f"[Session] Holatni o'qishda xato: {e}")
+        if not token:
+            return
+
+        # MUHIM: on_done fon oqimida chaqiriladi — Qt widget'larini
+        # to'g'ridan-to'g'ri o'zgartirib bo'lmaydi, shuning uchun
+        # natija signal orqali asosiy (GUI) oqimga uzatiladi (bu
+        # loyihada ilgari xuddi shu xato jiddiy render muammolariga
+        # sabab bo'lgan edi).
+        def _on_done(ok, data):
+            if ok:
+                self.signals.customer_session_restored.emit(data)
+            else:
+                self._clear_session_state()
+        self.main_window.api_client.whoami_async(token, self.pc_name, on_done=_on_done)
+
+    def _apply_restored_customer_session(self, data):
+        print(f"[Session] Kabinet tiklandi: {data.get('full_name')}")
+        self.main_window.launcher_page.set_logged_in_customer(data)
 
     def _handle_customer_unlock_request(self, session_token):
         """Mijoz "Kompyuterni ochish" tugmasini bosganda — balansdan
@@ -3903,22 +3988,6 @@ def main():
         traceback.print_exception(exc_type, exc_value, exc_tb)
     sys.excepthook = _excepthook
 
-    # Dastur ishga tushishidan oldin: serverda yangi klient versiyasi
-    # bo'lsa, uni o'rnatib, nolmas kod bilan chiqamiz — watchdog.bat
-    # buni "kutilmagan to'xtash" deb hisoblab, yangi kod bilan qayta
-    # ishga tushiradi (kod 0 bo'lganda esa qayta ishga tushirmas edi).
-    try:
-        with open("config.json", 'r') as f:
-            _cfg = json.load(f)
-        _server_url = _cfg.get("server_url", "").rstrip('/')
-        _api_key = _cfg.get("api_key", "")
-        if _server_url and check_and_apply_update(_server_url, _api_key):
-            sys.exit(17)
-    except SystemExit:
-        raise
-    except Exception as e:
-        print(f"[Update] Ishga tushishda yangilanishni tekshirib bo'lmadi: {e}")
-
     app = QApplication(sys.argv)
     app.setStyleSheet("""
         QWidget {
@@ -3976,7 +4045,26 @@ def main():
     if IS_WINDOWS:
         register_global_hotkeys(app)
 
+    # MUHIM: ClientLockerApp("config.json") kiosk oynasini DARHOL (hech
+    # qanday tarmoq so'rovisiz) to'liq ekranga chiqaradi — shuning uchun
+    # yangilanishni tekshirish shu OYNA ALLAQACHON KO'RINGANDAN KEYIN,
+    # fon oqimida amalga oshiriladi. Oldin bu tekshiruv oyna
+    # yaratilishidan OLDIN, asosiy oqimda (bloklovchi tarmoq so'rovi
+    # bilan) bajarilar edi — agar server sekin javob bersa yoki tarmoq
+    # hali tayyor bo'lmasa (kompyuter yangi yoqilgan payt), mijoz bir
+    # necha soniya Windows ish stolini ko'rib turardi, kiosk oynasi esa
+    # keyin paydo bo'lardi.
     _locker = ClientLockerApp("config.json")
+
+    def _check_update_on_startup():
+        try:
+            if check_and_apply_update(_locker.server_url, _locker.api_key):
+                print("[Update] Yangilanish o'rnatildi — dastur qayta ishga tushirilmoqda...")
+                os._exit(17)
+        except Exception as e:
+            print(f"[Update] Ishga tushishda yangilanishni tekshirib bo'lmadi: {e}")
+    threading.Thread(target=_check_update_on_startup, daemon=True).start()
+
     sys.exit(app.exec())
 
 if __name__ == '__main__':

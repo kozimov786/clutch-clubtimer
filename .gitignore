@@ -19,6 +19,10 @@ server/media/
 # Klient kiosk log fayli (har bir PC'da mahalliy, runtime-generated)
 client/client_locker.log
 
+# Mijoz "Kabinet" holatini tiklash uchun mahalliy sessiya fayli
+# (har bir PC'da mahalliy, runtime-generated)
+client/session_state.json
+
 # macOS
 .DS_Store
 

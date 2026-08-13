@@ -1268,7 +1268,7 @@ class CustomerViewSet(viewsets.ModelViewSet):
     serializer_class = CustomerSerializer
 
     def get_permissions(self):
-        if self.action in ('kiosk_login', 'my_activity', 'kiosk_change_password'):
+        if self.action in ('kiosk_login', 'my_activity', 'kiosk_change_password', 'whoami'):
             return [HasClientApiKey()]
         return super().get_permissions()
 
@@ -1335,6 +1335,28 @@ class CustomerViewSet(viewsets.ModelViewSet):
         )
         data = self.get_serializer(customer).data
         data['session_token'] = _create_kiosk_session_token(customer.id)
+        return Response(data)
+
+    @action(detail=False, methods=['post'])
+    def whoami(self, request):
+        """Klient (client_locker.py) qayta ishga tushganda — masalan
+        yangilanish/qulash/qayta yuklashdan keyin — "Kabinet" holatini
+        tiklash uchun. session_token mahalliy faylda saqlangan bo'lsa
+        ham, faqat shu mijoz HOZIR aynan shu PC'da BALANCE seansi ochib
+        turgan bo'lsagina ma'lumot qaytariladi — aks holda eski/boshqa
+        mijozning profili noto'g'ri PC'da yoki tugagan seans uchun
+        qayta ko'rsatilib qolishi mumkin edi."""
+        customer, error_response = _resolve_kiosk_session_customer(request)
+        if error_response:
+            return error_response
+        pc_name = request.data.get('pc_name')
+        has_active_balance_session = Session.objects.filter(
+            computer__name=pc_name, customer=customer, is_active=True, payment_method='BALANCE'
+        ).exists()
+        if not has_active_balance_session:
+            return Response({'error': "Bu PC'da faol seans topilmadi."}, status=status.HTTP_404_NOT_FOUND)
+        data = self.get_serializer(customer).data
+        data['session_token'] = request.data.get('session_token')
         return Response(data)
 
     @action(detail=True, methods=['post'])

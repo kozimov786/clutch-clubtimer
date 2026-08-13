@@ -2704,7 +2704,7 @@ if IS_WINDOWS:
     kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
     WH_KEYBOARD_LL = 13
     VK_TAB = 0x09; VK_LWIN = 0x5B; VK_RWIN = 0x5C; VK_F4 = 0x73; VK_ESCAPE = 0x1B
-    VK_U = 0x55; VK_F9 = 0x78; VK_P = 0x50; VK_SCROLL = 0x91
+    VK_U = 0x55; VK_F9 = 0x78; VK_P = 0x50
 
     class KBDLLHOOKSTRUCT(ctypes.Structure):
         _fields_ = [
@@ -2754,15 +2754,12 @@ if IS_WINDOWS:
             # yetkazmasligi mumkin edi — shu sababli F9 vaqti-vaqti
             # bilan ishlamay qolar edi. Past darajali hook esa
             # o'yindan OLDINROQ, xom (raw) darajada ishlaydi, shuning
-            # uchun ancha ishonchli.
-            #
-            # Scroll Lock — F9'ga QO'SHIMCHA (zaxira) tugma sifatida.
-            # Win+D emas: Win tugmasi bizning hookimiz tomonidan
-            # allaqachon butunlay bloklangan (Start menyu ochilmasligi
-            # uchun), shuning uchun Win+D hech qachon aniqlanmas edi.
-            # Scroll Lock esa deyarli hech qanday o'yinda ishlatilmaydi
-            # va Windows tomonidan ham band qilinmagan.
-            if vk in (VK_F9, VK_SCROLL) and wParam in (WM_KEYDOWN, WM_SYSKEYDOWN):
+            # uchun ancha ishonchli. Bu yerda F9 ONCHA Ctrl bosilgan-
+            # bosilmaganidan qat'iy nazar aniqlanadi (pastdagi
+            # RegisterHotKey esa alohida "faqat F9" va "Ctrl+F9"
+            # kombinatsiyalarini ro'yxatdan o'tkazadi — ikkalasi ham
+            # shu yerga, xuddi shu natijaga olib keladi).
+            if vk == VK_F9 and wParam in (WM_KEYDOWN, WM_SYSKEYDOWN):
                 SHOW_LAUNCHER_REQUESTED = True
                 return 1
         return user32.CallNextHookEx(hook_id, nCode, wParam, lParam)
@@ -2790,7 +2787,10 @@ if IS_WINDOWS:
     HOTKEY_EMERGENCY_1 = 1   # Ctrl+Alt+Shift+U
     HOTKEY_EMERGENCY_2 = 2   # Ctrl+Shift+P
     HOTKEY_SHOW_LAUNCHER = 3  # F9
-    HOTKEY_SHOW_LAUNCHER_2 = 4  # Scroll Lock (F9'ga zaxira)
+    # Ctrl+F9 — F9'ga qo'shimcha (zaxira) kombinatsiya. Scroll Lock EMAS:
+    # ko'p (ayniqsa noutbuk) klaviaturalarda bu tugma umuman yo'q. Ctrl
+    # va F9 esa HAR QANDAY klaviaturada kafolatlangan mavjud.
+    HOTKEY_SHOW_LAUNCHER_2 = 4  # Ctrl+F9
 
     class HotkeyEventFilter(QAbstractNativeEventFilter):
         def nativeEventFilter(self, eventType, message):
@@ -2801,7 +2801,7 @@ if IS_WINDOWS:
                     print(f"[Hotkey] Favqulodda chiqish kombinatsiyasi aniqlandi (id={msg.wParam})")
                     EMERGENCY_UNLOCK_REQUESTED = True
                 elif msg.wParam in (HOTKEY_SHOW_LAUNCHER, HOTKEY_SHOW_LAUNCHER_2):
-                    print(f"[Hotkey] F9/Scroll Lock aniqlandi (id={msg.wParam})")
+                    print(f"[Hotkey] F9/Ctrl+F9 aniqlandi (id={msg.wParam})")
                     SHOW_LAUNCHER_REQUESTED = True
             return False, 0
 
@@ -2815,11 +2815,11 @@ if IS_WINDOWS:
             user32.RegisterHotKey(None, HOTKEY_EMERGENCY_1, MOD_CONTROL | MOD_ALT | MOD_SHIFT, VK_U),
             user32.RegisterHotKey(None, HOTKEY_EMERGENCY_2, MOD_CONTROL | MOD_SHIFT, VK_P),
             user32.RegisterHotKey(None, HOTKEY_SHOW_LAUNCHER, 0, VK_F9),
-            user32.RegisterHotKey(None, HOTKEY_SHOW_LAUNCHER_2, 0, VK_SCROLL),
+            user32.RegisterHotKey(None, HOTKEY_SHOW_LAUNCHER_2, MOD_CONTROL, VK_F9),
         ]
         if all(results):
             print("[Hotkey] Barcha global hotkeylar muvaffaqiyatli ro'yxatdan o'tkazildi "
-                  "(Ctrl+Alt+Shift+U, Ctrl+Shift+P, F9, Scroll Lock)")
+                  "(Ctrl+Alt+Shift+U, Ctrl+Shift+P, F9, Ctrl+F9)")
         else:
             print(f"[Hotkey] OGOHLANTIRISH: ba'zi hotkeylar ro'yxatdan o'tmadi: {results} "
                   f"GetLastError={ctypes.get_last_error()}")

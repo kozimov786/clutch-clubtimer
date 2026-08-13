@@ -345,6 +345,25 @@ function handleSearch(val) {
   renderPCGrid();
 }
 
+// "SETTINGS" ochiladigan menyusi ostidagi bo'limlar — shulardan biri
+// tanlangan bo'lsa, "SETTINGS" pillasining o'zi ham faol ko'rinishi
+// kerak (aks holda foydalanuvchi qaysi menyuda ekanini yo'qotib qo'yadi).
+const SETTINGS_SUB_TABS = ['tariffs', 'analytics', 'auditlog', 'sessions'];
+
+function toggleSettingsMenu(event) {
+  event.stopPropagation();
+  document.getElementById('settings-dropdown-panel')?.classList.toggle('hidden');
+}
+
+document.addEventListener('click', (e) => {
+  const panel = document.getElementById('settings-dropdown-panel');
+  const btn = document.getElementById('settings-nav-btn');
+  if (!panel || panel.classList.contains('hidden')) return;
+  if (!panel.contains(e.target) && e.target !== btn && !btn?.contains(e.target)) {
+    panel.classList.add('hidden');
+  }
+});
+
 function switchTab(tabName) {
   currentTab = tabName;
   document.querySelectorAll('.main-nav-btn').forEach(btn => {
@@ -356,6 +375,12 @@ function switchTab(tabName) {
       btn.classList.add('text-slate-400', 'border-transparent');
     }
   });
+
+  const settingsBtn = document.getElementById('settings-nav-btn');
+  if (settingsBtn) {
+    settingsBtn.classList.toggle('nav-tab-active', SETTINGS_SUB_TABS.includes(tabName));
+  }
+  document.getElementById('settings-dropdown-panel')?.classList.add('hidden');
 
   document.getElementById('tab-view-grid').classList.toggle('hidden', tabName !== 'grid');
   document.getElementById('tab-view-tariffs').classList.toggle('hidden', tabName !== 'tariffs');
@@ -2322,6 +2347,7 @@ async function openCustomerModal(customerId) {
         document.getElementById('customer-phone-input').value = c.phone;
         document.getElementById('customer-notes-input').value = c.notes || '';
         document.getElementById('customer-modal-balance').textContent = formatMoney(c.balance);
+        document.getElementById('customer-modal-points').textContent = c.bonus_points || 0;
       }
     } catch (err) { console.error(err); }
     loadCustomerTransactions(customerId);
@@ -2422,6 +2448,7 @@ async function customerBalanceOp(action) {
       return;
     }
     document.getElementById('customer-modal-balance').textContent = formatMoney(data.balance);
+    document.getElementById('customer-modal-points').textContent = data.bonus_points || 0;
     amountInput.value = '';
     loadCustomerTransactions(activeCustomerId);
     fetchCustomers();
@@ -2441,9 +2468,12 @@ async function loadCustomerTransactions(customerId) {
       return;
     }
     list.innerHTML = txs.map(t => `
-      <div class="flex items-center justify-between py-1.5 border-b border-slate-800/60">
-        <span class="text-slate-400">${new Date(t.created_at).toLocaleString('uz-UZ')}</span>
-        <span class="font-mono font-bold ${t.type === 'TOPUP' ? 'text-emerald-400' : 'text-rose-400'}">
+      <div class="flex items-center justify-between gap-2 py-1.5 border-b border-slate-800/60 last:border-b-0">
+        <div class="min-w-0">
+          <div class="text-slate-300 font-semibold truncate">${t.note || t.type_display || ''}</div>
+          <div class="text-slate-500 text-[10px]">${new Date(t.created_at).toLocaleString('uz-UZ')}</div>
+        </div>
+        <span class="font-mono font-bold shrink-0 ${t.type === 'TOPUP' ? 'text-emerald-400' : 'text-rose-400'}">
           ${t.type === 'TOPUP' ? '+' : '−'}${formatMoney(t.amount)}
         </span>
       </div>

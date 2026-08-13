@@ -1795,22 +1795,55 @@ function setFinancePeriod(period) {
 
 async function fetchFinanceData() {
   try {
-    let url = `/api/expenses/cashflow/?period=${currentFinancePeriod}`;
+    let periodQs = `period=${currentFinancePeriod}`;
     if (currentFinancePeriod === 'custom') {
       const df = document.getElementById('finance-date-from')?.value;
       const dt = document.getElementById('finance-date-to')?.value;
-      if (df) url += `&date_from=${df}`;
-      if (dt) url += `&date_to=${dt}`;
+      if (df) periodQs += `&date_from=${df}`;
+      if (dt) periodQs += `&date_to=${dt}`;
     }
 
-    const res = await fetch(url);
+    const res = await fetch(`/api/expenses/cashflow/?${periodQs}`);
     if (res.ok) {
       const data = await res.json();
       renderFinanceDashboard(data);
     }
+
+    const ledgerRes = await fetch(`/api/expenses/kassa_report/?${periodQs}`);
+    if (ledgerRes.ok) {
+      const ledgerData = await ledgerRes.json();
+      renderKassaLedger(ledgerData);
+    }
   } catch (err) {
     console.error("Fetch finance error:", err);
   }
+}
+
+function renderKassaLedger(data) {
+  const openingEl = document.getElementById('kassa-ledger-opening');
+  const currentEl = document.getElementById('kassa-ledger-current');
+  const tbody = document.getElementById('kassa-ledger-table-body');
+
+  if (openingEl) openingEl.textContent = formatMoney(data.opening_balance || 0);
+  if (currentEl) currentEl.textContent = formatMoney(data.current_kassa || 0);
+
+  if (!tbody) return;
+
+  const ledger = data.ledger || [];
+  if (ledger.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-xs text-slate-500">Ushbu davrda kassa harakati mavjud emas</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = ledger.map(row => `
+    <tr class="border-b border-slate-800/60 hover:bg-slate-900/50 transition-all text-xs">
+      <td class="py-2.5 px-3 font-mono text-slate-400 whitespace-nowrap">${row.date}</td>
+      <td class="py-2.5 px-3 text-slate-200 whitespace-nowrap">${row.detail}</td>
+      <td class="py-2.5 px-3 font-bold font-orbitron whitespace-nowrap ${row.income ? 'text-emerald-400' : 'text-slate-600'}">${row.income ? '+' + formatMoney(row.income) : '—'}</td>
+      <td class="py-2.5 px-3 font-bold font-orbitron whitespace-nowrap ${row.expense ? 'text-rose-400' : 'text-slate-600'}">${row.expense ? '-' + formatMoney(row.expense) : '—'}</td>
+      <td class="py-2.5 px-3 font-bold font-orbitron text-white whitespace-nowrap">${formatMoney(row.balance)}</td>
+    </tr>
+  `).join('');
 }
 
 function renderFinanceDashboard(data) {

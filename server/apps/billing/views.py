@@ -15,6 +15,7 @@ import re
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.hashers import make_password, check_password
 from django.db.models import Sum, Count, F, Case, When, Value, DecimalField, Q
+from django.db.models.functions import TruncDate
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.decorators import action
@@ -44,6 +45,38 @@ TOPUP_BONUS_TIERS = [
     (200_000, 50_000),
     (100_000, 20_000),
 ]
+
+
+def _resolve_period_range(request):
+    """period/date_from/date_to query paramlaridan (start_dt, end_dt) hisoblaydi.
+    Kassa (cashflow) va Kassa Hisoboti (kassa_report) action'lari o'rtasida umumiy."""
+    period = request.query_params.get('period', 'daily')
+    date_from_str = request.query_params.get('date_from')
+    date_to_str = request.query_params.get('date_to')
+
+    now = timezone.localtime()
+
+    if period == 'monthly':
+        start_dt = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        _, last_day = calendar.monthrange(now.year, now.month)
+        end_dt = now.replace(day=last_day, hour=23, minute=59, second=59, microsecond=999999)
+    elif period == 'yearly':
+        start_dt = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        end_dt = now.replace(month=12, day=31, hour=23, minute=59, second=59, microsecond=999999)
+    elif period == 'custom' and date_from_str and date_to_str:
+        try:
+            df = datetime.strptime(date_from_str, '%Y-%m-%d')
+            dt = datetime.strptime(date_to_str, '%Y-%m-%d')
+            start_dt = timezone.make_aware(datetime.combine(df.date(), time.min))
+            end_dt = timezone.make_aware(datetime.combine(dt.date(), time.max))
+        except Exception:
+            start_dt = timezone.make_aware(datetime.combine(now.date(), time.min))
+            end_dt = timezone.make_aware(datetime.combine(now.date(), time.max))
+    else:
+        start_dt = timezone.make_aware(datetime.combine(now.date(), time.min))
+        end_dt = timezone.make_aware(datetime.combine(now.date(), time.max))
+
+    return period, start_dt, end_dt
 
 
 def _log_action(request, action_key, description):
@@ -1146,31 +1179,7 @@ class ExpenseViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def cashflow(self, request):
-        period = request.query_params.get('period', 'daily')
-        date_from_str = request.query_params.get('date_from')
-        date_to_str = request.query_params.get('date_to')
-
-        now = timezone.localtime()
-
-        if period == 'monthly':
-            start_dt = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            _, last_day = calendar.monthrange(now.year, now.month)
-            end_dt = now.replace(day=last_day, hour=23, minute=59, second=59, microsecond=999999)
-        elif period == 'yearly':
-            start_dt = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-            end_dt = now.replace(month=12, day=31, hour=23, minute=59, second=59, microsecond=999999)
-        elif period == 'custom' and date_from_str and date_to_str:
-            try:
-                df = datetime.strptime(date_from_str, '%Y-%m-%d')
-                dt = datetime.strptime(date_to_str, '%Y-%m-%d')
-                start_dt = timezone.make_aware(datetime.combine(df.date(), time.min))
-                end_dt = timezone.make_aware(datetime.combine(dt.date(), time.max))
-            except Exception:
-                start_dt = timezone.make_aware(datetime.combine(now.date(), time.min))
-                end_dt = timezone.make_aware(datetime.combine(now.date(), time.max))
-        else:
-            start_dt = timezone.make_aware(datetime.combine(now.date(), time.min))
-            end_dt = timezone.make_aware(datetime.combine(now.date(), time.max))
+        period, start_dt, end_dt = _resolve_period_range(request)
 
         sessions_qs = Session.objects.filter(start_time__range=(start_dt, end_dt))
         session_cash = float(sessions_qs.aggregate(
@@ -1283,6 +1292,112 @@ class ExpenseViewSet(viewsets.ModelViewSet):
             'total_revenue': total_revenue,
             'expenses': expense_serializer.data,
             'recent_sales': recent_sales
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'])
+    def kassa_report(self, request):
+        """Kunlik kassa daftari: Sana - Tafsilot - Kirim (Bar+Savdo) - Chiqim - Kassa.
+        Har kun uchun Bar+Savdo naqd tushumi BITTA qatorga jamlanadi, har bir
+        rasxod esa ALOHIDA qatorda ko'rsatiladi. "Kassa" ustuni — davr boshigacha
+        bo'lgan barcha tarixdan hisoblangan ochilish qoldig'idan boshlab yuritilgan
+        yig'ma (running) qoldiq, shu sababli davr bugungi kunni qamrab olsa,
+        oxirgi qatordagi Kassa qoldig'i hozirgi haqiqiy kassa miqdoriga teng bo'ladi."""
+        period, start_dt, end_dt = _resolve_period_range(request)
+
+        cash_expr = Case(
+            When(payment_method='CASH', then='total_price'),
+            When(payment_method='CARD', then=Value(0)),
+            default='cash_amount',
+            output_field=DecimalField()
+        )
+
+        # Ochilish qoldig'i: davr boshlanishidan OLDINGI butun tarix bo'yicha
+        opening_session_cash = float(Session.objects.filter(start_time__lt=start_dt).aggregate(
+            total=Sum(cash_expr))['total'] or 0.0)
+        opening_bar_cash = float(Order.objects.filter(
+            status__in=['APPROVED', 'DELIVERED'], created_at__lt=start_dt
+        ).aggregate(total=Sum(cash_expr))['total'] or 0.0)
+        opening_expense_cash = float(Expense.objects.filter(
+            payment_method='CASH', created_at__lt=start_dt
+        ).aggregate(total=Sum('amount'))['total'] or 0.0)
+        opening_balance = opening_session_cash + opening_bar_cash - opening_expense_cash
+
+        # Tanlangan davr ichida kunlik jamlangan Bar+Savdo naqd kirimi
+        session_daily = Session.objects.filter(start_time__range=(start_dt, end_dt)).annotate(
+            day=TruncDate('start_time')
+        ).values('day').annotate(total=Sum(cash_expr)).order_by('day')
+        order_daily = Order.objects.filter(
+            status__in=['APPROVED', 'DELIVERED'], created_at__range=(start_dt, end_dt)
+        ).annotate(day=TruncDate('created_at')).values('day').annotate(total=Sum(cash_expr)).order_by('day')
+
+        daily_income = {}
+        for row in session_daily:
+            daily_income[row['day']] = daily_income.get(row['day'], 0.0) + float(row['total'] or 0.0)
+        for row in order_daily:
+            daily_income[row['day']] = daily_income.get(row['day'], 0.0) + float(row['total'] or 0.0)
+
+        # Davr ichidagi har bir naqd rasxod — alohida qator
+        expenses_cash_qs = Expense.objects.filter(
+            payment_method='CASH', created_at__range=(start_dt, end_dt)
+        ).order_by('created_at')
+
+        events = []
+        for day, amount in daily_income.items():
+            if amount:
+                events.append({
+                    'sort_key': timezone.make_aware(datetime.combine(day, time.min)),
+                    'date': day.strftime('%Y-%m-%d'),
+                    'detail': "Bar + Savdo daromadi",
+                    'income': round(amount, 2),
+                    'expense': 0.0,
+                })
+        for e in expenses_cash_qs:
+            detail = f"Rasxod: {e.category}" + (f" - {e.recipient_name}" if e.recipient_name else "")
+            events.append({
+                'sort_key': e.created_at,
+                'date': timezone.localtime(e.created_at).strftime('%Y-%m-%d'),
+                'detail': detail,
+                'income': 0.0,
+                'expense': float(e.amount),
+            })
+        events.sort(key=lambda x: x['sort_key'])
+
+        ledger = []
+        balance = opening_balance
+        total_income = 0.0
+        total_expense = 0.0
+        for ev in events:
+            balance += ev['income'] - ev['expense']
+            total_income += ev['income']
+            total_expense += ev['expense']
+            ledger.append({
+                'date': ev['date'],
+                'detail': ev['detail'],
+                'income': ev['income'],
+                'expense': ev['expense'],
+                'balance': round(balance, 2),
+            })
+
+        # Hozirgi haqiqiy kassa miqdori — sana filtridan mustaqil, BUTUN tarix bo'yicha
+        current_session_cash = float(Session.objects.aggregate(total=Sum(cash_expr))['total'] or 0.0)
+        current_bar_cash = float(Order.objects.filter(
+            status__in=['APPROVED', 'DELIVERED']
+        ).aggregate(total=Sum(cash_expr))['total'] or 0.0)
+        current_expense_cash = float(Expense.objects.filter(
+            payment_method='CASH'
+        ).aggregate(total=Sum('amount'))['total'] or 0.0)
+        current_kassa = round(current_session_cash + current_bar_cash - current_expense_cash, 2)
+
+        return Response({
+            'period': period,
+            'start_date': start_dt.strftime('%Y-%m-%d %H:%M:%S'),
+            'end_date': end_dt.strftime('%Y-%m-%d %H:%M:%S'),
+            'opening_balance': round(opening_balance, 2),
+            'ledger': ledger,
+            'total_income': round(total_income, 2),
+            'total_expense': round(total_expense, 2),
+            'closing_balance': round(balance, 2),
+            'current_kassa': current_kassa,
         }, status=status.HTTP_200_OK)
 
 

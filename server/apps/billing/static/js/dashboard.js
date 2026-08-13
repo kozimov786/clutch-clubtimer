@@ -1987,6 +1987,12 @@ function renderFinanceDashboard(data) {
     } else {
       expTbody.innerHTML = expenses.map(e => {
         const formattedDate = new Date(e.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+        const expPmColors = {
+          CASH: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+          CARD: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+          FREE: 'bg-pink-500/20 text-pink-300 border-pink-500/30',
+        };
+        const expPmClass = expPmColors[e.payment_method] || expPmColors.CARD;
         return `
           <tr class="border-b border-slate-800/60 hover:bg-slate-900/50 transition-all text-xs">
             <td class="py-2.5 px-2.5 font-mono text-slate-400 whitespace-nowrap">${formattedDate}</td>
@@ -1995,9 +2001,10 @@ function renderFinanceDashboard(data) {
               <div class="text-[10px] text-slate-400">${e.recipient_name || '-'}</div>
             </td>
             <td class="py-2.5 px-2.5 whitespace-nowrap">
-              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${e.payment_method === 'CASH' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'}">
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${expPmClass}">
                 ${e.payment_method_display || e.payment_method}
               </span>
+              ${e.payment_method === 'FREE' ? `<div class="text-[9px] text-pink-400 font-semibold mt-0.5">Kassadan pul chiqmagan</div>` : ''}
             </td>
             <td class="py-2.5 px-2.5 font-bold text-rose-400 font-orbitron whitespace-nowrap">-${formatMoney(Math.abs(parseFloat(e.amount || 0)))}</td>
             <td class="py-2.5 px-2.5 text-slate-400 max-w-[150px] truncate" title="${e.description || ''}">${e.description || '-'}</td>

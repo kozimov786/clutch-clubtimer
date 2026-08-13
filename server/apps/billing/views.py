@@ -864,9 +864,16 @@ class ProductViewSet(viewsets.ModelViewSet):
 
         total_cost = float(product.price * quantity)
 
+        # payment_method='FREE': spisaniye — mahsulot ombordan kamaydi, lekin
+        # kassadan HECH QANDAY naqd/plastik pul chiqmadi (masalan xodim ichib
+        # qo'ygan yoki mahsulot yaroqsiz bo'lib chiqarib tashlangan). Avval
+        # bu yerda payment_method='CASH' deb yozilardi — bu kassa
+        # hisobotida (cashflow/kassa_report) expense_cash sifatida
+        # ayirilib, kassa qoldig'ini haqiqiy naqd miqdoridan PASTROQ qilib
+        # ko'rsatib kelgan (aslida hech qanday naqd pul chiqmagan edi).
         expense = Expense.objects.create(
             amount=total_cost,
-            payment_method='CASH',
+            payment_method='FREE',
             category='Bar Rasxodi (Spisaniye)',
             recipient_name=employee_name,
             description=f"Spisaniye: {quantity}x {product.name} ({total_cost:,.0f} UZS). Izoh: {reason}"

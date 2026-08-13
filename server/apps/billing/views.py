@@ -931,10 +931,19 @@ class OrderViewSet(viewsets.ModelViewSet):
                 oi['product'].save()
 
         if balance_session:
+            # Kabinetning "Jami harakatlar" ro'yxatida aniq nima
+            # sotib olinganini ko'rsatish uchun — mahsulot nomi(lari)
+            # to'g'ridan-to'g'ri note'ga yoziladi (masalan
+            # "Cola 250ml" yoki bir nechta mahsulot bo'lsa
+            # "Cola 250ml x2, Chips x1").
+            item_summary = ", ".join(
+                oi['product'].name + (f" x{oi['quantity']}" if oi['quantity'] > 1 else "")
+                for oi in order_items_to_create
+            )
             CustomerTransaction.objects.create(
                 customer=balance_session.customer, type='SPEND', amount=total_price,
                 balance_after=balance_session.customer.balance,
-                note=f"{computer.name}: bar buyurtma #{order.id} uchun"
+                note=item_summary or f"{computer.name}: bar buyurtma #{order.id}"
             )
 
         serializer = self.get_serializer(order)

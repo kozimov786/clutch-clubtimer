@@ -1312,7 +1312,7 @@ class CustomerCabinetPage(QWidget):
         columns = QHBoxLayout()
         columns.setSpacing(16)
         columns.addWidget(self._build_identity_card(), 1)
-        columns.addWidget(self._build_security_card(), 1)
+        columns.addWidget(self._build_history_card(), 1)
         columns.addWidget(self._build_stats_card(), 1)
         root.addLayout(columns, 1)
 
@@ -1341,8 +1341,9 @@ class CustomerCabinetPage(QWidget):
         self.old_pw_input.clear()
         self.new_pw_input.clear()
         self.pw_status.hide()
+        self.security_section.hide()
         self.playtime_val.setText("—")
-        self.station_val.setText("—")
+        self.points_val.setText(str(self.customer_data.get('bonus_points', 0)))
         self._load_activity()
 
     def _build_header_card(self):
@@ -1387,9 +1388,9 @@ class CustomerCabinetPage(QWidget):
         row.addLayout(info_col, 1)
 
         balance_box = QFrame()
-        balance_box.setStyleSheet(f"""
+        balance_box.setStyleSheet("""
             background: rgba(0,243,255,0.05);
-            border: 1px solid {COLOR_CYAN};
+            border: none;
             border-radius: 10px;
         """)
         bb = QVBoxLayout(balance_box)
@@ -1406,6 +1407,13 @@ class CustomerCabinetPage(QWidget):
         self.header_balance_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         bb.addWidget(self.header_balance_label)
 
+        stop_btn = QPushButton("⏻  VAQTNI TO'XTATISH")
+        stop_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        stop_btn.setFixedHeight(32)
+        stop_btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        stop_btn.setStyleSheet(CRIMSON_BTN_QSS)
+        stop_btn.clicked.connect(self._on_stop_session_clicked)
+
         topup_btn = QPushButton("+  BALANSNI TO'LDIRISH")
         topup_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         topup_btn.setFixedHeight(32)
@@ -1416,6 +1424,7 @@ class CustomerCabinetPage(QWidget):
         right_col = QVBoxLayout()
         right_col.setSpacing(8)
         right_col.addWidget(balance_box)
+        right_col.addWidget(stop_btn)
         right_col.addWidget(topup_btn)
         row.addLayout(right_col)
 
@@ -1458,69 +1467,95 @@ class CustomerCabinetPage(QWidget):
         hint.setWordWrap(True)
         hint.setStyleSheet("color: #475569; font-size: 10px;")
         lo.addWidget(hint)
-        lo.addStretch(1)
-        return card
 
-    def _build_security_card(self):
-        card = BracketFrame(bracket_color=COLOR_CYAN, bracket_len=12)
-        card.setObjectName("cabinetCard")
-        card.setStyleSheet(self.CARD_STYLE)
-        lo = QVBoxLayout(card)
-        lo.setContentsMargins(18, 16, 18, 16)
-        lo.setSpacing(10)
+        lo.addSpacing(12)
+        divider = QFrame()
+        divider.setFixedHeight(1)
+        divider.setStyleSheet(f"background: {COLOR_PANEL_BORDER}; border: none;")
+        lo.addWidget(divider)
+        lo.addSpacing(12)
 
-        title = QLabel("🔐  SECURITY")
-        title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        title.setStyleSheet("color: #e2e8f0;")
-        lo.addWidget(title)
+        self.security_toggle_btn = QPushButton("🔐  CHANGE PASSWORD")
+        self.security_toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.security_toggle_btn.setFixedHeight(36)
+        self.security_toggle_btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        self.security_toggle_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255,255,255,0.06); color: #e2e8f0;
+                border: 1px solid rgba(255,255,255,0.15); border-radius: 9px;
+            }
+            QPushButton:hover { background: rgba(255,255,255,0.12); }
+        """)
+        self.security_toggle_btn.clicked.connect(self._toggle_security_section)
+        lo.addWidget(self.security_toggle_btn)
+
+        self.security_section = QWidget()
+        sec_lo = QVBoxLayout(self.security_section)
+        sec_lo.setContentsMargins(0, 10, 0, 0)
+        sec_lo.setSpacing(10)
 
         self.old_pw_input = QLineEdit()
         self.old_pw_input.setPlaceholderText("Joriy parol")
         self.old_pw_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.old_pw_input.setFixedHeight(36)
         self.old_pw_input.setStyleSheet(INPUT_QSS)
-        lo.addWidget(self.old_pw_input)
+        sec_lo.addWidget(self.old_pw_input)
 
         self.new_pw_input = QLineEdit()
         self.new_pw_input.setPlaceholderText("Yangi parol")
         self.new_pw_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.new_pw_input.setFixedHeight(36)
         self.new_pw_input.setStyleSheet(INPUT_QSS)
-        lo.addWidget(self.new_pw_input)
+        sec_lo.addWidget(self.new_pw_input)
 
         self.pw_status = QLabel("")
         self.pw_status.setWordWrap(True)
         self.pw_status.setStyleSheet("color: #ef4444; font-size: 10px;")
         self.pw_status.hide()
-        lo.addWidget(self.pw_status)
+        sec_lo.addWidget(self.pw_status)
 
         self.pw_submit_btn = QPushButton("UPDATE PASSWORD")
         self.pw_submit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.pw_submit_btn.setFixedHeight(36)
         self.pw_submit_btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-        self.pw_submit_btn.setStyleSheet("""
-            QPushButton {
-                background: rgba(255,255,255,0.06); color: #e2e8f0;
-                border: 1px solid rgba(255,255,255,0.15); border-radius: 9px;
-            }
-            QPushButton:hover { background: rgba(255,255,255,0.12); }
-            QPushButton:disabled { color: #475569; }
-        """)
+        self.pw_submit_btn.setStyleSheet(GRADIENT_BTN_QSS)
         self.pw_submit_btn.clicked.connect(self._on_change_password_clicked)
-        lo.addWidget(self.pw_submit_btn)
+        sec_lo.addWidget(self.pw_submit_btn)
 
-        lo.addSpacing(6)
-
-        stop_btn = QPushButton("⏻  VAQTNI TO'XTATISH")
-        stop_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        stop_btn.setFixedHeight(36)
-        stop_btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-        stop_btn.setStyleSheet(CRIMSON_BTN_QSS)
-        stop_btn.clicked.connect(self._on_stop_session_clicked)
-        lo.addWidget(stop_btn)
+        self.security_section.hide()
+        lo.addWidget(self.security_section)
 
         lo.addStretch(1)
         return card
+
+    def _toggle_security_section(self):
+        self.security_section.setVisible(not self.security_section.isVisible())
+
+    def _build_history_card(self):
+        history_card = BracketFrame(bracket_color=COLOR_CYAN, bracket_len=12)
+        history_card.setObjectName("cabinetCard")
+        history_card.setStyleSheet(self.CARD_STYLE)
+        hl = QVBoxLayout(history_card)
+        hl.setContentsMargins(16, 14, 16, 14)
+        hl.setSpacing(8)
+        history_title = QLabel("🕐  HISTORY")
+        history_title.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        hl.addWidget(history_title)
+
+        self.activity_area = QScrollArea()
+        self.activity_area.setWidgetResizable(True)
+        self.activity_area.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        self.activity_container = QWidget()
+        self.activity_layout = QVBoxLayout(self.activity_container)
+        self.activity_layout.setSpacing(6)
+        self.activity_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.activity_loading = QLabel("Yuklanmoqda...")
+        self.activity_loading.setStyleSheet("color: #64748b; font-size: 11px;")
+        self.activity_layout.addWidget(self.activity_loading)
+        self.activity_area.setWidget(self.activity_container)
+        hl.addWidget(self.activity_area, 1)
+
+        return history_card
 
     def _build_stats_card(self):
         w = QWidget()
@@ -1547,33 +1582,10 @@ class CustomerCabinetPage(QWidget):
         playtime_box, self.playtime_val = _stat_box("TOTAL PLAYTIME")
         lo.addWidget(playtime_box)
 
-        station_box, self.station_val = _stat_box("FAV STATION")
-        lo.addWidget(station_box)
+        points_box, self.points_val = _stat_box("JAMI BALL")
+        lo.addWidget(points_box)
 
-        history_card = BracketFrame(bracket_color=COLOR_CYAN, bracket_len=12)
-        history_card.setObjectName("cabinetCard")
-        history_card.setStyleSheet(self.CARD_STYLE)
-        hl = QVBoxLayout(history_card)
-        hl.setContentsMargins(16, 14, 16, 14)
-        hl.setSpacing(8)
-        history_title = QLabel("🕐  HISTORY")
-        history_title.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        hl.addWidget(history_title)
-
-        self.activity_area = QScrollArea()
-        self.activity_area.setWidgetResizable(True)
-        self.activity_area.setStyleSheet("QScrollArea { border: none; background: transparent; }")
-        self.activity_container = QWidget()
-        self.activity_layout = QVBoxLayout(self.activity_container)
-        self.activity_layout.setSpacing(6)
-        self.activity_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.activity_loading = QLabel("Yuklanmoqda...")
-        self.activity_loading.setStyleSheet("color: #64748b; font-size: 11px;")
-        self.activity_layout.addWidget(self.activity_loading)
-        self.activity_area.setWidget(self.activity_container)
-        hl.addWidget(self.activity_area, 1)
-
-        lo.addWidget(history_card, 1)
+        lo.addStretch(1)
         return w
 
     def _on_change_password_clicked(self):
@@ -1636,21 +1648,14 @@ class CustomerCabinetPage(QWidget):
 
         sessions = data.get('sessions', [])
         total_minutes = 0
-        station_counts = {}
         for s in sessions:
             try:
                 total_minutes += int(s.get('duration_minutes') or 0)
             except (TypeError, ValueError):
                 pass
-            cname = s.get('computer_name')
-            if cname:
-                station_counts[cname] = station_counts.get(cname, 0) + 1
         if hasattr(self, 'playtime_val'):
             hours, mins = divmod(total_minutes, 60)
             self.playtime_val.setText(f"{hours} soat {mins} daq" if total_minutes else "—")
-        if hasattr(self, 'station_val'):
-            fav = max(station_counts, key=station_counts.get) if station_counts else None
-            self.station_val.setText(fav or "—")
 
         rows = []
         for t in data.get('transactions', []):
@@ -1660,13 +1665,24 @@ class CustomerCabinetPage(QWidget):
                 amount = float(t.get('amount', 0))
             except (TypeError, ValueError):
                 amount = 0
-            rows.append((t.get('created_at', ''), t.get('type_display', ''), f"{sign}{amount:,.0f} UZS", color))
+            # Bar xaridlari uchun note'da aniq mahsulot nomi bor
+            # (masalan "Cola 250ml") — bu "Sarflash" kabi umumiy
+            # yorliqdan ko'ra ancha aniqroq, shuning uchun mavjud
+            # bo'lsa shunisi ko'rsatiladi.
+            label = t.get('note') or t.get('type_display', '')
+            rows.append((t.get('created_at', ''), label, f"{sign}{amount:,.0f} UZS", color))
         for s in sessions:
             try:
                 price = float(s.get('total_price', 0))
             except (TypeError, ValueError):
                 price = 0
-            rows.append((s.get('start_time', ''), f"🎮 {s.get('computer_name', '')}", f"−{price:,.0f} UZS", '#ef4444'))
+            try:
+                duration = int(s.get('duration_minutes') or 0)
+            except (TypeError, ValueError):
+                duration = 0
+            h, m = divmod(duration, 60)
+            label = f"🎮 {s.get('computer_name', '')} - {h}:{m:02d} daq"
+            rows.append((s.get('start_time', ''), label, f"−{price:,.0f} UZS", '#ef4444'))
 
         rows.sort(key=lambda r: r[0] or '', reverse=True)
 

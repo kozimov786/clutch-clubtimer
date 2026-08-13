@@ -1812,17 +1812,37 @@ class GameCard(BracketFrame):
             badge.adjustSize()
             badge.move(10, 10)
 
-        name = QLabel(game.get('name', 'Unknown'))
-        name.setFont(serif_font(13))
-        name.setStyleSheet("color: #ffffff; padding: 14px 10px;")
-        name.setWordWrap(True)
-        name.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lo.addWidget(name)
+        self._name_text = game.get('name', 'Unknown')
+        self.name_label = QLabel(self._name_text)
+        self.name_label.setFont(serif_font(13))
+        self.name_label.setStyleSheet("color: #ffffff; padding: 14px 10px;")
+        self.name_label.setWordWrap(True)
+        self.name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lo.addWidget(self.name_label)
+
+        # Ba'zi o'yinlar ochilishi bir necha soniya cho'zilishi mumkin —
+        # shu orada sabrsizlanib qayta-qayta bosilsa, o'yinning o'zi
+        # "faqat bitta nusxa ishlashi mumkin" xatosi bilan qulashiga
+        # sabab bo'lardi. Bosilgandan keyin karta vaqtincha bloklanadi
+        # va holatini ko'rsatadi.
+        self._launching = False
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton and not self._launching:
+            self._launching = True
+            self.name_label.setText("⏳  ISHGA TUSHIRILMOQDA...")
+            self.setCursor(Qt.CursorShape.WaitCursor)
             self.launch_requested.emit(self.game)
+            QTimer.singleShot(6000, self._reset_launch_state)
         super().mousePressEvent(event)
+
+    def _reset_launch_state(self):
+        self._launching = False
+        try:
+            self.name_label.setText(self._name_text)
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+        except RuntimeError:
+            pass  # karta panjara qayta yuklanganda allaqachon o'chirilgan bo'lishi mumkin
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -3228,6 +3248,11 @@ class ClientLockerApp:
         self.current_game_name = None
         self.current_game_pid = None
         self.current_game_exe = None
+        # GameCard'ning o'zi ham ketma-ket bosishni bloklaydi, lekin
+        # bu ikkinchi, mustaqil himoya qatlami — qaysi manbadan kelishidan
+        # qat'iy nazar, tezkor ketma-ket ishga tushirish so'rovlarini
+        # to'xtatadi.
+        self._last_launch_at = 0.0
         # WebSocket ulangan bo'lsa, u real-vaqtli va aniq tartibda keladi —
         # shu payt heartbeat javobini e'tiborsiz qoldiramiz, aks holda
         # kechikkan heartbeat javobi WebSocket orqali kelgan yangi holatni
@@ -3517,6 +3542,11 @@ class ClientLockerApp:
         exe = game.get('executable_path')
         cwd_ = game.get('working_directory')
         name = game.get('name', 'Game')
+        now = time.time()
+        if now - self._last_launch_at < 5.0:
+            print(f"[Launcher] '{name}' -> e'tiborsiz qoldirildi (yaqinda boshqa o'yin ishga tushirilgan)")
+            return
+        self._last_launch_at = now
         print(f"[Launcher] '{name}' -> {exe}")
         if exe and os.path.exists(exe):
             try:

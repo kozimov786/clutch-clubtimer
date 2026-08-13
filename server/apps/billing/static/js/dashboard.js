@@ -105,11 +105,6 @@ function formatMoney(amount) {
   return new Intl.NumberFormat('uz-UZ').format(Math.round(amount)) + ' UZS';
 }
 
-function isDaytimeDiscountActive() {
-  const hour = new Date().getHours();
-  return hour >= 10 && hour < 18;
-}
-
 // Authentication
 async function handleAdminLogin(e) {
   if (e) e.preventDefault();
@@ -318,18 +313,6 @@ function updateStatsHeader() {
     revenue += parseFloat(s.total_price || 0);
   });
   document.getElementById('stat-revenue').textContent = (revenue > 0 ? '+' : '') + formatMoney(revenue);
-
-  const isDaytime = isDaytimeDiscountActive();
-  const discountBanner = document.getElementById('daytime-discount-badge');
-  if (discountBanner) {
-    if (isDaytime) {
-      discountBanner.className = "hidden lg:flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-bold font-orbitron animate-pulse";
-      discountBanner.innerHTML = `☀️ KUNDUZGI 50% CHEGIRMA (10:00 - 18:00)`;
-    } else {
-      discountBanner.className = "hidden";
-      discountBanner.innerHTML = "";
-    }
-  }
 }
 
 // Filtering & Navigation
@@ -431,17 +414,21 @@ function generatePCCardHTML(pc) {
             </div>
           </div>
           <div class="flex items-center gap-1.5">
-            <button onclick="openScreenshotModal(${pc.id}, '${pc.name}')" title="Ekranni ko'rish" class="w-7 h-7 rounded-lg bg-slate-800/80 hover:bg-cyan-500/20 border border-slate-700 hover:border-cyan-500/40 text-slate-400 hover:text-cyan-400 flex items-center justify-center transition-all">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-            </button>
-            <button onclick="forceCloseApp(${pc.id}, '${pc.name}')" title="Muzlab qolgan dasturni majburan yopish" class="w-7 h-7 rounded-lg bg-slate-800/80 hover:bg-amber-500/20 border border-slate-700 hover:border-amber-500/40 text-slate-400 hover:text-amber-400 flex items-center justify-center transition-all">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-            </button>
-            <button onclick="remoteShutdownPc(${pc.id}, '${pc.name}')" title="Kompyuterni o'chirish" class="w-7 h-7 rounded-lg bg-slate-800/80 hover:bg-rose-500/20 border border-slate-700 hover:border-rose-500/40 text-slate-400 hover:text-rose-400 flex items-center justify-center transition-all">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.636 5.636a9 9 0 1012.728 0M12 3v9"/></svg>
-            </button>
             ${statusBadge}
           </div>
+        </div>
+
+        <!-- Utility Icons Row (screenshot / force-close / shutdown) -->
+        <div class="flex items-center justify-end gap-1.5 mb-2.5">
+          <button onclick="openScreenshotModal(${pc.id}, '${pc.name}')" title="Ekranni ko'rish" class="w-6 h-6 rounded-md bg-slate-800/80 hover:bg-cyan-500/20 border border-slate-700 hover:border-cyan-500/40 text-slate-400 hover:text-cyan-400 flex items-center justify-center transition-all">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+          </button>
+          <button onclick="forceCloseApp(${pc.id}, '${pc.name}')" title="Muzlab qolgan dasturni majburan yopish" class="w-6 h-6 rounded-md bg-slate-800/80 hover:bg-amber-500/20 border border-slate-700 hover:border-amber-500/40 text-slate-400 hover:text-amber-400 flex items-center justify-center transition-all">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+          <button onclick="remoteShutdownPc(${pc.id}, '${pc.name}')" title="Kompyuterni o'chirish" class="w-6 h-6 rounded-md bg-slate-800/80 hover:bg-rose-500/20 border border-slate-700 hover:border-rose-500/40 text-slate-400 hover:text-rose-400 flex items-center justify-center transition-all">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.636 5.636a9 9 0 1012.728 0M12 3v9"/></svg>
+          </button>
         </div>
 
         <!-- Giant Timer Box -->

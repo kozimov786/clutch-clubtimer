@@ -314,11 +314,6 @@ button,
   header .max-w-7xl {
     gap: 10px;
   }
-  /* Hide daytime discount badge on mobile */
-  #daytime-discount-badge {
-    display: none !important;
-  }
-
   /* Main content padding */
   main.max-w-7xl {
     padding-left: 12px !important;

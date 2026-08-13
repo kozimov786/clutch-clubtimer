@@ -426,15 +426,26 @@ class ApiClient:
         threading.Thread(target=_post, daemon=True).start()
 
 
-GAME_CATEGORIES = [
-    ("all", "BARCHASI", "🌐"),
-    ("FPS", "FPS / SHOOTER", "🎯"),
-    ("Action", "ACTION / RPG", "⚔️"),
-    ("Sports", "SPORTS / RACING", "🏎️"),
-    ("Strategy", "STRATEGY / MOBA", "🎮"),
-]
+# "FILTER BY" pillslari endi qattiq kodlangan ro'yxatdan EMAS, balki
+# config.json'dagi fallback_games (yoki serverdan kelgan o'yinlar)
+# ro'yxatida haqiqatda uchraydigan category qiymatlaridan dinamik
+# quriladi (GamesPage._rebuild_category_filters) — shu orqali "Settings"
+# kabi qo'shimcha kategoriyalar ham avtomatik pill oladi, "Sports"/
+# "Action" kabi hech qaysi o'yinda ishlatilmagan bo'sh pillslar esa
+# ko'rinmaydi. Bu ro'yxat faqat ma'lum kategoriyalar uchun ikonka
+# tanlashda ishlatiladi.
+GAME_CATEGORY_ICONS = {
+    'fps': '🎯', 'shooter': '🎯',
+    'action': '⚔️', 'rpg': '⚔️',
+    'sports': '🏎️', 'racing': '🏎️',
+    'strategy': '🎮', 'moba': '🎮',
+    'settings': '⚙️',
+}
+GAME_CATEGORY_DEFAULT_ICON = '📁'
 
-CATEGORY_LABELS = {key: label for key, label, _ in GAME_CATEGORIES}
+
+def _game_category_icon_for(cat):
+    return GAME_CATEGORY_ICONS.get((cat or '').lower(), GAME_CATEGORY_DEFAULT_ICON)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1874,26 +1885,20 @@ class GamesPage(QWidget):
         switcher_widget.setFixedHeight(46)
         root.addWidget(switcher_widget)
 
-        # Category filter row
-        cat_row = QHBoxLayout()
-        cat_row.setContentsMargins(28, 14, 28, 10)
-        cat_row.setSpacing(10)
-        filter_label = QLabel("FILTER BY:")
-        filter_label.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-        filter_label.setStyleSheet("color: #64748b; letter-spacing: 1px;")
-        cat_row.addWidget(filter_label)
+        # Category filter row — pillslar set_games()'da, config.json'dagi
+        # o'yinlarda haqiqatda uchraydigan category qiymatlaridan dinamik
+        # quriladi (pastdagi _rebuild_category_filters).
+        self.cat_row = QHBoxLayout()
+        self.cat_row.setContentsMargins(28, 14, 28, 10)
+        self.cat_row.setSpacing(10)
+        self.filter_label = QLabel("FILTER BY:")
+        self.filter_label.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        self.filter_label.setStyleSheet("color: #64748b; letter-spacing: 1px;")
+        self.cat_row.addWidget(self.filter_label)
         self.cat_buttons = {}
-        for key, label, icon in GAME_CATEGORIES:
-            btn = QPushButton(f"{icon}  {label}")
-            btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setFixedHeight(34)
-            btn.clicked.connect(lambda _, k=key: self._select_category(k))
-            cat_row.addWidget(btn)
-            self.cat_buttons[key] = btn
-        cat_row.addStretch(1)
+        self._rebuild_category_filters([])
         cat_row_widget = QWidget()
-        cat_row_widget.setLayout(cat_row)
+        cat_row_widget.setLayout(self.cat_row)
         cat_row_widget.setFixedHeight(58)
         root.addWidget(cat_row_widget)
 
@@ -1926,7 +1931,47 @@ class GamesPage(QWidget):
 
     def set_games(self, games):
         self._all_games = games
+        # O'yinlarda haqiqatda uchraydigan kategoriyalarni (birinchi
+        # ko'rinish tartibida, takrorlanmasdan) yig'ib, filter
+        # pillslarini shularga moslab qayta quramiz.
+        seen = set()
+        categories = []
+        for g in games:
+            cat = (g.get('category') or '').strip()
+            if cat and cat.lower() not in seen:
+                seen.add(cat.lower())
+                categories.append(cat)
+        self._rebuild_category_filters(categories)
+        if self._active_category != "all" and self._active_category.lower() not in seen:
+            self._active_category = "all"
         self._refresh_grid()
+
+    def _rebuild_category_filters(self, categories):
+        while self.cat_row.count() > 1:  # 0-indeks — "FILTER BY:" yorlig'i
+            item = self.cat_row.takeAt(1)
+            if item.widget():
+                item.widget().setParent(None)
+        self.cat_buttons = {}
+
+        all_btn = QPushButton("🌐  BARCHASI")
+        all_btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        all_btn.setFixedHeight(34)
+        all_btn.clicked.connect(lambda: self._select_category("all"))
+        self.cat_row.addWidget(all_btn)
+        self.cat_buttons["all"] = all_btn
+
+        for cat in categories:
+            btn = QPushButton(f"{_game_category_icon_for(cat)}  {cat.upper()}")
+            btn.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFixedHeight(34)
+            btn.clicked.connect(lambda _, k=cat: self._select_category(k))
+            self.cat_row.addWidget(btn)
+            self.cat_buttons[cat] = btn
+
+        self.cat_row.addStretch(1)
+        self._apply_category_styles()
 
     def _select_category(self, key):
         self._active_category = key
@@ -2645,13 +2690,26 @@ if IS_WINDOWS:
     kernel32.GetModuleHandleW.argtypes = [ctypes.c_wchar_p]
 
     hook_id = None; is_hook_enabled = False
+    WM_KEYDOWN = 0x0100; WM_SYSKEYDOWN = 0x0104
 
     def low_level_keyboard_proc(nCode, wParam, lParam):
-        global is_hook_enabled
+        global is_hook_enabled, SHOW_LAUNCHER_REQUESTED
         if nCode >= 0 and is_hook_enabled:
             kb = lParam.contents; vk = kb.vkCode; alt = (kb.flags & 0x20) != 0
             if (alt and vk == VK_TAB) or (vk in (VK_LWIN, VK_RWIN)) or \
                (alt and vk == VK_F4) or (alt and vk == VK_ESCAPE):
+                return 1
+            # F9 uchun IKKINCHI, mustaqil aniqlash yo'li — pastdagi
+            # RegisterHotKey (WM_HOTKEY) ba'zi eski, eksklyuziv
+            # to'liq ekran (DirectInput) o'yinlarda (masalan Prince of
+            # Persia, Pro Evolution Soccer) klaviaturani o'zi
+            # "yutib" yuborib, WM_HOTKEY xabarini hech qachon
+            # yetkazmasligi mumkin edi — shu sababli F9 vaqti-vaqti
+            # bilan ishlamay qolar edi. Past darajali hook esa
+            # o'yindan OLDINROQ, xom (raw) darajada ishlaydi, shuning
+            # uchun ancha ishonchli.
+            if vk == VK_F9 and wParam in (WM_KEYDOWN, WM_SYSKEYDOWN):
+                SHOW_LAUNCHER_REQUESTED = True
                 return 1
         return user32.CallNextHookEx(hook_id, nCode, wParam, lParam)
     pointer_proc = HOOKPROC(low_level_keyboard_proc)

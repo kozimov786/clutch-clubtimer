@@ -352,7 +352,19 @@ const SETTINGS_SUB_TABS = ['tariffs', 'analytics', 'auditlog', 'sessions'];
 
 function toggleSettingsMenu(event) {
   event.stopPropagation();
-  document.getElementById('settings-dropdown-panel')?.classList.toggle('hidden');
+  const panel = document.getElementById('settings-dropdown-panel');
+  const btn = document.getElementById('settings-nav-btn');
+  if (!panel || !btn) return;
+  const willShow = panel.classList.contains('hidden');
+  if (willShow) {
+    // position:fixed bo'lgani uchun joylashuvi tugma ekrandagi joyiga
+    // qarab har safar hisoblanadi (nav skroll qilingan/o'zgargan bo'lsa
+    // ham to'g'ri joyda chiqishi uchun).
+    const rect = btn.getBoundingClientRect();
+    panel.style.top = (rect.bottom + 8) + 'px';
+    panel.style.left = rect.left + 'px';
+  }
+  panel.classList.toggle('hidden', !willShow);
 }
 
 document.addEventListener('click', (e) => {

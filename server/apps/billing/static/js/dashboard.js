@@ -770,7 +770,7 @@ async function confirmStartSession() {
       fetchComputers();
       fetchSessions();
     } else {
-      alert("Seansni boshlashda xatolik!");
+      alert(t('alert.start_session_err'));
     }
   } catch (err) {
     console.error("Error starting session:", err);
@@ -805,7 +805,7 @@ async function confirmAddTime(mins) {
       fetchComputers();
       fetchSessions();
     } else {
-      alert("Vaqt qo'shishda xatolik!");
+      alert(t('alert.add_time_err'));
     }
   } catch (err) {
     console.error("Error adding time:", err);
@@ -840,7 +840,7 @@ async function openFinishSessionModal(pcId) {
   try {
     const res = await fetch(`/api/computers/${pcId}/finish_summary/`);
     if (!res.ok) {
-      alert("Seans chek ma'lumotlarini olishda xatolik!");
+      alert(t('alert.finish_summary_err'));
       closeFinishSessionModal();
       return;
     }
@@ -887,7 +887,7 @@ async function openFinishSessionModal(pcId) {
     footer.classList.remove('hidden');
   } catch (err) {
     console.error("Error fetching finish summary:", err);
-    alert("Chek ma'lumotlarini yuklashda xatolik yuz berdi!");
+    alert(t('alert.finish_load_err'));
     closeFinishSessionModal();
   }
 }
@@ -1011,7 +1011,7 @@ async function confirmFinishSession() {
       fetchAnalytics();
       fetchFinanceData();
     } else {
-      alert("Seansni tugatishda va to'lovni qabul qilishda xatolik!");
+      alert(t('alert.finish_session_err'));
       if (submitBtn) {
         submitBtn.disabled = false;
         submitBtn.innerText = "TO'LOVNI QABUL QILISH VA YOPISH";
@@ -1019,7 +1019,7 @@ async function confirmFinishSession() {
     }
   } catch (err) {
     console.error("Error confirming finish session:", err);
-    alert("To'lovni yopishda xatolik yuz berdi!");
+    alert(t('alert.payment_close_err'));
     if (submitBtn) {
       submitBtn.disabled = false;
       submitBtn.innerText = "TO'LOVNI QABUL QILISH VA YOPISH";
@@ -1028,7 +1028,7 @@ async function confirmFinishSession() {
 }
 
 async function emergencyLockAll() {
-  if (!confirm("DIQQAT: Favqulodda bloklash BARCHA kompyuterlarni darhol bloklaydi. Davom etasizmi?")) return;
+  if (!confirm(t('confirm.emergency_lock_all'))) return;
 
   try {
     const res = await fetch(`/api/computers/emergency_lock_all/`, {
@@ -1040,7 +1040,7 @@ async function emergencyLockAll() {
       fetchComputers();
       fetchSessions();
     } else {
-      alert("Emergency lock error!");
+      alert(t('alert.emergency_lock_err'));
     }
   } catch (err) {
     console.error("Error in emergency lock:", err);
@@ -1048,7 +1048,7 @@ async function emergencyLockAll() {
 }
 
 async function shutdownAllPcs() {
-  if (!confirm("DIQQAT: Bu BARCHA kompyuterlarni butunlay o'chiradi (Windows shutdown). Davom etasizmi?")) return;
+  if (!confirm(t('confirm.shutdown_all'))) return;
 
   try {
     const res = await fetch(`/api/computers/shutdown_all_pcs/`, {
@@ -1058,7 +1058,7 @@ async function shutdownAllPcs() {
     if (res.ok) {
       playSound('alert');
     } else {
-      alert("Kompyuterlarni o'chirishda xatolik!");
+      alert(t('alert.shutdown_all_err'));
     }
   } catch (err) {
     console.error("Error in shutdown all:", err);
@@ -1072,7 +1072,7 @@ async function remoteShutdownPc(pcId, pcName) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     });
-    if (!res.ok) alert("Kompyuterni o'chirishda xatolik!");
+    if (!res.ok) alert(t('alert.shutdown_pc_err'));
   } catch (err) {
     console.error("Error in remote shutdown:", err);
   }
@@ -1085,7 +1085,7 @@ async function forceCloseApp(pcId, pcName) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     });
-    if (!res.ok) alert("Dasturni yopishda xatolik!");
+    if (!res.ok) alert(t('alert.force_close_err'));
   } catch (err) {
     console.error("Error in force close app:", err);
   }
@@ -1339,7 +1339,7 @@ async function deliverOrder(orderId) {
 }
 
 async function cancelOrder(orderId) {
-  if (!confirm("Haqiqatan ham ushbu buyurtmani bekor qilmoqchimisiz?")) return;
+  if (!confirm(t('confirm.cancel_order'))) return;
   try {
     const res = await fetch(`/api/orders/${orderId}/cancel/`, { method: 'POST' });
     if (res.ok) {
@@ -1692,14 +1692,14 @@ async function handleSpisaniyeSubmit(e) {
       productsCacheHTML();
       fetchAnalytics();
       fetchFinanceData();
-      alert("Spisaniye muvaffaqiyatli bajarildi va Chiqim jurnaliga yozildi!");
+      alert(t('alert.spisaniye_ok'));
     } else {
       const errData = await res.json();
       alert(errData.error || "Spisaniye xatoligi!");
     }
   } catch (err) {
     console.error("Spisaniye error:", err);
-    alert("Spisaniyeda xatolik yuz berdi!");
+    alert(t('alert.spisaniye_err'));
   } finally {
     if (submitBtn) {
       submitBtn.disabled = false;
@@ -1734,12 +1734,12 @@ async function productsCacheHTML() {
         </div>
         <div class="flex items-center gap-1">
           <span class="px-1.5 py-0.5 rounded font-mono text-[10px] ${p.stock < 5 ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-slate-900 text-slate-300'}">
-            ${p.stock} ta
+            ${p.stock} ${t('unit.pcs')}
           </span>
-          <button onclick="addToPOSCart(${p.id})" class="px-2 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 font-bold text-[10px]" title="Savatga qo'shish">
-            + Sabat
+          <button onclick="addToPOSCart(${p.id})" class="px-2 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 font-bold text-[10px]" title="${t('bar.add_to_cart')}">
+            + ${t('bar.cart_short')}
           </button>
-          <button onclick="openSpisaniyeModal(${p.id})" class="px-1.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 font-bold text-[10px]" title="Spisaniye (Ichki rasxod)">
+          <button onclick="openSpisaniyeModal(${p.id})" class="px-1.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 font-bold text-[10px]" title="${t('bar.writeoff')}">
             🗑️
           </button>
         </div>
@@ -2044,7 +2044,7 @@ async function handleCreateExpense(e) {
   const description = descInput.value.trim();
 
   if (amount <= 0) {
-    alert("Iltimos, musbat summa kiriting!");
+    alert(t('alert.positive_amount'));
     return;
   }
 
@@ -2074,7 +2074,7 @@ async function handleCreateExpense(e) {
     } else {
       const errData = await res.json().catch(() => ({}));
       console.error("Create expense error response:", errData);
-      alert("Chiqimni saqlashda xatolik yuz berdi!");
+      alert(t('alert.expense_save_err'));
     }
   } catch (err) {
     console.error("Create expense error:", err);
@@ -2082,7 +2082,7 @@ async function handleCreateExpense(e) {
 }
 
 async function handleDeleteExpense(id) {
-  if (!confirm("Ushbu chiqim yozuvini o'chirmoqchimisiz?")) return;
+  if (!confirm(t('confirm.delete_expense'))) return;
 
   try {
     const res = await fetch(`/api/expenses/${id}/`, {
@@ -2241,14 +2241,14 @@ async function handleRestockSubmit(e) {
 
   if (currentRestockMode === 'new' || selectVal === '__NEW__') {
     if (!newNameInputVal) {
-      alert("Iltimos, yangi mahsulot nomini kiriting!");
+      alert(t('alert.enter_product_name'));
       document.getElementById('restock-new-product-name')?.focus();
       return;
     }
     productName = newNameInputVal;
   } else {
     if (!selectVal) {
-      alert("Iltimos, ro'yxatdan mahsulotni tanlang yoki '+ Yangi Mahsulot' tugmasini bosing!");
+      alert(t('alert.select_or_new_product'));
       return;
     }
     productId = selectVal;
@@ -2297,7 +2297,7 @@ async function handleRestockSubmit(e) {
     }
   } catch (err) {
     console.error("Restock submit error:", err);
-    alert("Kirimni saqlashda xatolik yuz berdi!");
+    alert(t('alert.restock_save_err'));
   } finally {
     if (submitBtn) {
       submitBtn.disabled = false;

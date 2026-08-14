@@ -1057,6 +1057,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
         order = Order.objects.create(
             computer=computer,
+            customer=balance_session.customer if balance_session else None,
             client_order_id=client_order_id,
             total_price=total_price,
             cash_amount=cash_amt,
@@ -1146,10 +1147,33 @@ class OrderViewSet(viewsets.ModelViewSet):
                 item.product.stock += item.quantity
                 item.product.save()
 
+        # MUHIM: BALANCE bilan to'langan buyurtmada mijozning puli
+        # ALLAQACHON buyurtma yaratilgan zahoti (holatidan — PENDING/
+        # APPROVED/DELIVERED — qat'iy nazar) yechilgan bo'ladi. Avval
+        # bekor qilishda faqat ombor tiklanardi, mijozning puli esa
+        # HECH QACHON qaytarilmasdi — ya'ni mijoz pul to'lab, na
+        # mahsulot olar, na puli qaytarilar edi.
+        refunded = False
+        if order.payment_method == 'BALANCE' and order.customer_id and order.status != 'CANCELLED':
+            refund_amount = float(order.total_price)
+            if refund_amount > 0:
+                Customer.objects.filter(pk=order.customer_id).update(balance=F('balance') + refund_amount)
+                customer = Customer.objects.get(pk=order.customer_id)
+                CustomerTransaction.objects.create(
+                    customer=customer, type='ADJUST', amount=refund_amount, balance_after=customer.balance,
+                    note=f"Bekor qilingan buyurtma #{order.id} uchun balans qaytarildi",
+                    created_by=request.user if request.user.is_authenticated else None
+                )
+                refunded = True
+
         order.status = 'CANCELLED'
         order.save()
 
-        _log_action(request, 'ORDER_CANCELLED', f"Buyurtma #{order.id} bekor qilindi ({order.total_price:,.0f} UZS)")
+        _log_action(
+            request, 'ORDER_CANCELLED',
+            f"Buyurtma #{order.id} bekor qilindi ({order.total_price:,.0f} UZS)"
+            + (" — mijoz balansiga qaytarildi" if refunded else "")
+        )
 
         serializer = self.get_serializer(order)
         notify_bar_order_change({

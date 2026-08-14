@@ -1833,7 +1833,7 @@ function renderKassaLedger(data) {
 
   const ledger = data.ledger || [];
   if (ledger.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-xs text-slate-500">Ushbu davrda kassa harakati mavjud emas</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-xs text-slate-500">${t('finance.no_ledger_activity')}</td></tr>`;
     return;
   }
 
@@ -1939,7 +1939,7 @@ function renderFinanceDashboard(data) {
 
   if (salesTbody) {
     if (recentSales.length === 0) {
-      salesTbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-xs text-slate-500">Ushbu davrda savdolar mavjud emas</td></tr>`;
+      salesTbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-xs text-slate-500">${t('finance.no_sales_period')}</td></tr>`;
     } else {
       salesTbody.innerHTML = recentSales.map(s => {
         const pmColors = {
@@ -1950,17 +1950,21 @@ function renderFinanceDashboard(data) {
           FREE: 'bg-pink-500/20 text-pink-300 border-pink-500/30',
         };
         const pmClass = pmColors[s.payment_method] || pmColors.SPLIT;
-        const pmBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold border ${pmClass}">${s.payment_method_display || s.payment_method}</span>`;
+        // s.payment_method_display serverdan (doim o'zbekcha) keladi —
+        // til almashtirilganda mos kelishi uchun bu yerda ATAYLAB
+        // ishlatilmaydi, klient tilidagi pm.* kalit ishlatiladi.
+        const pmLabel = t({ CASH: 'pm.cash', CARD: 'pm.card', SPLIT: 'pm.split_short', BALANCE: 'pm.balance', FREE: 'pm.free_short' }[s.payment_method] || 'pm.cash');
+        const pmBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold border ${pmClass}">${pmLabel}</span>`;
         const typeBadges = {
-          SESSION: `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">🎮 Seans</span>`,
-          BAR: `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">🍸 Bar</span>`,
-          TOPUP: `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">👛 To'ldirish</span>`,
+          SESSION: `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">🎮 ${t('finance.type_session')}</span>`,
+          BAR: `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">🍸 ${t('finance.type_bar')}</span>`,
+          TOPUP: `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">👛 ${t('finance.type_topup')}</span>`,
         };
         const typeBadge = typeBadges[s.type] || typeBadges.BAR;
         const balanceNote = s.payment_method === 'FREE'
-          ? `<div class="text-[9px] text-pink-400 font-semibold mt-0.5">Bepul (Comp) — kassaga yangi pul qo'shilmaydi</div>`
+          ? `<div class="text-[9px] text-pink-400 font-semibold mt-0.5">${t('finance.note_free')}</div>`
           : s.from_balance
-            ? `<div class="text-[9px] text-indigo-400 font-semibold mt-0.5">Balansdan — kassaga yangi pul qo'shilmaydi</div>`
+            ? `<div class="text-[9px] text-indigo-400 font-semibold mt-0.5">${t('finance.note_balance')}</div>`
             : '';
 
         return `
@@ -1985,11 +1989,11 @@ function renderFinanceDashboard(data) {
   const expTbody = document.getElementById('expenses-table-body');
   const expenses = data.expenses || [];
 
-  if (countBadge) countBadge.textContent = `${expenses.length} ta chiqim`;
+  if (countBadge) countBadge.textContent = `${expenses.length} ${t('finance.expenses_count')}`;
 
   if (expTbody) {
     if (expenses.length === 0) {
-      expTbody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-xs text-slate-500">Ushbu davrda chiqimlar mavjud emas</td></tr>`;
+      expTbody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-xs text-slate-500">${t('finance.no_expenses_period')}</td></tr>`;
     } else {
       expTbody.innerHTML = expenses.map(e => {
         const formattedDate = new Date(e.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
@@ -1999,18 +2003,19 @@ function renderFinanceDashboard(data) {
           FREE: 'bg-pink-500/20 text-pink-300 border-pink-500/30',
         };
         const expPmClass = expPmColors[e.payment_method] || expPmColors.CARD;
+        const expPmLabel = t({ CASH: 'pm.cash', CARD: 'pm.card', FREE: 'pm.free_short' }[e.payment_method] || 'pm.cash');
         return `
           <tr class="border-b border-slate-800/60 hover:bg-slate-900/50 transition-all text-xs">
             <td class="py-2.5 px-2.5 font-mono text-slate-400 whitespace-nowrap">${formattedDate}</td>
             <td class="py-2.5 px-2.5 whitespace-nowrap">
-              <div class="font-bold text-cyan-300 text-xs">${e.category || 'Boshqa'}</div>
+              <div class="font-bold text-cyan-300 text-xs">${e.category || t('expense_cat.other')}</div>
               <div class="text-[10px] text-slate-400">${e.recipient_name || '-'}</div>
             </td>
             <td class="py-2.5 px-2.5 whitespace-nowrap">
               <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${expPmClass}">
-                ${e.payment_method_display || e.payment_method}
+                ${expPmLabel}
               </span>
-              ${e.payment_method === 'FREE' ? `<div class="text-[9px] text-pink-400 font-semibold mt-0.5">Kassadan pul chiqmagan</div>` : ''}
+              ${e.payment_method === 'FREE' ? `<div class="text-[9px] text-pink-400 font-semibold mt-0.5">${t('finance.note_no_cash_out')}</div>` : ''}
             </td>
             <td class="py-2.5 px-2.5 font-bold text-rose-400 font-orbitron whitespace-nowrap">-${formatMoney(Math.abs(parseFloat(e.amount || 0)))}</td>
             <td class="py-2.5 px-2.5 text-slate-400 max-w-[150px] truncate" title="${e.description || ''}">${e.description || '-'}</td>
@@ -2382,7 +2387,7 @@ async function fetchCustomers() {
 function renderCustomers(customers) {
   const tbody = document.getElementById('customers-table-body');
   if (!customers.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-xs text-slate-500">Mijozlar topilmadi</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-xs text-slate-500">${t('customers.not_found')}</td></tr>`;
     return;
   }
   tbody.innerHTML = customers.map(c => `
@@ -2390,11 +2395,11 @@ function renderCustomers(customers) {
       <td class="py-2.5 px-2.5 font-bold text-white">${c.full_name}</td>
       <td class="py-2.5 px-2.5 font-mono text-slate-300">${c.phone}</td>
       <td class="py-2.5 px-2.5 font-mono font-bold text-emerald-400">${formatMoney(c.balance)}</td>
-      <td class="py-2.5 px-2.5 font-mono text-amber-400">${c.bonus_points} ball</td>
+      <td class="py-2.5 px-2.5 font-mono text-amber-400">${c.bonus_points} ${t('unit.points')}</td>
       <td class="py-2.5 px-2.5 font-mono text-slate-300">${formatMoney(c.total_spent)}</td>
       <td class="py-2.5 px-2.5 font-mono text-slate-400">${c.session_count}</td>
       <td class="py-2.5 px-2.5 text-right">
-        <button onclick="openCustomerModal(${c.id})" class="px-2.5 py-1 rounded-lg bg-pink-600/20 hover:bg-pink-600/30 border border-pink-500/40 text-pink-400 text-xs font-bold transition-all">Ochish</button>
+        <button onclick="openCustomerModal(${c.id})" class="px-2.5 py-1 rounded-lg bg-pink-600/20 hover:bg-pink-600/30 border border-pink-500/40 text-pink-400 text-xs font-bold transition-all">${t('customers.open')}</button>
       </td>
     </tr>
   `).join('');
@@ -2407,7 +2412,7 @@ async function openCustomerModal(customerId) {
   const balanceSection = document.getElementById('customer-balance-section');
 
   if (customerId) {
-    document.getElementById('customer-modal-title').textContent = 'Mijozni tahrirlash';
+    document.getElementById('customer-modal-title').textContent = t('customers.edit_title');
     balanceSection.classList.remove('hidden');
     try {
       const res = await fetch(`/api/customers/${customerId}/`);
@@ -2422,7 +2427,7 @@ async function openCustomerModal(customerId) {
     } catch (err) { console.error(err); }
     loadCustomerTransactions(customerId);
   } else {
-    document.getElementById('customer-modal-title').textContent = 'Yangi mijoz';
+    document.getElementById('customer-modal-title').textContent = t('customers.new_customer');
     balanceSection.classList.add('hidden');
     document.getElementById('customer-name-input').value = '';
     document.getElementById('customer-phone-input').value = '';
@@ -2445,7 +2450,7 @@ async function saveCustomer() {
   const notes = document.getElementById('customer-notes-input').value.trim();
 
   if (!fullName || !phone) {
-    errEl.textContent = "Ism va telefon raqamini kiriting!";
+    errEl.textContent = t('customers.err_name_phone');
     errEl.classList.remove('hidden');
     return;
   }
@@ -2462,29 +2467,29 @@ async function saveCustomer() {
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      errEl.textContent = data.phone ? "Bu telefon raqami allaqachon ro'yxatdan o'tgan!" : "Xato yuz berdi, qayta urinib ko'ring.";
+      errEl.textContent = data.phone ? t('customers.err_phone_exists') : t('customers.err_generic');
       errEl.classList.remove('hidden');
       return;
     }
     closeCustomerModal();
     fetchCustomers();
   } catch (err) {
-    errEl.textContent = "Tarmoq xatosi.";
+    errEl.textContent = t('customers.err_network');
     errEl.classList.remove('hidden');
   }
 }
 
 async function resetCustomerPassword() {
   if (!activeCustomerId) return;
-  if (!confirm("Bu mijozning kiosk paroli tozalanadi — keyingi safar kirganda yangi parol o'rnatishi kerak bo'ladi. Davom etilsinmi?")) return;
+  if (!confirm(t('customers.confirm_reset_pw'))) return;
   try {
     const res = await fetch(`/api/customers/${activeCustomerId}/reset_password/`, { method: 'POST' });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      alert(data.error || "Xato yuz berdi");
+      alert(data.error || t('customers.err_generic'));
       return;
     }
-    alert("Parol tozalandi. Mijoz keyingi safar kiosk'da kirganda yangi parol o'rnatadi.");
+    alert(t('customers.pw_reset_ok'));
   } catch (err) {
     console.error(err);
   }
@@ -2503,7 +2508,7 @@ async function customerBalanceOp(action) {
   const amountInput = document.getElementById('customer-tx-amount');
   const amount = parseFloat(amountInput.value);
   if (!amount || amount <= 0) {
-    alert("Summani to'g'ri kiriting!");
+    alert(t('customers.err_amount'));
     return;
   }
   const body = { amount };
@@ -2518,7 +2523,7 @@ async function customerBalanceOp(action) {
     });
     const data = await res.json();
     if (!res.ok) {
-      alert(data.error || "Xato yuz berdi");
+      alert(data.error || t('customers.err_generic'));
       return;
     }
     document.getElementById('customer-modal-balance').textContent = formatMoney(data.balance);
@@ -2577,13 +2582,13 @@ async function fetchAuditLog() {
 function renderAuditLog(logs) {
   const tbody = document.getElementById('auditlog-table-body');
   if (!logs.length) {
-    tbody.innerHTML = `<tr><td colspan="4" class="py-6 text-center text-xs text-slate-500">Hali yozuvlar yo'q</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" class="py-6 text-center text-xs text-slate-500">${t('auditlog.no_records')}</td></tr>`;
     return;
   }
   tbody.innerHTML = logs.map(l => `
     <tr class="border-b border-slate-800 hover:bg-slate-900/50 transition-colors whitespace-nowrap text-xs">
       <td class="py-2.5 px-2.5 text-slate-400 font-mono">${new Date(l.created_at).toLocaleString('uz-UZ')}</td>
-      <td class="py-2.5 px-2.5 font-bold text-cyan-400">${l.username || 'tizim'}</td>
+      <td class="py-2.5 px-2.5 font-bold text-cyan-400">${l.username || t('auditlog.system')}</td>
       <td class="py-2.5 px-2.5"><span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-semibold">${l.action_display}</span></td>
       <td class="py-2.5 px-2.5 text-slate-300 whitespace-normal">${l.description}</td>
     </tr>

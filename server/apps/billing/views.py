@@ -112,7 +112,16 @@ def _normalize_phone_core(phone):
     return digits
 
 
-KIOSK_SESSION_TOKEN_TTL_SECONDS = 600  # 10 daqiqa
+KIOSK_SESSION_TOKEN_TTL_SECONDS = 24 * 60 * 60  # 24 soat
+# Avval 600 (10 daqiqa) edi — bu Open Time (balans) seanslar bilan mos
+# kelmasdi: mijoz 10 daqiqadan ko'proq o'ynasa, token cache'dan o'chib
+# ketib, "Kabinet"dagi "Vaqtni to'xtatish" (customer_stop_session) 401
+# "Sessiya tugagan" xatosi bilan jimgina ishlamay qolar edi — garchi
+# pastda haqiqiy Session hali ham faol va balance_worker.py orqali pul
+# yechilayotgan bo'lsa ham. Token o'zi 24 baytli tasodifiy tayinlanadi
+# (taxmin qilib bo'lmaydi), shuning uchun muddatni uzaytirish xavfsizlikka
+# ta'sir qilmaydi — faqat token ISHLATILGANDA (pastdagi
+# _resolve_kiosk_session_customer) muddati yana yangilanib turadi.
 
 def _create_kiosk_session_token(customer_id):
     """kiosk_login muvaffaqiyatli bo'lgach chaqiriladi — mijoz ID'sini
@@ -130,12 +139,18 @@ def _resolve_kiosk_session_customer(request):
     token = request.data.get('session_token')
     if not token:
         return None, Response({'error': "Avval tizimga kiring."}, status=status.HTTP_401_UNAUTHORIZED)
-    customer_id = cache.get(f"kiosk_session:{token}")
+    cache_key = f"kiosk_session:{token}"
+    customer_id = cache.get(cache_key)
     if not customer_id:
         return None, Response({'error': "Sessiya tugagan, qayta kiring."}, status=status.HTTP_401_UNAUTHORIZED)
     customer = Customer.objects.filter(id=customer_id).first()
     if not customer:
         return None, Response({'error': "Mijoz topilmadi."}, status=status.HTTP_400_BAD_REQUEST)
+    # Sirg'anuvchi (sliding) muddat: har ishlatilganda token yana
+    # to'liq 24 soatga uzaytiriladi — faol mijoz hech qachon "sessiya
+    # tugadi" xatosiga duch kelmaydi, faqat haqiqatda uzoq vaqt
+    # ishlatilmagan token o'z-o'zidan eskiradi.
+    cache.set(cache_key, customer_id, timeout=KIOSK_SESSION_TOKEN_TTL_SECONDS)
     return customer, None
 
 

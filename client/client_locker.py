@@ -2727,10 +2727,15 @@ class MainWindow(FullscreenMixin, QMainWindow):
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  KEYBOARD HOOK (Windows) — LOCKED holatda Alt+Tab/Win/Alt+F4/Alt+Esc bloklaydi.
-#  Global hotkeylar (favqulodda chiqish, F9) ESA endi past darajali hook orqali
-#  emas, balki Windows'ning shu maqsad uchun MO'LJALLANGAN RegisterHotKey()
-#  API'si orqali aniqlanadi — GetAsyncKeyState + 250ms polling'ga qaraganda
-#  ancha ishonchli va kechikishsiz (WM_HOTKEY xabari darhol yetkaziladi).
+#  Favqulodda chiqish kombinatsiyalari (Ctrl+Alt+Shift+U, Ctrl+Shift+P) —
+#  Windows'ning RegisterHotKey() API'si orqali aniqlanadi (WM_HOTKEY xabari
+#  darhol yetkaziladi, kechikishsiz).
+#  F9 va Ctrl+F9 (launcherni ko'rsatish) ESA — shu past darajali hook orqali
+#  aniqlanadi (RegisterHotKey EMAS): eksklyuziv to'liq ekranli o'yinlarda
+#  RegisterHotKey'ning WM_HOTKEY xabari ba'zan yetib bormaydi, past darajali
+#  hook esa o'yindan OLDINROQ, xom darajada ishlagani uchun ancha ishonchli.
+#  RegisterHotKey orqali ham F9/Ctrl+F9 ro'yxatga olinadi — bu faqat
+#  qo'shimcha zaxira (agar hook biror sababdan o'rnatilmay qolsa).
 # ──────────────────────────────────────────────────────────────────────────────
 IS_WINDOWS = platform.system() == 'Windows'
 
@@ -2747,9 +2752,7 @@ if IS_WINDOWS:
     kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
     WH_KEYBOARD_LL = 13
     VK_TAB = 0x09; VK_LWIN = 0x5B; VK_RWIN = 0x5C; VK_F4 = 0x73; VK_ESCAPE = 0x1B
-    VK_U = 0x55; VK_F9 = 0x78; VK_P = 0x50; VK_CONTROL = 0x11
-    user32.GetAsyncKeyState.restype = ctypes.c_short
-    user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
+    VK_U = 0x55; VK_F9 = 0x78; VK_P = 0x50
 
     class KBDLLHOOKSTRUCT(ctypes.Structure):
         _fields_ = [
@@ -2791,27 +2794,28 @@ if IS_WINDOWS:
             if (alt and vk == VK_TAB) or (vk in (VK_LWIN, VK_RWIN)) or \
                (alt and vk == VK_F4) or (alt and vk == VK_ESCAPE):
                 return 1
-            # F9 (Ctrl bosilmagan holda) — past darajali hook orqali
+            # F9 va Ctrl+F9 — IKKALASI HAM shu past darajali hook orqali
             # DARHOL aniqlanadi va yutib yuboriladi (ba'zi eski,
             # eksklyuziv to'liq ekran (DirectInput) o'yinlarda —
             # masalan Prince of Persia, Pro Evolution Soccer —
             # RegisterHotKey'ning WM_HOTKEY xabari yetib bormasligi
             # mumkin, past darajali hook esa o'yindan OLDINROQ, xom
-            # darajada ishlaydi).
+            # darajada ishlaydi — aynan shu sabab F9 uchun hook
+            # ishlatiladi).
             #
-            # MUHIM: Ctrl+F9 ATAYLAB shu yerda YUTILMAYDI (pastga —
-            # CallNextHookEx'ga — o'tkazib yuboriladi). Avval bu yerda
-            # F9 Ctrl holatidan qat'iy nazar ushlanardi — natijada
-            # Ctrl+F9 "zaxira" bo'lishi kerak bo'lsa-da, aslida XUDDI
-            # SHU kod yo'liga (va demak xuddi shu zaif tomonga) tayanib
-            # qolgan, haqiqiy mustaqil ikkinchi yo'l bo'lmagan edi.
-            # Endi Ctrl+F9 pastdagi RegisterHotKey/WM_HOTKEY orqali —
-            # butunlay boshqa, mustaqil mexanizm orqali — aniqlanadi.
+            # MUHIM (2-marta topilgan xato): avval Ctrl+F9 ATAYLAB shu
+            # yerda YUTILMAY, pastdagi RegisterHotKey/WM_HOTKEY orqali
+            # "mustaqil" ishlashi kerak edi. Lekin RegisterHotKey aynan
+            # HUDDI SHU muammoli (eksklyuziv to'liq ekran) o'yinlarda F9
+            # kabi ishonchsiz — ya'ni Ctrl+F9 "zaxira" bo'lishi kerak
+            # bo'lgan holatlarning aynan o'zida ishlamay qolardi
+            # ("ba'zida ishlab, ba'zida ishlamaydi"). Endi ikkalasi ham
+            # bir xil, isbotlangan ishonchli yo'l — shu hook — orqali
+            # ishlaydi; pastdagi RegisterHotKey ro'yxatga olish esa faqat
+            # qo'shimcha zaxira (agar hook o'rnatilmay qolsa).
             if vk == VK_F9 and wParam in (WM_KEYDOWN, WM_SYSKEYDOWN):
-                ctrl_held = bool(user32.GetAsyncKeyState(VK_CONTROL) & 0x8000)
-                if not ctrl_held:
-                    SHOW_LAUNCHER_REQUESTED = True
-                    return 1
+                SHOW_LAUNCHER_REQUESTED = True
+                return 1
         return user32.CallNextHookEx(hook_id, nCode, wParam, lParam)
     pointer_proc = HOOKPROC(low_level_keyboard_proc)
 
@@ -3316,6 +3320,7 @@ class SyncSignals(QObject):
     bar_order_updated = pyqtSignal(dict)
     remote_command = pyqtSignal(str)
     customer_session_restored = pyqtSignal(dict)
+    customer_stop_failed = pyqtSignal(str)
 
 
 class ClientLockerApp:
@@ -3327,6 +3332,7 @@ class ClientLockerApp:
         self.signals.bar_order_updated.connect(self._handle_bar_order)
         self.signals.remote_command.connect(self._handle_remote_command)
         self.signals.customer_session_restored.connect(self._apply_restored_customer_session)
+        self.signals.customer_stop_failed.connect(self._show_customer_stop_error)
         self.launched_processes = []
         self.current_status = 'LOCKED'
         self.time_remaining = 0
@@ -3857,10 +3863,26 @@ class ClientLockerApp:
     def _handle_customer_stop_request(self, session_token):
         """Mijoz "Kabinet"dan "Vaqtni to'xtatish"ni bosganda — o'zi
         balansidan ochgan seansni to'xtatishni so'raydi. Muvaffaqiyatli
-        bo'lsa, PC odatdagi status-sinxronlash orqali o'zi qulflanadi."""
+        bo'lsa, PC odatdagi status-sinxronlash orqali o'zi qulflanadi.
+        Muvaffaqiyatsiz bo'lsa (masalan sessiya tugagan bo'lsa), xato
+        avval hech qayerda ko'rsatilmasdi — tugma "shunchaki ishlamay
+        qolgandek" ko'rinardi. Endi xato albatta xabar sifatida
+        chiqariladi (on_done fon oqimida ishlaydi, shuning uchun
+        to'g'ridan-to'g'ri QMessageBox chaqirmasdan, signal orqali GUI
+        oqimiga uzatiladi)."""
         if not self.pc_id:
             return
-        self.main_window.api_client.customer_stop_session_async(self.pc_id, session_token)
+
+        def _on_done(ok, data):
+            if not ok:
+                self.signals.customer_stop_failed.emit(
+                    data.get('error', "Vaqtni to'xtatib bo'lmadi. Administratorga murojaat qiling.")
+                )
+
+        self.main_window.api_client.customer_stop_session_async(self.pc_id, session_token, on_done=_on_done)
+
+    def _show_customer_stop_error(self, message):
+        QMessageBox.warning(self.main_window, "Vaqtni to'xtatishda xatolik", message)
 
     def _tick(self):
         if self.current_status in ('ACTIVE', 'WARNING'):

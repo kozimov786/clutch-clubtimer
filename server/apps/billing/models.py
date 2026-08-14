@@ -69,6 +69,24 @@ class Computer(models.Model):
                     # so'rovlaridan (is_active=False filtri) ko'rinmay
                     # qoladi va daromadi hisobotga kirmaydi.
                     Session.objects.filter(computer=self, is_active=True).update(is_active=False, end_time=now)
+                    # Boshqa har qanday qulflash yo'li (stop_session,
+                    # emergency_lock, customer_stop_session...) WebSocket
+                    # orqali darhol xabar beradi — vaqt tabiiy tugashi esa
+                    # avval BUNDAY EMAS edi. Kiosk klienti faqat shu
+                    # broadcast orqali qulflanadi (heartbeat javobidagi
+                    # holatga ATAYLAB e'tibor bermaydi, miltillashning
+                    # oldini olish uchun), shuning uchun klient FAQAT
+                    # o'zining mahalliy soniyalik hisoblagichiga tayanib
+                    # qolar edi — agar u biror sababdan (masalan og'ir
+                    # o'yin fon oqimini bir necha soniyaga to'sib qo'ysa)
+                    # kechiksa, klient bilan server orasida qisqa vaqt
+                    # ziddiyat paydo bo'lardi.
+                    from .consumers import notify_pc_status_change
+                    from .serializers import ComputerSerializer
+                    notify_pc_status_change({
+                        'action': 'SESSION_EXPIRED',
+                        'pc': ComputerSerializer(self).data
+                    })
                     return 0
                 elif diff <= 300: # 5 minutes left -> WARNING
                     self.time_remaining = int(diff)

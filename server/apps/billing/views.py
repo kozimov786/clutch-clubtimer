@@ -469,13 +469,25 @@ class ComputerViewSet(viewsets.ModelViewSet):
         minutes = int(request.data.get('minutes', 30))
 
         now = timezone.now()
-        if pc.status == 'ACTIVE' and pc.session_end_time and pc.session_end_time > now:
+        # MUHIM: shart avval faqat status=='ACTIVE' bo'lganda vaqtni
+        # QO'SHAR edi. Agar PC 'WARNING' holatida bo'lsa (5 daqiqadan
+        # kam qoldi) — bu ham hali FAOL seans, lekin shart mos kelmagani
+        # uchun pastdagi "else" bo'limiga tushib, session_end_time'ni
+        # QO'SHISH o'rniga ALMASHTIRIB yuborardi — mijozda qolgan bir
+        # necha daqiqa jimgina yo'qolib ketardi (masalan 3 daqiqa qolgan
+        # bo'lsa-yu, "+30 daqiqa" bossa, natija 33 emas, 30 daqiqa bo'lib
+        # chiqardi), garchi active_session.total_price pastda TO'LIQ
+        # +30 daqiqalik narxni qo'shsa ham — ya'ni mijoz 33 daqiqalik
+        # pul to'lab, 30 daqiqalik vaqt olardi.
+        if pc.status in ('ACTIVE', 'WARNING') and pc.session_end_time and pc.session_end_time > now:
             pc.session_end_time += timedelta(minutes=minutes)
         else:
-            pc.status = 'ACTIVE'
             pc.session_start_time = now
             pc.session_end_time = now + timedelta(minutes=minutes)
 
+        # Vaqt qo'shilgandan keyin PC har doim ACTIVE bo'lishi kerak —
+        # WARNING holati endi mos emas (yetarli vaqt qo'shildi).
+        pc.status = 'ACTIVE'
         pc.time_remaining = int((pc.session_end_time - now).total_seconds())
         pc.is_open_time = False
         pc.save()

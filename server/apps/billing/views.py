@@ -215,10 +215,15 @@ def _split_payment(payment_method, grand_total, req_cash, req_card):
 
 
 def _deduct_stock_for_order(order):
-    """Shared by approve()/deliver()/stop_session() when a PENDING order clears."""
-    for item in order.items.all():
-        item.product.stock = max(0, item.product.stock - item.quantity)
-        item.product.save()
+    """Shared by approve()/deliver()/stop_session() when a PENDING order clears.
+    select_for_update() bilan — bu buyurtma approve+deliver kabi ikkita
+    yo'l orqali deyarli bir vaqtda (masalan xodim tugmani ikki marta
+    bossa) qayta ishlansa ham, ombor ikki marta kamaymasligi uchun."""
+    with transaction.atomic():
+        for item in order.items.select_related('product').all():
+            product = Product.objects.select_for_update().get(pk=item.product_id)
+            product.stock = max(0, product.stock - item.quantity)
+            product.save()
 
 class AdminLoginView(APIView):
     permission_classes = [AllowAny]
@@ -1105,12 +1110,18 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
-        order = self.get_object()
-        if order.status == 'PENDING':
-            _deduct_stock_for_order(order)
-
-        order.status = 'APPROVED'
-        order.save()
+        # self.get_object() qulfsiz o'qiydi — agar bir buyurtma bir necha
+        # marta (xodim ikki marta bossa yoki tarmoq qayta yuborsa) deyarli
+        # bir vaqtda approve/deliver qilinsa, ikkalasi ham "hali PENDING"
+        # deb o'qib, ombordan IKKI MARTA kamaytirib yuborishi mumkin edi.
+        # Qatorni qulflab qayta o'qish shu poyga holatini oldini oladi.
+        self.get_object()
+        with transaction.atomic():
+            order = Order.objects.select_for_update().get(pk=pk)
+            if order.status == 'PENDING':
+                _deduct_stock_for_order(order)
+            order.status = 'APPROVED'
+            order.save()
 
         _log_action(request, 'ORDER_APPROVED', f"Buyurtma #{order.id} tasdiqlandi ({order.total_price:,.0f} UZS)")
 
@@ -1123,12 +1134,13 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def deliver(self, request, pk=None):
-        order = self.get_object()
-        if order.status == 'PENDING':
-            _deduct_stock_for_order(order)
-
-        order.status = 'DELIVERED'
-        order.save()
+        self.get_object()
+        with transaction.atomic():
+            order = Order.objects.select_for_update().get(pk=pk)
+            if order.status == 'PENDING':
+                _deduct_stock_for_order(order)
+            order.status = 'DELIVERED'
+            order.save()
 
         _log_action(request, 'ORDER_DELIVERED', f"Buyurtma #{order.id} yetkazildi ({order.total_price:,.0f} UZS)")
 
@@ -1141,33 +1153,43 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):
-        order = self.get_object()
-        if order.status in ('APPROVED', 'DELIVERED'):
-            for item in order.items.all():
-                item.product.stock += item.quantity
-                item.product.save()
+        self.get_object()
+        with transaction.atomic():
+            order = Order.objects.select_for_update().get(pk=pk)
+            if order.status == 'CANCELLED':
+                # Allaqachon bekor qilingan — qayta ishlamaymiz (masalan
+                # ikki marta bosilsa/tarmoq qayta yuborsa, ombor yoki
+                # mijoz balansi IKKI MARTA tiklanib/qaytarilib ketmasin).
+                serializer = self.get_serializer(order)
+                return Response(serializer.data, status=status.HTTP_200_OK)
 
-        # MUHIM: BALANCE bilan to'langan buyurtmada mijozning puli
-        # ALLAQACHON buyurtma yaratilgan zahoti (holatidan — PENDING/
-        # APPROVED/DELIVERED — qat'iy nazar) yechilgan bo'ladi. Avval
-        # bekor qilishda faqat ombor tiklanardi, mijozning puli esa
-        # HECH QACHON qaytarilmasdi — ya'ni mijoz pul to'lab, na
-        # mahsulot olar, na puli qaytarilar edi.
-        refunded = False
-        if order.payment_method == 'BALANCE' and order.customer_id and order.status != 'CANCELLED':
-            refund_amount = float(order.total_price)
-            if refund_amount > 0:
-                Customer.objects.filter(pk=order.customer_id).update(balance=F('balance') + refund_amount)
-                customer = Customer.objects.get(pk=order.customer_id)
-                CustomerTransaction.objects.create(
-                    customer=customer, type='ADJUST', amount=refund_amount, balance_after=customer.balance,
-                    note=f"Bekor qilingan buyurtma #{order.id} uchun balans qaytarildi",
-                    created_by=request.user if request.user.is_authenticated else None
-                )
-                refunded = True
+            if order.status in ('APPROVED', 'DELIVERED'):
+                for item in order.items.select_related('product').all():
+                    product = Product.objects.select_for_update().get(pk=item.product_id)
+                    product.stock += item.quantity
+                    product.save()
 
-        order.status = 'CANCELLED'
-        order.save()
+            # MUHIM: BALANCE bilan to'langan buyurtmada mijozning puli
+            # ALLAQACHON buyurtma yaratilgan zahoti (holatidan — PENDING/
+            # APPROVED/DELIVERED — qat'iy nazar) yechilgan bo'ladi. Avval
+            # bekor qilishda faqat ombor tiklanardi, mijozning puli esa
+            # HECH QACHON qaytarilmasdi — ya'ni mijoz pul to'lab, na
+            # mahsulot olar, na puli qaytarilar edi.
+            refunded = False
+            if order.payment_method == 'BALANCE' and order.customer_id:
+                refund_amount = float(order.total_price)
+                if refund_amount > 0:
+                    Customer.objects.filter(pk=order.customer_id).update(balance=F('balance') + refund_amount)
+                    customer = Customer.objects.get(pk=order.customer_id)
+                    CustomerTransaction.objects.create(
+                        customer=customer, type='ADJUST', amount=refund_amount, balance_after=customer.balance,
+                        note=f"Bekor qilingan buyurtma #{order.id} uchun balans qaytarildi",
+                        created_by=request.user if request.user.is_authenticated else None
+                    )
+                    refunded = True
+
+            order.status = 'CANCELLED'
+            order.save()
 
         _log_action(
             request, 'ORDER_CANCELLED',

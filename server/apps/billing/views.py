@@ -5,6 +5,7 @@ import secrets
 from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
+from django.db.utils import OperationalError
 from django.http import FileResponse
 from django.utils import timezone
 from django.shortcuts import render
@@ -45,6 +46,15 @@ TOPUP_BONUS_TIERS = [
     (200_000, 50_000),
     (100_000, 20_000),
 ]
+
+
+# Tarif tayinlanmagan/topilmagan holatlar uchun YAGONA zaxira narx.
+# Avval har bir chaqiruv joyi o'zining alohida sonini ishlatardi (200,
+# 12000, 250, 0.0/bepul balance_worker.py'da) — bir xil "tarif yo'q"
+# holati qaysi endpoint orqali kelganiga qarab BUTUNLAY boshqa (yoki
+# hatto bepul!) narxga olib kelardi. Endi hammasi shu bitta doimiy
+# qiymatga tayanadi.
+FALLBACK_PRICE_PER_HOUR = 12000.0
 
 
 def _resolve_period_range(request):
@@ -162,7 +172,7 @@ def _calculate_session_duration_and_price(pc, active_session, start_time, tariff
     if pc.is_open_time and start_time:
         elapsed_seconds = max(0, (now - start_time).total_seconds())
         duration_minutes = round(elapsed_seconds / 60.0)
-        price_per_min = (tariff.get_effective_price_per_hour() / 60.0) if tariff else 200.0
+        price_per_min = (tariff.get_effective_price_per_hour() / 60.0) if tariff else (FALLBACK_PRICE_PER_HOUR / 60.0)
         time_price = round(price_per_min * duration_minutes)
     elif active_session and active_session.duration_minutes > 0:
         duration_minutes = active_session.duration_minutes
@@ -172,7 +182,7 @@ def _calculate_session_duration_and_price(pc, active_session, start_time, tariff
             duration_minutes = round(max(0, (pc.session_end_time - start_time).total_seconds()) / 60.0)
         else:
             duration_minutes = round(max(0, (now - start_time).total_seconds()) / 60.0)
-        price_per_min = (tariff.get_effective_price_per_hour() / 60.0) if tariff else 200.0
+        price_per_min = (tariff.get_effective_price_per_hour() / 60.0) if tariff else (FALLBACK_PRICE_PER_HOUR / 60.0)
         time_price = round(price_per_min * duration_minutes)
 
     return duration_minutes, time_price
@@ -185,10 +195,13 @@ def _split_payment(payment_method, grand_total, req_cash, req_card):
     elif payment_method == 'CARD':
         return 0.0, grand_total
     elif payment_method == 'SPLIT':
-        final_cash = req_cash
-        final_card = req_card
-        if abs((final_cash + final_card) - grand_total) > 0.01:
-            final_card = max(0.0, grand_total - final_cash)
+        # final_cash HAR DOIM grand_total'dan oshmasligi kerak — avval
+        # bu yerda faqat final_card qayta hisoblanardi (final_cash esa
+        # tekshirilmasdan qaytarilardi), shuning uchun req_cash xato
+        # (yoki qasddan) grand_total'dan katta yuborilsa, kassaga
+        # haqiqatda to'langan summadan ko'proq naqd pul yozilib qolardi.
+        final_cash = max(0.0, min(req_cash, grand_total))
+        final_card = max(0.0, grand_total - final_cash)
         return final_cash, final_card
     elif payment_method == 'FREE':
         # Bepul (comp) seans/buyurtma — xodim yoki egasi, do'sti va h.k.
@@ -299,7 +312,7 @@ class ComputerViewSet(viewsets.ModelViewSet):
         tariff = Tariff.objects.filter(id=tariff_id).first() if tariff_id else pc.current_tariff or Tariff.objects.first()
 
         now = timezone.now()
-        effective_price_per_hour = tariff.get_effective_price_per_hour() if tariff else 12000.0
+        effective_price_per_hour = tariff.get_effective_price_per_hour() if tariff else FALLBACK_PRICE_PER_HOUR
         price_per_minute = effective_price_per_hour / 60.0
 
         if is_open_time:
@@ -470,7 +483,7 @@ class ComputerViewSet(viewsets.ModelViewSet):
         active_session = Session.objects.filter(computer=pc, is_active=True).first()
         if active_session:
             active_session.duration_minutes += minutes
-            price_per_minute = (active_session.tariff.get_effective_price_per_hour() / 60) if active_session.tariff else 250
+            price_per_minute = (active_session.tariff.get_effective_price_per_hour() / 60) if active_session.tariff else (FALLBACK_PRICE_PER_HOUR / 60)
             active_session.total_price = float(active_session.total_price) + price_per_minute * minutes
             active_session.end_time = pc.session_end_time
             active_session.save()
@@ -924,9 +937,19 @@ class OrderViewSet(viewsets.ModelViewSet):
         is_direct_sale = request.data.get('is_direct_sale', False) or request.data.get('direct_sale', False)
         payment_method = request.data.get('payment_method', 'CASH')
         order_status = request.data.get('status', 'PENDING')
+        client_order_id = (request.data.get('client_order_id') or '').strip() or None
 
         if not items_data:
             return Response({'error': 'Buyurtmada tovarlar yo\'q!'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Idempotentlik: agar client shu client_order_id bilan buyurtmani
+        # ALLAQACHON muvaffaqiyatli yaratgan bo'lsa (masalan javob tarmoqda
+        # yo'qolib, "xatolik" deb qayta yuborgan bo'lsa), YANGI buyurtma
+        # yaratmasdan/qayta pul yechmasdan, mavjudini qaytaramiz.
+        if client_order_id:
+            existing = Order.objects.filter(client_order_id=client_order_id).first()
+            if existing:
+                return Response(self.get_serializer(existing).data, status=status.HTTP_200_OK)
 
         computer = None
         if not is_direct_sale:
@@ -938,28 +961,55 @@ class OrderViewSet(viewsets.ModelViewSet):
             if not computer:
                 return Response({'error': 'Kompyuter topilmadi!'}, status=status.HTTP_400_BAD_REQUEST)
 
-        total_price = 0
-        order_items_to_create = []
-
-        for item in items_data:
-            prod_id = item.get('product_id') or item.get('product')
-            qty = int(item.get('quantity', 1))
-            product = Product.objects.filter(id=prod_id).first()
-            if not product:
-                return Response({'error': f'Mahsulot topilmadi (ID: {prod_id})'}, status=status.HTTP_400_BAD_REQUEST)
-            if product.stock < qty:
-                return Response({'error': f'{product.name} omborda yetarli emas! (Mavjud: {product.stock})'}, status=status.HTTP_400_BAD_REQUEST)
-
-            item_price = product.price * qty
-            total_price += item_price
-            order_items_to_create.append({
-                'product': product,
-                'quantity': qty,
-                'unit_price': product.price
-            })
-
         if is_direct_sale:
             order_status = 'DELIVERED'
+
+        # transaction.atomic() + select_for_update(): bir vaqtda kelgan
+        # ikkita buyurtma bir xil mahsulotning oxirgi donasini "ikkalasi
+        # ham bor" deb o'qib, ikkalasi ham DELIVERED bo'lib qolishining
+        # (ombordan ortiqcha sotish) oldini oladi — mahsulot qatori
+        # birinchi so'rov tugagunicha qulflanadi.
+        try:
+            with transaction.atomic():
+                total_price = 0
+                order_items_to_create = []
+
+                for item in items_data:
+                    prod_id = item.get('product_id') or item.get('product')
+                    qty = int(item.get('quantity', 1))
+                    product = Product.objects.select_for_update().filter(id=prod_id).first()
+                    if not product:
+                        return Response({'error': f'Mahsulot topilmadi (ID: {prod_id})'}, status=status.HTTP_400_BAD_REQUEST)
+                    if product.stock < qty:
+                        return Response({'error': f'{product.name} omborda yetarli emas! (Mavjud: {product.stock})'}, status=status.HTTP_400_BAD_REQUEST)
+
+                    item_price = product.price * qty
+                    total_price += item_price
+                    order_items_to_create.append({
+                        'product': product,
+                        'quantity': qty,
+                        'unit_price': product.price
+                    })
+
+                return self._create_order_locked(
+                    request, computer, total_price, order_items_to_create,
+                    payment_method, order_status, client_order_id
+                )
+        except OperationalError:
+            # SQLite bir vaqtning o'zida faqat bitta yozuvchini qabul
+            # qiladi — juda kamdan-kam holatda (bir nechta buyurtma
+            # AYNAN bir soniyada tushsa) qulf kutish vaqti (settings.py:
+            # OPTIONS.timeout) tugab ketishi mumkin. Xom 500 xato sahifasi
+            # o'rniga tushunarli, qayta urinishga chaqiradigan xabar.
+            return Response(
+                {'error': "Server band, bir necha soniyadan keyin qaytadan urinib ko'ring."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+
+    def _create_order_locked(self, request, computer, total_price, order_items_to_create,
+                              payment_method, order_status, client_order_id):
+        """OrderViewSet.create()'ning transaction.atomic() bloki ichida chaqiriladi —
+        shu sababli pastdagi Product.stock yozuvlari hali ham qulflangan holda qoladi."""
 
         # Agar bu PC'da hozir mijoz o'z balansidan ochgan (BALANCE) seans
         # faol bo'lsa — bar buyurtmasi ham darhol o'sha mijozning
@@ -995,6 +1045,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
         order = Order.objects.create(
             computer=computer,
+            client_order_id=client_order_id,
             total_price=total_price,
             cash_amount=cash_amt,
             card_amount=card_amt,

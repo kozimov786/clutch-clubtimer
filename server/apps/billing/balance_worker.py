@@ -41,7 +41,19 @@ def _process_once():
             continue
 
         tariff = session.tariff or pc.current_tariff
-        price_per_minute = (tariff.get_effective_price_per_hour() / 60.0) if tariff else 0.0
+        if tariff:
+            price_per_minute = tariff.get_effective_price_per_hour() / 60.0
+        else:
+            # Tarif seans boshlangandan keyin o'chirilgan/ajratilmagan
+            # bo'lishi mumkin (customer_start_session yangi seans
+            # boshlashda tarifsiz ruxsat bermaydi, lekin mavjud seansning
+            # tarifi keyinchalik o'chirilishi mumkin). Avval bunday holatda
+            # hisoblash butunlay o'tkazib yuborilar edi — mijoz cheksiz
+            # bepul o'ynardi. Boshqa hamma joydagi bitta umumiy zaxira
+            # narxga tayaniladi, shunda hech bo'lmasa noto'g'ri (0) emas,
+            # oqilona narx bo'yicha hisoblanadi.
+            from .views import FALLBACK_PRICE_PER_HOUR
+            price_per_minute = FALLBACK_PRICE_PER_HOUR / 60.0
         if price_per_minute <= 0:
             continue
 

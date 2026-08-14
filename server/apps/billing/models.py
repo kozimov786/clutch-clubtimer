@@ -61,6 +61,14 @@ class Computer(models.Model):
                     self.session_start_time = None
                     self.session_end_time = None
                     self.save(update_fields=['status', 'time_remaining', 'is_open_time', 'session_start_time', 'session_end_time'])
+                    # Computer LOCKED'ga o'tganda uning Session yozuvi ham
+                    # is_active=False qilinishi SHART — aks holda Computer
+                    # va Session bir-biriga zid holatda qolib (Computer:
+                    # seans tugadi, Session: hali faol), o'sha seans
+                    # keyingi start_session bosilguncha Kassa/tarix
+                    # so'rovlaridan (is_active=False filtri) ko'rinmay
+                    # qoladi va daromadi hisobotga kirmaydi.
+                    Session.objects.filter(computer=self, is_active=True).update(is_active=False, end_time=now)
                     return 0
                 elif diff <= 300: # 5 minutes left -> WARNING
                     self.time_remaining = int(diff)
@@ -236,6 +244,13 @@ class Order(models.Model):
 
     computer = models.ForeignKey(Computer, on_delete=models.CASCADE, related_name='bar_orders', null=True, blank=True)
     customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
+    # Client tomonidan har bir "buyurtma berish" bosilganda BIR MARTA
+    # generatsiya qilinadigan tasodifiy ID (masalan UUID) — tarmoq
+    # uzilib, javob yo'qolganda client XUDDI SHU ID bilan qayta
+    # yuborsa, OrderViewSet.create takroriy buyurtma/ikki marta pul
+    # yechishning oldini olish uchun shu ID bo'yicha mavjud buyurtmani
+    # topib qaytaradi, YANGISINI yaratmaydi.
+    client_order_id = models.CharField(max_length=64, null=True, blank=True, unique=True)
     total_price = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     cash_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     card_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)

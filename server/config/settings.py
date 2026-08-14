@@ -75,6 +75,15 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+        # SQLite bir vaqtning o'zida faqat BITTA yozuvchi ulanishga
+        # ruxsat beradi. select_for_update() bilan qulflangan yozuvlar
+        # (masalan bir xil mahsulotga bir vaqtda kelgan bir nechta bar
+        # buyurtmasi) uchun standart kutish vaqti juda qisqa bo'lsa,
+        # ikkinchi so'rov toza xato (masalan "omborda yetarli emas")
+        # o'rniga "database is locked" bilan yiqilib tushadi. Bu yerda
+        # 20 soniyagacha kutishga ruxsat berilyapti — real hayotda
+        # bunday to'qnashuv juda qisqa (millisekundlar) davom etadi.
+        'OPTIONS': {'timeout': 20},
     }
 }
 

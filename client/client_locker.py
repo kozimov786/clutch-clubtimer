@@ -11,6 +11,7 @@ render xatosi bor edi; sof Qt widgetlar esa har doim to'g'ri ishlagan.
 import sys
 import os
 import ctypes
+import uuid
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  1. DPI AWARENESS (QApplication yaratilishidan OLDIN)
@@ -295,12 +296,15 @@ class ApiClient:
         data = self._get("/api/products/")
         return data if isinstance(data, list) else []
 
-    def create_order_async(self, pc_name, items, on_done=None):
+    def create_order_async(self, pc_name, items, client_order_id=None, on_done=None):
         def _post():
             try:
+                payload = {"pc_name": pc_name, "items": items, "payment_method": "CASH"}
+                if client_order_id:
+                    payload["client_order_id"] = client_order_id
                 r = requests.post(
                     f"{self.server_url}/api/orders/",
-                    json={"pc_name": pc_name, "items": items, "payment_method": "CASH"},
+                    json=payload,
                     headers=self._headers(),
                     timeout=6
                 )
@@ -2192,6 +2196,7 @@ class BarPage(QWidget):
         self.api_client = api_client
         self.pc_name = pc_name
         self.cart = {}  # product_id -> (product, qty)
+        self._pending_client_order_id = None
         self.setStyleSheet(f"background-color: {COLOR_BG};")
         self._order_result.connect(self._on_order_done)
 
@@ -2313,6 +2318,10 @@ class BarPage(QWidget):
             self.cart[pid] = (product, qty)
         else:
             self.cart.pop(pid, None)
+        # Savat tarkibi o'zgardi — bu endi YANGI buyurtma, oldingi
+        # (muvaffaqiyatsiz) urinishning client_order_id'sini qayta
+        # ishlatib bo'lmaydi.
+        self._pending_client_order_id = None
         self._update_total()
 
     def _update_total(self):
@@ -2329,10 +2338,18 @@ class BarPage(QWidget):
         items = [{"product_id": pid, "quantity": qty} for pid, (_, qty) in self.cart.items()]
         if not items:
             return
+        # Bir xil client_order_id qayta yuborilsa (masalan tarmoq
+        # javobi yo'qolib, "BUYURTMA BERISH" yana bosilsa), server
+        # buni tanib, YANGI buyurtma/qayta pul yechish o'rniga oldingi
+        # (allaqachon yaratilgan) buyurtmani qaytaradi — savat bir xil
+        # bo'lgan davomida id o'zgarmaydi, faqat muvaffaqiyatli
+        # yuborilgach yoki savat tarkibi o'zgarganda yangilanadi.
+        if not self._pending_client_order_id:
+            self._pending_client_order_id = str(uuid.uuid4())
         self.order_btn.setEnabled(False)
         self.order_btn.setText("YUBORILMOQDA...")
         self.api_client.create_order_async(
-            self.pc_name, items,
+            self.pc_name, items, client_order_id=self._pending_client_order_id,
             on_done=lambda ok, data: self._order_result.emit(ok, data)
         )
 
@@ -2343,6 +2360,7 @@ class BarPage(QWidget):
             self.status_label.setStyleSheet("color: #10b981;")
             self.status_label.setText("✅ Buyurtma qabul qilindi! Bar xodimi tez orada olib keladi.")
             self.cart = {}
+            self._pending_client_order_id = None
             self._update_total()
             self.set_products([])
         else:

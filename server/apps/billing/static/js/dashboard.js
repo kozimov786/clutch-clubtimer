@@ -417,19 +417,19 @@ function switchTab(tabName) {
 // Ultra Sleek Modern PC Card Generator
 function generatePCCardHTML(pc) {
   let statusClass = 'card-status-locked';
-  let statusBadge = `<span class="px-2.5 py-1 text-[10px] font-extrabold rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center gap-1.5 whitespace-nowrap"><span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> LOCKED</span>`;
+  let statusBadge = `<span class="px-2.5 py-1 text-[10px] font-extrabold rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center gap-1.5 whitespace-nowrap"><span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> ${t('card.locked')}</span>`;
 
   if (pc.status === 'ACTIVE') {
     if (pc.is_open_time) {
       statusClass = 'card-status-active';
-      statusBadge = `<span class="px-2.5 py-1 text-[10px] font-extrabold rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center gap-1.5 animate-pulse whitespace-nowrap"><span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span> OPEN TIME</span>`;
+      statusBadge = `<span class="px-2.5 py-1 text-[10px] font-extrabold rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center gap-1.5 animate-pulse whitespace-nowrap"><span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span> ${t('card.open_time')}</span>`;
     } else {
       statusClass = 'card-status-active';
-      statusBadge = `<span class="px-2.5 py-1 text-[10px] font-extrabold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 whitespace-nowrap"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> ACTIVE</span>`;
+      statusBadge = `<span class="px-2.5 py-1 text-[10px] font-extrabold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 whitespace-nowrap"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> ${t('card.active')}</span>`;
     }
   } else if (pc.status === 'WARNING') {
     statusClass = 'card-status-warning';
-    statusBadge = `<span class="px-2.5 py-1 text-[10px] font-extrabold rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1.5 whitespace-nowrap"><span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce"></span> LOW TIME</span>`;
+    statusBadge = `<span class="px-2.5 py-1 text-[10px] font-extrabold rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1.5 whitespace-nowrap"><span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce"></span> ${t('card.low_time')}</span>`;
   }
 
   const timerText = formatTime(pc.time_remaining) + (pc.is_open_time ? " ♾️" : "");
@@ -453,13 +453,13 @@ function generatePCCardHTML(pc) {
 
         <!-- Utility Icons Row (screenshot / force-close / shutdown) -->
         <div class="flex items-center justify-end gap-1.5 mb-2.5">
-          <button onclick="openScreenshotModal(${pc.id}, '${pc.name}')" title="Ekranni ko'rish" class="w-6 h-6 rounded-md bg-slate-800/80 hover:bg-cyan-500/20 border border-slate-700 hover:border-cyan-500/40 text-slate-400 hover:text-cyan-400 flex items-center justify-center transition-all">
+          <button onclick="openScreenshotModal(${pc.id}, '${pc.name}')" title="${t('card.view_screen')}" class="w-6 h-6 rounded-md bg-slate-800/80 hover:bg-cyan-500/20 border border-slate-700 hover:border-cyan-500/40 text-slate-400 hover:text-cyan-400 flex items-center justify-center transition-all">
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
           </button>
-          <button onclick="forceCloseApp(${pc.id}, '${pc.name}')" title="Muzlab qolgan dasturni majburan yopish" class="w-6 h-6 rounded-md bg-slate-800/80 hover:bg-amber-500/20 border border-slate-700 hover:border-amber-500/40 text-slate-400 hover:text-amber-400 flex items-center justify-center transition-all">
+          <button onclick="forceCloseApp(${pc.id}, '${pc.name}')" title="${t('card.force_close')}" class="w-6 h-6 rounded-md bg-slate-800/80 hover:bg-amber-500/20 border border-slate-700 hover:border-amber-500/40 text-slate-400 hover:text-amber-400 flex items-center justify-center transition-all">
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
-          <button onclick="remoteShutdownPc(${pc.id}, '${pc.name}')" title="Kompyuterni o'chirish" class="w-6 h-6 rounded-md bg-slate-800/80 hover:bg-rose-500/20 border border-slate-700 hover:border-rose-500/40 text-slate-400 hover:text-rose-400 flex items-center justify-center transition-all">
+          <button onclick="remoteShutdownPc(${pc.id}, '${pc.name}')" title="${t('card.shutdown_pc')}" class="w-6 h-6 rounded-md bg-slate-800/80 hover:bg-rose-500/20 border border-slate-700 hover:border-rose-500/40 text-slate-400 hover:text-rose-400 flex items-center justify-center transition-all">
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.636 5.636a9 9 0 1012.728 0M12 3v9"/></svg>
           </button>
         </div>
@@ -467,7 +467,7 @@ function generatePCCardHTML(pc) {
         <!-- Giant Timer Box -->
         <div class="my-3 py-3 px-3 rounded-xl bg-slate-950/90 border border-slate-800/90 text-center relative overflow-hidden group-hover:border-cyan-500/30 transition-colors">
           <div class="text-[9px] text-slate-400 uppercase tracking-widest font-semibold mb-1 flex items-center justify-center gap-1">
-            ${pc.is_open_time ? '<span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span> O\'YNALGAN VAQT' : 'QOLGAN VAQT'}
+            ${pc.is_open_time ? `<span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span> ${t('card.time_played')}` : t('card.time_remaining')}
           </div>
           <div id="timer-display-${pc.id}" class="text-3xl font-black font-orbitron tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-300 to-purple-400">
             ${timerText}
@@ -476,7 +476,7 @@ function generatePCCardHTML(pc) {
 
         <!-- Tariff Info Line -->
         <div class="flex items-center justify-between text-xs px-1 mb-3 pt-1">
-          <span class="text-[11px] text-slate-400">Tarif:</span>
+          <span class="text-[11px] text-slate-400">${t('finish_modal.tariff_label')}</span>
           <span class="text-[11px] font-bold font-orbitron text-slate-200">${tariffName}</span>
         </div>
       </div>
@@ -486,17 +486,17 @@ function generatePCCardHTML(pc) {
         ${(pc.status === 'LOCKED' || pc.status === 'OFFLINE') ? `
           <button onclick="openStartModal(${pc.id})" class="w-full py-2.5 px-3 rounded-xl glow-btn-cyan text-xs font-extrabold flex items-center justify-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            SEANS BOSHLASH
+            ${t('card.start_session')}
           </button>
         ` : `
           <div class="flex items-center justify-center gap-2">
             <button onclick="openAddTimeModal(${pc.id})" class="py-2 px-3.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 text-xs font-extrabold flex items-center justify-center gap-1 transition-all">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
-              + Vaqt
+              ${t('card.add_time')}
             </button>
             <button onclick="stopSession(${pc.id})" class="py-2 px-3.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/40 text-xs font-extrabold flex items-center justify-center gap-1 transition-all">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/></svg>
-              Tugatish
+              ${t('card.finish')}
             </button>
           </div>
         `}
@@ -559,11 +559,11 @@ function populateTariffSelect() {
   if (!select) return;
   select.innerHTML = '';
 
-  tariffs.forEach(t => {
+  tariffs.forEach(tariff => {
     const opt = document.createElement('option');
-    opt.value = t.id;
-    const price = parseFloat(t.price_per_hour);
-    opt.textContent = `${t.name} — ${formatMoney(price)} / soat`;
+    opt.value = tariff.id;
+    const price = parseFloat(tariff.price_per_hour);
+    opt.textContent = `${tariff.name} — ${formatMoney(price)} / ${t('unit.hour_lower')}`;
     select.appendChild(opt);
   });
 }
@@ -573,15 +573,15 @@ function renderTariffsTable() {
   if (!tbody) return;
   tbody.innerHTML = '';
 
-  tariffs.forEach(t => {
+  tariffs.forEach(tariff => {
     const tr = document.createElement('tr');
     tr.className = 'border-b border-slate-800 hover:bg-slate-900/50 transition-colors';
-    const basePrice = parseFloat(t.price_per_hour);
+    const basePrice = parseFloat(tariff.price_per_hour);
 
     tr.innerHTML = `
-      <td class="py-3 px-4 font-bold text-white font-orbitron">${t.name}</td>
-      <td class="py-3 px-4 text-cyan-400 font-bold font-orbitron">${formatMoney(basePrice)} / soat</td>
-      <td class="py-3 px-4 text-xs text-slate-400 font-mono">${new Date(t.created_at).toLocaleDateString()}</td>
+      <td class="py-3 px-4 font-bold text-white font-orbitron">${tariff.name}</td>
+      <td class="py-3 px-4 text-cyan-400 font-bold font-orbitron">${formatMoney(basePrice)} / ${t('unit.hour_lower')}</td>
+      <td class="py-3 px-4 text-xs text-slate-400 font-mono">${new Date(tariff.created_at).toLocaleDateString()}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -596,14 +596,14 @@ function renderSessionsTable() {
     tr.className = 'border-b border-slate-800 hover:bg-slate-900/50 transition-colors';
     tr.innerHTML = `
       <td class="py-3 px-4 font-bold text-cyan-400 font-orbitron">${s.computer_name}</td>
-      <td class="py-3 px-4 text-xs text-slate-300">${s.is_open_time ? "♾️ VIP Open Time" : (s.tariff_name || 'Standard')}</td>
-      <td class="py-3 px-4 font-mono text-xs text-slate-300">${s.is_open_time ? s.duration_minutes + " min (Open)" : formatDurationText(s.duration_minutes)}</td>
+      <td class="py-3 px-4 text-xs text-slate-300">${s.is_open_time ? "♾️ VIP Open Time" : (s.tariff_name || t('sessions.standard'))}</td>
+      <td class="py-3 px-4 font-mono text-xs text-slate-300">${s.is_open_time ? s.duration_minutes + " " + t('sessions.min_open') : formatDurationText(s.duration_minutes)}</td>
       <td class="py-3 px-4 font-bold text-emerald-400 font-orbitron">${formatMoney(s.total_price)}</td>
       <td class="py-3 px-4 text-xs text-slate-400 font-mono">${new Date(s.start_time).toLocaleTimeString()}</td>
       <td class="py-3 px-4">
-        ${s.is_active ? 
-          '<span class="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-500/20 text-emerald-400">ACTIVE</span>' : 
-          '<span class="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-800 text-slate-400">COMPLETED</span>'}
+        ${s.is_active ?
+          `<span class="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-500/20 text-emerald-400">${t('card.active')}</span>` :
+          `<span class="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-800 text-slate-400">${t('sessions.completed')}</span>`}
       </td>
     `;
     tbody.appendChild(tr);
@@ -1184,7 +1184,7 @@ function renderBarOrders() {
   const navPendingBadge = document.getElementById('nav-bar-pending-badge');
 
   if (pendingBadge) {
-    pendingBadge.textContent = `${pendingCount} Kutilmoqda`;
+    pendingBadge.textContent = `${pendingCount} ${t('bar.status_pending')}`;
     pendingBadge.classList.toggle('bg-rose-500/20', pendingCount > 0);
   }
 
@@ -1203,29 +1203,29 @@ function renderBarOrders() {
     container.innerHTML = `
       <div class="glass-panel p-8 text-center rounded-2xl text-slate-500">
         <svg class="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-        Hozircha buyurtmalar yo'q
+        ${t('bar.no_orders')}
       </div>
     `;
     return;
   }
 
   container.innerHTML = filtered.map(order => {
-    let statusBadge = `<span class="px-3 py-1 text-xs font-bold rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse flex items-center gap-1">⏳ KUTILMOQDA</span>`;
+    let statusBadge = `<span class="px-3 py-1 text-xs font-bold rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse flex items-center gap-1">⏳ ${t('bar.badge_pending')}</span>`;
     if (order.status === 'APPROVED') {
-      statusBadge = `<span class="px-3 py-1 text-xs font-bold rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center gap-1">👍 TASDIQLANDI</span>`;
+      statusBadge = `<span class="px-3 py-1 text-xs font-bold rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center gap-1">👍 ${t('bar.badge_approved')}</span>`;
     } else if (order.status === 'DELIVERED') {
-      statusBadge = `<span class="px-3 py-1 text-xs font-bold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center gap-1">🚚 TOPSHIRILDI</span>`;
+      statusBadge = `<span class="px-3 py-1 text-xs font-bold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center gap-1">🚚 ${t('bar.badge_delivered')}</span>`;
     } else if (order.status === 'CANCELLED') {
-      statusBadge = `<span class="px-3 py-1 text-xs font-bold rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40 flex items-center gap-1">❌ BEKOR QILINDI</span>`;
+      statusBadge = `<span class="px-3 py-1 text-xs font-bold rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40 flex items-center gap-1">❌ ${t('bar.badge_cancelled')}</span>`;
     }
 
-    const pcDisplayName = order.computer_name || (order.computer ? `PC-${String(order.computer).padStart(2, '0')}` : 'TEZKOR BAR');
+    const pcDisplayName = order.computer_name || (order.computer ? `PC-${String(order.computer).padStart(2, '0')}` : t('bar.quick_sale'));
     const isDirectBarSale = !order.computer && (!order.computer_name || order.computer_name === 'TEZKOR BAR');
 
     const pcBadgeHTML = isDirectBarSale ? `
       <div class="px-3.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 font-orbitron font-extrabold text-xs flex items-center gap-1.5 shrink-0 whitespace-nowrap shadow-md shadow-amber-500/10">
         <span class="text-base">🛍️</span>
-        <span>TEZKOR BAR SOTUV</span>
+        <span>${t('bar.quick_sale')}</span>
       </div>
     ` : `
       <div class="px-3.5 py-1.5 rounded-xl bg-cyan-500/20 border border-cyan-400/50 text-cyan-300 font-orbitron font-black text-sm flex items-center gap-2 shrink-0 whitespace-nowrap shadow-lg shadow-cyan-500/15">
@@ -1246,7 +1246,13 @@ function renderBarOrders() {
     `).join('');
 
     const timeAgo = new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const paymentMethodLabel = order.payment_method === 'CARD' ? '💳 Plastik' : '💵 Naqd';
+    // order.payment_method_display serverdan keladi va doim o'zbekcha
+    // (Django choice label) — shuning uchun til almashtirilganda mos
+    // kelmay qolmasligi uchun bu yerda ATAYLAB ishlatilmaydi, buning
+    // o'rniga joriy tilga mos kalit orqali hisoblanadi.
+    const paymentMethodLabel = t(
+      { CASH: 'pm.cash', CARD: 'pm.card', SPLIT: 'pm.split_short', BALANCE: 'pm.balance', FREE: 'pm.free_short' }[order.payment_method] || 'pm.cash'
+    );
 
     return `
       <div class="glass-panel p-5 rounded-2xl border border-slate-800 space-y-3.5 relative hover:border-slate-700 transition-all">
@@ -1256,10 +1262,10 @@ function renderBarOrders() {
             ${pcBadgeHTML}
             <div>
               <div class="flex items-center gap-2">
-                <span class="text-sm font-black text-white font-orbitron">Order #${order.id}</span>
+                <span class="text-sm font-black text-white font-orbitron">${t('bar.order_number')} #${order.id}</span>
                 <span class="px-2 py-0.5 rounded-md bg-slate-900 border border-slate-800 text-[10px] font-bold text-slate-400">${paymentMethodLabel}</span>
               </div>
-              <div class="text-[11px] text-slate-400 font-mono mt-0.5">Vaqti: ${timeAgo}</div>
+              <div class="text-[11px] text-slate-400 font-mono mt-0.5">${t('bar.order_time')} ${timeAgo}</div>
             </div>
           </div>
           <div>
@@ -1271,7 +1277,7 @@ function renderBarOrders() {
         <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800/80 space-y-1">
           ${itemsHTML}
           <div class="flex justify-between items-center pt-2.5 mt-1 border-t border-slate-800/80">
-            <span class="text-slate-400 font-bold uppercase tracking-wider text-xs">Jami Summa:</span>
+            <span class="text-slate-400 font-bold uppercase tracking-wider text-xs">${t('bar.total_amount')}</span>
             <span class="text-emerald-400 font-orbitron font-black text-lg">${formatMoney(order.total_price)}</span>
           </div>
         </div>
@@ -1280,24 +1286,24 @@ function renderBarOrders() {
         <div class="flex items-center gap-2 pt-1">
           ${order.status === 'PENDING' ? `
             <button onclick="approveOrder(${order.id})" class="flex-1 py-2.5 rounded-xl glow-btn-cyan text-xs font-bold flex items-center justify-center gap-1.5 transition-all">
-              ✓ Tasdiqlash (Approve)
+              ✓ ${t('bar.approve_btn')}
             </button>
             <button onclick="deliverOrder(${order.id})" class="flex-1 py-2.5 rounded-xl glow-btn-emerald text-xs font-bold flex items-center justify-center gap-1.5 transition-all">
-              🚚 Topshirildi (Deliver)
+              🚚 ${t('bar.deliver_btn')}
             </button>
             <button onclick="cancelOrder(${order.id})" class="py-2.5 px-3.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/40 text-xs font-bold transition-all">
-              Bekor Qilish
+              ${t('common.cancel')}
             </button>
           ` : order.status === 'APPROVED' ? `
             <button onclick="deliverOrder(${order.id})" class="flex-1 py-2.5 rounded-xl glow-btn-emerald text-xs font-bold flex items-center justify-center gap-1.5 transition-all">
-              🚚 Topshirildi (Deliver)
+              🚚 ${t('bar.deliver_btn')}
             </button>
             <button onclick="cancelOrder(${order.id})" class="py-2.5 px-3.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/40 text-xs font-bold transition-all">
-              Bekor Qilish
+              ${t('common.cancel')}
             </button>
           ` : `
             <div class="text-xs text-slate-500 font-mono italic flex items-center gap-1">
-              <span>✓ Buyurtma yakunlangan (${order.status})</span>
+              <span>✓ ${t('bar.order_completed')} (${order.status})</span>
             </div>
           `}
         </div>
@@ -1374,9 +1380,9 @@ function renderInventoryTable(products) {
     const tr = document.createElement('tr');
     tr.className = 'border-b border-slate-800/80 hover:bg-slate-900/50 transition-colors text-xs';
 
-    let stockBadge = `<span class="px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono">${p.stock} ta</span>`;
+    let stockBadge = `<span class="px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono">${p.stock} ${t('unit.pcs')}</span>`;
     if (p.stock < 5) {
-      stockBadge = `<span class="px-2.5 py-1 text-xs font-bold rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40 font-mono animate-pulse">⚠️ ${p.stock} ta (KAM)</span>`;
+      stockBadge = `<span class="px-2.5 py-1 text-xs font-bold rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40 font-mono animate-pulse">⚠️ ${p.stock} ${t('unit.pcs')} (${t('analytics.low')})</span>`;
     }
 
     const costPrice = parseFloat(p.cost_price || 0);
@@ -1390,17 +1396,17 @@ function renderInventoryTable(products) {
           <span class="font-bold text-white text-sm truncate max-w-[160px] sm:max-w-xs inline-block" title="${p.name}">${p.name}</span>
         </div>
       </td>
-      <td class="py-3 px-3 text-xs text-slate-400 font-semibold whitespace-nowrap">${p.category_name || 'Barchasi'}</td>
+      <td class="py-3 px-3 text-xs text-slate-400 font-semibold whitespace-nowrap">${p.category_name || t('common.all')}</td>
       <td class="py-3 px-3 font-mono text-amber-400 font-bold whitespace-nowrap">${formatMoney(costPrice)}</td>
       <td class="py-3 px-3 font-mono text-emerald-400 font-bold whitespace-nowrap">${formatMoney(sellingPrice)}</td>
       <td class="py-3 px-3 whitespace-nowrap">${stockBadge}</td>
       <td class="py-3 px-3 font-mono text-slate-300 font-semibold whitespace-nowrap">${formatMoney(totalAssetVal)}</td>
       <td class="py-3 px-3 text-right flex items-center justify-end gap-1.5 whitespace-nowrap">
-        <button onclick="openRestockModal(${p.id})" class="py-1 px-2.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold transition-all flex items-center gap-1 shrink-0" title="Omborga Kirim Qilish">
-          📦 Kirim
+        <button onclick="openRestockModal(${p.id})" class="py-1 px-2.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold transition-all flex items-center gap-1 shrink-0" title="${t('analytics.stock_in')}">
+          📦 ${t('analytics.intake_short')}
         </button>
-        <button onclick="openSpisaniyeModal(${p.id})" class="py-1 px-2.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition-all flex items-center gap-1 shrink-0" title="Spisaniye (Ichki rasxod)">
-          🗑️ Spisaniye
+        <button onclick="openSpisaniyeModal(${p.id})" class="py-1 px-2.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition-all flex items-center gap-1 shrink-0" title="${t('bar.writeoff')}">
+          🗑️ ${t('bar.writeoff')}
         </button>
       </td>
     `;
@@ -1413,7 +1419,7 @@ function renderTopSellers(topSellers) {
   if (!container) return;
 
   if (topSellers.length === 0) {
-    container.innerHTML = `<div class="text-xs text-slate-500">Hozircha sotuvlar yo'q</div>`;
+    container.innerHTML = `<div class="text-xs text-slate-500">${t('analytics.no_sales')}</div>`;
     return;
   }
 
@@ -1428,7 +1434,7 @@ function renderTopSellers(topSellers) {
         </div>
       </div>
       <div class="text-right">
-        <span class="px-2 py-1 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/30 text-xs font-bold font-mono">${item.total_sold} ta</span>
+        <span class="px-2 py-1 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/30 text-xs font-bold font-mono">${item.total_sold} ${t('unit.pcs')}</span>
       </div>
     </div>
   `).join('');
@@ -1442,13 +1448,13 @@ function addToPOSCart(productId) {
   if (!prod) return;
 
   if (prod.stock <= 0) {
-    alert(`${prod.name} omborda qolmagan!`);
+    alert(`${prod.name} ${t('bar.out_of_stock')}`);
     return;
   }
 
   const currentQty = posCart[productId] ? posCart[productId].quantity : 0;
   if (currentQty + 1 > prod.stock) {
-    alert(`${prod.name} omborda yetarli emas! (Mavjud: ${prod.stock})`);
+    alert(`${prod.name} ${t('bar.insufficient_stock')} (${t('bar.available')}: ${prod.stock})`);
     return;
   }
 
@@ -1474,7 +1480,7 @@ function updatePOSCartQty(productId, delta) {
     delete posCart[productId];
   } else {
     if (newQty > prod.stock) {
-      alert(`${prod.name} omborda yetarli emas! (Mavjud: ${prod.stock})`);
+      alert(`${prod.name} ${t('bar.insufficient_stock')} (${t('bar.available')}: ${prod.stock})`);
       return;
     }
     posCart[productId].quantity = newQty;
@@ -1500,7 +1506,7 @@ function renderPOSCart() {
 
   const cartEntries = Object.values(posCart);
   if (cartEntries.length === 0) {
-    container.innerHTML = `<div class="text-slate-500 italic text-center py-3">Savat bo'sh. Mahsulot qo'shing.</div>`;
+    container.innerHTML = `<div class="text-slate-500 italic text-center py-3">${t('bar.cart_empty')}</div>`;
     if (totalDisplay) totalDisplay.innerText = '0 UZS';
     return;
   }
@@ -1532,7 +1538,7 @@ function renderPOSPCDropdown() {
 
   const activePCs = computers.filter(pc => pc.status === 'ACTIVE' || pc.status === 'WARNING');
   if (activePCs.length === 0) {
-    select.innerHTML = `<option value="">Aktiv PC lar yo'q</option>`;
+    select.innerHTML = `<option value="">${t('bar.no_active_pcs')}</option>`;
     return;
   }
 
@@ -1544,7 +1550,7 @@ function renderPOSPCDropdown() {
 async function checkoutDirectPOS(paymentMethod) {
   const cartEntries = Object.values(posCart);
   if (cartEntries.length === 0) {
-    alert("Savat bo'sh! Sotuv uchun mahsulot tanlang.");
+    alert(t('bar.alert_cart_empty'));
     return;
   }
 
@@ -1571,21 +1577,21 @@ async function checkoutDirectPOS(paymentMethod) {
       fetchAnalytics();
       fetchFinanceData();
       productsCacheHTML();
-      alert(`To'g'ridan-to'g'ri sotuv muvaffaqiyatli bajarildi (${paymentMethod === 'CASH' ? 'Naqd' : 'Plastik'})!`);
+      alert(`${t('bar.alert_direct_sale_ok')} (${paymentMethod === 'CASH' ? t('pm.cash') : t('pm.card')})!`);
     } else {
       const errData = await res.json();
-      alert(errData.error || "Sotuvni amalga oshirishda xatolik!");
+      alert(errData.error || t('bar.alert_sale_error'));
     }
   } catch (err) {
     console.error("Direct POS sale error:", err);
-    alert("Sotuvda xatolik yuz berdi!");
+    alert(t('bar.alert_sale_error'));
   }
 }
 
 async function checkoutAddToPCSession() {
   const cartEntries = Object.values(posCart);
   if (cartEntries.length === 0) {
-    alert("Savat bo'sh! Mahsulot tanlang.");
+    alert(t('bar.alert_cart_empty_select'));
     return;
   }
 
@@ -1593,7 +1599,7 @@ async function checkoutAddToPCSession() {
   const pcId = select ? select.value : null;
 
   if (!pcId) {
-    alert("Iltimos, mahsulot biriktirish uchun aktiv kompyuterni tanlang!");
+    alert(t('bar.alert_select_pc'));
     return;
   }
 
@@ -1622,14 +1628,14 @@ async function checkoutAddToPCSession() {
       fetchAnalytics();
       fetchFinanceData();
       productsCacheHTML();
-      alert(`Mahsulotlar tanlangan PC seansiga biriktirildi!`);
+      alert(t('bar.alert_attach_ok'));
     } else {
       const errData = await res.json();
-      alert(errData.error || "Seansga biriktirishda xatolik!");
+      alert(errData.error || t('bar.alert_attach_error'));
     }
   } catch (err) {
     console.error("Add to PC session error:", err);
-    alert("Seansga biriktirishda xatolik!");
+    alert(t('bar.alert_attach_error'));
   }
 }
 
@@ -2532,17 +2538,17 @@ async function loadCustomerTransactions(customerId) {
     if (!res.ok) return;
     const txs = await res.json();
     if (!txs.length) {
-      list.innerHTML = `<div class="text-slate-500 text-xs py-2">Tranzaksiyalar yo'q</div>`;
+      list.innerHTML = `<div class="text-slate-500 text-xs py-2">${t('customer_modal.no_transactions')}</div>`;
       return;
     }
-    list.innerHTML = txs.map(t => `
+    list.innerHTML = txs.map(tx => `
       <div class="flex items-center justify-between gap-2 py-1.5 border-b border-slate-800/60 last:border-b-0">
         <div class="min-w-0">
-          <div class="text-slate-300 font-semibold truncate">${t.note || t.type_display || ''}</div>
-          <div class="text-slate-500 text-[10px]">${new Date(t.created_at).toLocaleString('uz-UZ')}</div>
+          <div class="text-slate-300 font-semibold truncate">${tx.note || tx.type_display || ''}</div>
+          <div class="text-slate-500 text-[10px]">${new Date(tx.created_at).toLocaleString('uz-UZ')}</div>
         </div>
-        <span class="font-mono font-bold shrink-0 ${(t.type === 'TOPUP' || t.type === 'BONUS') ? 'text-emerald-400' : 'text-rose-400'}">
-          ${(t.type === 'TOPUP' || t.type === 'BONUS') ? '+' : '−'}${formatMoney(t.amount)}
+        <span class="font-mono font-bold shrink-0 ${(tx.type === 'TOPUP' || tx.type === 'BONUS') ? 'text-emerald-400' : 'text-rose-400'}">
+          ${(tx.type === 'TOPUP' || tx.type === 'BONUS') ? '+' : '−'}${formatMoney(tx.amount)}
         </span>
       </div>
     `).join('');

@@ -4,22 +4,24 @@ REM ISHGA TUSHIRISH kifoya: kiosk rejimini (watchdog bilan, xato bo'lsa
 REM avtomatik qayta ishga tushiradigan) DARHOL ishga tushiradi, so'ngra
 REM eng so'nggi kodni (git pull) FON rejimida tortadi.
 REM
-REM MUHIM: avval bu ikkalasi KETMA-KET edi — avval git pull tugashini
-REM (internet sekin bo'lsa bir necha soniya) kutib, keyingina locker
-REM ishga tushar edi. Shu orada foydalanuvchi Windows ish stolini
-REM ko'rib turar edi. Endi locker QAT'IY birinchi (kutmasdan) ishga
-REM tushadi; git pull esa parallel ravishda bajariladi — yangi kod
-REM shu zahoti emas, keyingi qayta ishga tushirilishda (watchdog xato
-REM tufayli qayta boshlasa yoki kompyuter qayta yoqilsa) qo'llaniladi.
+REM MUHIM (2-marta topilgan xato): birinchi urinishda bu teskarisi
+REM qilingan edi — watchdog.bat FON rejimiga ("start /B") olinib, git
+REM pull esa asosiy oqimda qolgan edi. Bu esa client'ni kompyuter
+REM qayta yoqilganda UMUMAN ishga tushmay qolishiga sabab bo'ldi:
+REM git pull tugagach, shu skriptning o'zi (uni chaqirgan yashirin
+REM konsol) tugab, YOPILIB ketardi — va o'sha konsolga hali ham
+REM "biriktirilgan" fondagi watchdog.bat/client_locker.py zanjiri ham
+REM konsol yopilishi bilan birga to'xtab/yo'q qilinishi mumkin edi.
 REM
-REM Bitta tugma bilan ishlatish uchun: shu faylga o'ng tugma bosib
-REM "Send to -> Desktop (create shortcut)" tanlang — Desktop'da paydo
-REM bo'lgan yorliqni istasangiz nomini o'zgartiring (masalan "Ishga
-REM tushirish"), shundan keyin xodim shu ikonkani ikki marta bosishi
-REM kifoya bo'ladi.
+REM TO'G'RI YECHIM: buning aksi — git pull FON rejimiga ("start /B")
+REM olinadi (u tezkor va muhim emas), watchdog.bat esa "call" bilan,
+REM ASOSIY oqimda, CHEKSIZ tsikl sifatida qoladi — aynan shu "call"
+REM shu skriptni (demak, uni ishga tushirgan yashirin konsolni) butun
+REM kiosk sessiyasi davomida TIRIK ushlab turadi, hech narsa erta
+REM yopilib qolmaydi. locker esa hamon DARHOL (git pull tugashini
+REM kutmasdan) ishga tushadi, chunki ikkalasi PARALLEL boshlanadi.
 cd /d "%~dp0"
 
-REM /B — yangi (ko'rinadigan) oyna ochmasdan, fon jarayoni sifatida
-start "" /B watchdog.bat
+start "" /B git pull
 
-git pull >nul 2>&1
+call watchdog.bat

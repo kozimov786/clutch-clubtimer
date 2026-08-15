@@ -168,18 +168,34 @@ class FullscreenMixin:
         if not self.isFullScreen() or not self.isVisible():
             self.showFullScreen()
 
-        self.raise_()
-        self.activateWindow()
-        # Qt'ning activateWindow()'i Windows'ning "focus-stealing
-        # prevention" siyosati tufayli eksklyuziv to'liq ekranli o'yin
-        # ustidan doim ishlayvermaydi (F9 "ba'zida ishlamaydi" muammosi
-        # aynan shundan) — shuning uchun ishonchliroq Win32 usuli bilan
-        # ham qo'shimcha kuchaytiriladi.
-        if IS_WINDOWS:
-            try:
-                force_foreground_window(int(self.winId()))
-            except Exception as e:
-                print(f"[Fullscreen] force_foreground_window xato: {e}")
+        # MUHIM (CS2'da g'ijirlash sababi topildi): _show_launcher_over_game()
+        # bu funksiyani F9 bosilganda 5 marta — darhol, keyin 400/1200/
+        # 2500/4000ms'dan keyin — ATAYLAB qayta-qayta chaqiradi (eski,
+        # sekin yopiladigan o'yinlar uchun kerak edi). Lekin oldin
+        # raise_()/activateWindow()/force_foreground_window() HAR SAFAR
+        # SHARTSIZ qayta bajarilardi — hatto oyna ALLAQACHON faol bo'lsa
+        # ham. Zamonaviy o'yinlarda (CS2 kabi) birinchi urinishning o'zi
+        # yetarli bo'ladi, shu sababli qolgan 4 ta keyingi "kuchlab
+        # oldinga chiqarish" chaqiruvi haqiqatda HECH NARSA qilmasdan,
+        # shunchaki Windows kompozitorini/oyna fokusini keraksiz qayta-
+        # qayta bezovta qilib, sezilarli "qoqilish" (stutter) yaratardi.
+        # Endi bu qimmat/bezovta qiluvchi qadam FAQAT oyna hali haqiqatda
+        # faol bo'lmagan holatdagina bajariladi — eski, qiynchiluk
+        # o'yinlar uchun bir xil ishonchlilik saqlanadi, zamonaviy
+        # o'yinlarda esa keyingi urinishlar haqiqiy no-op bo'lib qoladi.
+        if not self.isActiveWindow():
+            self.raise_()
+            self.activateWindow()
+            # Qt'ning activateWindow()'i Windows'ning "focus-stealing
+            # prevention" siyosati tufayli eksklyuziv to'liq ekranli o'yin
+            # ustidan doim ishlayvermaydi (F9 "ba'zida ishlamaydi" muammosi
+            # aynan shundan) — shuning uchun ishonchliroq Win32 usuli bilan
+            # ham qo'shimcha kuchaytiriladi.
+            if IS_WINDOWS:
+                try:
+                    force_foreground_window(int(self.winId()))
+                except Exception as e:
+                    print(f"[Fullscreen] force_foreground_window xato: {e}")
 
     def showEvent(self, event):
         super().showEvent(event)

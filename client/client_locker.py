@@ -170,6 +170,16 @@ class FullscreenMixin:
 
         self.raise_()
         self.activateWindow()
+        # Qt'ning activateWindow()'i Windows'ning "focus-stealing
+        # prevention" siyosati tufayli eksklyuziv to'liq ekranli o'yin
+        # ustidan doim ishlayvermaydi (F9 "ba'zida ishlamaydi" muammosi
+        # aynan shundan) — shuning uchun ishonchliroq Win32 usuli bilan
+        # ham qo'shimcha kuchaytiriladi.
+        if IS_WINDOWS:
+            try:
+                force_foreground_window(int(self.winId()))
+            except Exception as e:
+                print(f"[Fullscreen] force_foreground_window xato: {e}")
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -2801,6 +2811,45 @@ if IS_WINDOWS:
     # Alt+Tab bloklash) hech qachon o'rnatilmagan edi.
     kernel32.GetModuleHandleW.restype = ctypes.c_void_p
     kernel32.GetModuleHandleW.argtypes = [ctypes.c_wchar_p]
+
+    # F9 bosilganda oyna hookda ISHONCHLI aniqlanadi, lekin uni haqiqatda
+    # eksklyuziv to'liq ekranli o'yin USTIGA chiqarish — butunlay boshqa
+    # muammo. Qt'ning activateWindow()/raise_() ichida SetForegroundWindow()
+    # ishlatiladi — Windows esa "focus-stealing prevention" tufayli, agar
+    # so'rovchi jarayon hozirgi old-plandagi jarayon (bu holda o'yin) BILAN
+    # bevosita bog'liq bo'lmasa, buni JIMGINA rad etishi mumkin. Natija:
+    # F9 "ba'zida ishlaydi, ba'zida yo'q" — aynan foydalanuvchi tasvirlagan
+    # holat. Windows'ning rasmiy aylanma yo'li: bizning ip (kirish)
+    # oqimimizni old-plandagi oyna oqimiga AttachThreadInput() bilan
+    # vaqtincha "ulab qo'yish" — shunda SetForegroundWindow() Windows
+    # tomonidan haqiqiy foydalanuvchi so'rovi sifatida qabul qilinadi.
+    user32.GetForegroundWindow.restype = wintypes.HWND
+    user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+    user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    user32.AttachThreadInput.restype = wintypes.BOOL
+    user32.AttachThreadInput.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.BOOL]
+    user32.SetForegroundWindow.restype = wintypes.BOOL
+    user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+    user32.BringWindowToTop.argtypes = [wintypes.HWND]
+    user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
+    kernel32.GetCurrentThreadId.restype = wintypes.DWORD
+    SW_SHOW = 5
+
+    def force_foreground_window(hwnd):
+        try:
+            fg_hwnd = user32.GetForegroundWindow()
+            fg_thread = user32.GetWindowThreadProcessId(fg_hwnd, None)
+            cur_thread = kernel32.GetCurrentThreadId()
+            attached = False
+            if fg_thread and fg_thread != cur_thread:
+                attached = bool(user32.AttachThreadInput(cur_thread, fg_thread, True))
+            user32.ShowWindow(hwnd, SW_SHOW)
+            user32.BringWindowToTop(hwnd)
+            user32.SetForegroundWindow(hwnd)
+            if attached:
+                user32.AttachThreadInput(cur_thread, fg_thread, False)
+        except Exception as e:
+            print(f"[Hook] force_foreground_window xato: {e}")
 
     hook_id = None; is_hook_enabled = False
     WM_KEYDOWN = 0x0100; WM_SYSKEYDOWN = 0x0104

@@ -4184,7 +4184,7 @@ class BarPage(QWidget):
 #  11. TOURNAMENTS & BONUSES PAGE
 # ──────────────────────────────────────────────────────────────────────────────
 class TournamentsBonusesPage(QWidget):
-    """Klub turnirlari va faol bonus aksiyalari vitrinasi."""
+    """Klub turnirlari va faol bonus aksiyalari vitrinasi - zamonaviy borderlarsiz dizayn."""
     back_requested = pyqtSignal()
 
     def __init__(self, parent=None):
@@ -4196,19 +4196,36 @@ class TournamentsBonusesPage(QWidget):
 
         # Sahifa sarlavhasi
         header_row = QHBoxLayout()
+        title_box = QVBoxLayout()
+        title_box.setSpacing(2)
         title = QLabel("🏆  TOURNAMENTS & BONUSES")
         title.setFont(cyber_font(18, QFont.Weight.Bold, "Sora"))
-        title.setStyleSheet(f"color: {COLOR_PRIMARY}; letter-spacing: 1px;")
-        header_row.addWidget(title)
+        title.setStyleSheet(f"color: {COLOR_PRIMARY}; letter-spacing: 1px; border: none; background: transparent;")
+        title_box.addWidget(title)
+
+        subtitle = QLabel("Klub chempionatlari, ro'yxatdan o'tish va maxsus bonus aksiyalari")
+        subtitle.setFont(cyber_font(10, family="Hanken"))
+        subtitle.setStyleSheet("color: #7E8B9B; border: none; background: transparent;")
+        title_box.addWidget(subtitle)
+        header_row.addLayout(title_box)
         header_row.addStretch(1)
 
         back_btn = QPushButton("←  ORQAGA")
         back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        back_btn.setFixedHeight(32)
+        back_btn.setFixedHeight(34)
         back_btn.setFont(cyber_font(9, QFont.Weight.Bold, "Mono"))
         back_btn.setStyleSheet("""
-            QPushButton { background: transparent; color: #BAC9CC; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 0 14px; }
-            QPushButton:hover { background: rgba(255,255,255,0.06); color: #ffffff; }
+            QPushButton {
+                background: rgba(255, 255, 255, 0.05);
+                color: #BAC9CC;
+                border: none;
+                border-radius: 8px;
+                padding: 0 16px;
+            }
+            QPushButton:hover {
+                background: rgba(0, 229, 255, 0.15);
+                color: #00E5FF;
+            }
         """)
         back_btn.clicked.connect(self.back_requested.emit)
         header_row.addWidget(back_btn)
@@ -4226,106 +4243,240 @@ class TournamentsBonusesPage(QWidget):
         scroll.viewport().setStyleSheet("background: transparent;")
 
         container = QWidget()
-        container.setStyleSheet("background: transparent;")
+        container.setStyleSheet("background: transparent; border: none;")
         c_lo = QVBoxLayout(container)
-        c_lo.setContentsMargins(0, 0, 0, 0)
-        c_lo.setSpacing(20)
+        c_lo.setContentsMargins(0, 4, 8, 12)
+        c_lo.setSpacing(22)
 
-        # ── 1. ACTIVE TOURNAMENTS ──
-        t_title = QLabel("FAOL VA REJALASHTIRILGAN TURNIRLAR")
-        t_title.setFont(cyber_font(11, QFont.Weight.Bold, "Mono"))
-        t_title.setStyleSheet(f"color: {COLOR_PRIMARY_CONTAINER}; letter-spacing: 1px;")
-        c_lo.addWidget(t_title)
+        # ── HERO SPOTLIGHT: FEATURED TOURNAMENT (BORDERLESS) ──
+        hero_card = QFrame()
+        hero_card.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1a233a, stop:0.6 #131722, stop:1 #0d1017);
+                border: none;
+                border-radius: 16px;
+            }
+        """)
+        hero_lo = QHBoxLayout(hero_card)
+        hero_lo.setContentsMargins(24, 20, 24, 20)
+        hero_lo.setSpacing(20)
+
+        # Hero Left Info
+        h_info = QVBoxLayout()
+        h_info.setSpacing(6)
+
+        h_tag_row = QHBoxLayout()
+        h_tag = QLabel("🔥  ASOSIY CHEMPIONAT")
+        h_tag.setFont(cyber_font(8, QFont.Weight.Bold, "Mono"))
+        h_tag.setStyleSheet("""
+            background: rgba(255, 82, 82, 0.18);
+            color: #FF5252;
+            border: none;
+            border-radius: 6px;
+            padding: 3px 8px;
+        """)
+        h_tag_row.addWidget(h_tag)
+
+        h_game = QLabel("COUNTER-STRIKE 2 • 5v5 LAN")
+        h_game.setFont(cyber_font(9, QFont.Weight.Bold, "Mono"))
+        h_game.setStyleSheet("color: #00E5FF; border: none; background: transparent;")
+        h_tag_row.addWidget(h_game)
+        h_tag_row.addStretch(1)
+        h_info.addLayout(h_tag_row)
+
+        h_title = QLabel("CLUTCH ZONE MAJOR CHAMPIONSHIP 2026")
+        h_title.setFont(cyber_font(15, QFont.Weight.Bold, "Sora"))
+        h_title.setStyleSheet("color: #FFFFFF; border: none; background: transparent;")
+        h_info.addWidget(h_title)
+
+        h_desc = QLabel("Klubimizning eng yirik 5v5 CS2 turniri. Barcha jamoalar uchun ochiq saralash va final jonli efirda.")
+        h_desc.setFont(cyber_font(10, family="Hanken"))
+        h_desc.setStyleSheet("color: #8C9BAE; border: none; background: transparent;")
+        h_desc.setWordWrap(True)
+        h_info.addWidget(h_desc)
+
+        h_meta_row = QHBoxLayout()
+        h_meta_row.setSpacing(14)
+        m1 = QLabel("📅 Boshlanishi: 28-Avgust, 14:00")
+        m1.setFont(cyber_font(9, family="Mono"))
+        m1.setStyleSheet("color: #BAC9CC; border: none; background: transparent;")
+        m2 = QLabel("👥 Jamoalar: 12 / 16 Qabul qilindi")
+        m2.setFont(cyber_font(9, family="Mono"))
+        m2.setStyleSheet("color: #BAC9CC; border: none; background: transparent;")
+        h_meta_row.addWidget(m1)
+        h_meta_row.addWidget(m2)
+        h_meta_row.addStretch(1)
+        h_info.addLayout(h_meta_row)
+
+        hero_lo.addLayout(h_info, 3)
+
+        # Hero Right Prize & Action
+        h_action = QVBoxLayout()
+        h_action.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        h_action.setSpacing(8)
+
+        p_label = QLabel("YUTUQ JAMG'ARMASI")
+        p_label.setFont(cyber_font(8, QFont.Weight.Bold, "Mono"))
+        p_label.setStyleSheet("color: #8C9BAE; border: none; background: transparent;")
+        p_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        h_action.addWidget(p_label)
+
+        p_val = QLabel("5 000 000 UZS")
+        p_val.setFont(cyber_font(18, QFont.Weight.Bold, "Sora"))
+        p_val.setStyleSheet("color: #00E5FF; border: none; background: transparent; letter-spacing: 0.5px;")
+        p_val.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        h_action.addWidget(p_val)
+
+        reg_btn = QPushButton("🟢  RO'YXATDAN O'TISH")
+        reg_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        reg_btn.setFixedHeight(36)
+        reg_btn.setFont(cyber_font(9, QFont.Weight.Bold, "Mono"))
+        reg_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #00C9A7, stop:1 #00E5FF);
+                color: #05101A;
+                border: none;
+                border-radius: 8px;
+                padding: 0 18px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #00E5FF, stop:1 #52FFAC);
+            }
+        """)
+        h_action.addWidget(reg_btn)
+
+        hero_lo.addLayout(h_action, 1)
+        c_lo.addWidget(hero_card)
+
+        # ── 1. UPCOMING TOURNAMENTS (BORDERLESS GRID) ──
+        t_sec_lbl = QLabel("BOSHQA TURNIRLAR VA CHEMPIONATLAR")
+        t_sec_lbl.setFont(cyber_font(10, QFont.Weight.Bold, "Mono"))
+        t_sec_lbl.setStyleSheet(f"color: {COLOR_PRIMARY_CONTAINER}; letter-spacing: 1px; border: none; background: transparent;")
+        c_lo.addWidget(t_sec_lbl)
 
         t_grid = QHBoxLayout()
-        t_grid.setSpacing(16)
+        t_grid.setSpacing(14)
 
-        tournaments = [
-            ("Counter-Strike 2", "5v5 CLUTCH ZONE MAJOR", "5 000 000 UZS", "🟢 RO'YXAT OCHIQ", "#00E5FF"),
-            ("Dota 2", "1v1 MID TOURNAMENT", "2 000 000 UZS", "⏳ TEZ KUNDA", "#FFB4AB"),
-            ("Valorant", "5v5 WEEKLY CUP", "1 500 000 UZS", "🟢 RO'YXAT OCHIQ", "#00FFA3"),
+        tournaments_data = [
+            ("DOTA 2", "1v1 MID CUP TOURNAMENT", "2 000 000 UZS", "Har Yakshanba, 18:00", "⏳ TEZ KUNDA", "#C084FC", "rgba(192, 132, 252, 0.12)"),
+            ("VALORANT", "5v5 WEEKLY COMMUNITY CUP", "1 500 000 UZS", "Har Juma, 20:00", "🟢 RO'YXAT OCHIQ", "#34D399", "rgba(52, 211, 153, 0.12)"),
+            ("EA FC 24", "1v1 PS5 CHAMPIONS LEAGUE", "1 000 000 UZS", "Har Shanba, 16:00", "🟢 RO'YXAT OCHIQ", "#38BDF8", "rgba(56, 189, 248, 0.12)"),
         ]
 
-        for game_name, cup_title, prize, status, accent in tournaments:
-            card = QFrame()
-            card.setFixedHeight(160)
-            card.setStyleSheet(f"""
-                QFrame {{
-                    background: #191C22;
-                    border: 1px solid rgba(255, 255, 255, 0.08);
-                    border-radius: 12px;
-                }}
-                QFrame:hover {{
-                    border: 1px solid {accent};
-                }}
+        for game_name, cup_title, prize, time_str, status, accent, accent_bg in tournaments_data:
+            t_card = QFrame()
+            t_card.setFixedHeight(175)
+            t_card.setStyleSheet("""
+                QFrame {
+                    background: #141722;
+                    border: none;
+                    border-radius: 14px;
+                }
+                QFrame:hover {
+                    background: #1a1e2d;
+                }
             """)
-            card_lo = QVBoxLayout(card)
+            card_lo = QVBoxLayout(t_card)
             card_lo.setContentsMargins(18, 16, 18, 16)
             card_lo.setSpacing(6)
 
-            g_lbl = QLabel(game_name.upper())
-            g_lbl.setFont(cyber_font(9, QFont.Weight.Bold, "Mono"))
-            g_lbl.setStyleSheet(f"color: {accent};")
-            card_lo.addWidget(g_lbl)
+            tag_row = QHBoxLayout()
+            g_lbl = QLabel(game_name)
+            g_lbl.setFont(cyber_font(8, QFont.Weight.Bold, "Mono"))
+            g_lbl.setStyleSheet(f"""
+                background: {accent_bg};
+                color: {accent};
+                border: none;
+                border-radius: 5px;
+                padding: 2px 7px;
+            """)
+            tag_row.addWidget(g_lbl)
+            tag_row.addStretch(1)
+
+            st_lbl = QLabel(status)
+            st_lbl.setFont(cyber_font(8, QFont.Weight.Bold, "Mono"))
+            st_lbl.setStyleSheet(f"color: {accent}; border: none; background: transparent;")
+            tag_row.addWidget(st_lbl)
+            card_lo.addLayout(tag_row)
 
             c_lbl = QLabel(cup_title)
-            c_lbl.setFont(cyber_font(13, QFont.Weight.Bold, "Sora"))
-            c_lbl.setStyleSheet("color: #ffffff;")
+            c_lbl.setFont(cyber_font(12, QFont.Weight.Bold, "Sora"))
+            c_lbl.setStyleSheet("color: #FFFFFF; border: none; background: transparent;")
             card_lo.addWidget(c_lbl)
 
-            p_lbl = QLabel(f"Yutuq jamg'armasi:  {prize}")
-            p_lbl.setFont(cyber_font(11, QFont.Weight.Bold, "Mono"))
-            p_lbl.setStyleSheet("color: #BAC9CC;")
-            card_lo.addWidget(p_lbl)
+            tm_lbl = QLabel(f"⏱ {time_str}")
+            tm_lbl.setFont(cyber_font(9, family="Mono"))
+            tm_lbl.setStyleSheet("color: #7E8B9B; border: none; background: transparent;")
+            card_lo.addWidget(tm_lbl)
 
             card_lo.addStretch(1)
 
-            st_lbl = QLabel(status)
-            st_lbl.setFont(cyber_font(9, QFont.Weight.Bold, "Mono"))
-            st_lbl.setStyleSheet(f"color: {accent};")
-            card_lo.addWidget(st_lbl)
+            prz_box = QHBoxLayout()
+            prz_tag = QLabel("Sovrin:")
+            prz_tag.setFont(cyber_font(9, family="Mono"))
+            prz_tag.setStyleSheet("color: #8C9BAE; border: none; background: transparent;")
+            prz_box.addWidget(prz_tag)
 
-            t_grid.addWidget(card, 1)
+            p_lbl = QLabel(prize)
+            p_lbl.setFont(cyber_font(12, QFont.Weight.Bold, "Sora"))
+            p_lbl.setStyleSheet("color: #FFFFFF; border: none; background: transparent;")
+            prz_box.addWidget(p_lbl)
+            prz_box.addStretch(1)
+
+            card_lo.addLayout(prz_box)
+            t_grid.addWidget(t_card, 1)
 
         c_lo.addLayout(t_grid)
 
-        # ── 2. CLUB BONUSES & REWARDS ──
-        b_title = QLabel("MAXSUS AKSIYALAR VA BONUSLAR")
-        b_title.setFont(cyber_font(11, QFont.Weight.Bold, "Mono"))
-        b_title.setStyleSheet(f"color: {COLOR_PRIMARY_CONTAINER}; letter-spacing: 1px;")
-        c_lo.addWidget(b_title)
+        # ── 2. CLUB BONUSES & SPECIAL OFFERS (BORDERLESS CARDS) ──
+        b_sec_lbl = QLabel("MAXSUS AKSIYALAR VA BONUS DASTURLARI")
+        b_sec_lbl.setFont(cyber_font(10, QFont.Weight.Bold, "Mono"))
+        b_sec_lbl.setStyleSheet(f"color: {COLOR_PRIMARY_CONTAINER}; letter-spacing: 1px; border: none; background: transparent;")
+        c_lo.addWidget(b_sec_lbl)
 
         b_grid = QHBoxLayout()
-        b_grid.setSpacing(16)
+        b_grid.setSpacing(14)
 
-        bonuses = [
-            ("⚡ NIGHT OWL (23:00 - 08:00)", "Tungi paketlarda barcha zonalarga 25% chegirma va cheksiz tezlik.", "#D9C8FF"),
-            ("🎯 3+ SOAT SEANS", "Har 3 soatlik uzluksiz o'yin uchun hisobingizga +500 CP bonus qo'shiladi.", "#52FFAC"),
-            ("👑 VIP STATUS", "10+ soat o'ynagan mijozlarga Bar menyusidan bepul energetik va qulay kreslo.", "#9CF0FF"),
+        bonuses_data = [
+            ("🌙", "NIGHT OWL (23:00 - 08:00)", "Tungi paketlarda barcha zonalarga 25% chegirma va cheksiz tezlik.", "#C084FC", "rgba(192, 132, 252, 0.1)"),
+            ("🎯", "3+ SOAT MARAFON", "Har 3 soatlik uzluksiz o'yin uchun hisobingizga +500 Bonus Ball qo'shiladi.", "#34D399", "rgba(52, 211, 153, 0.1)"),
+            ("👑", "VIP CASHBACK", "Platinum va Diamond foydalanuvchilarga haftalik 5% sarf cashback qaytadi.", "#38BDF8", "rgba(56, 189, 248, 0.1)"),
+            ("👥", "DO'STINGNI KELTIR", "Do'stingiz birinchi to'lovida har ikkingizga 15 000 UZS balans beriladi.", "#F472B6", "rgba(244, 114, 182, 0.1)"),
         ]
 
-        for b_name, b_desc, b_color in bonuses:
+        for icon_s, b_name, b_desc, b_color, b_bg in bonuses_data:
             b_card = QFrame()
-            b_card.setFixedHeight(140)
-            b_card.setStyleSheet(f"""
-                QFrame {{
-                    background: #191C22;
-                    border: 1px solid rgba(255, 255, 255, 0.08);
-                    border-radius: 12px;
-                }}
+            b_card.setFixedHeight(150)
+            b_card.setStyleSheet("""
+                QFrame {
+                    background: #141722;
+                    border: none;
+                    border-radius: 14px;
+                }
+                QFrame:hover {
+                    background: #191e2b;
+                }
             """)
             b_lo = QVBoxLayout(b_card)
             b_lo.setContentsMargins(18, 16, 18, 16)
             b_lo.setSpacing(8)
 
+            head_r = QHBoxLayout()
+            ic_lbl = QLabel(icon_s)
+            ic_lbl.setFont(cyber_font(13))
+            ic_lbl.setStyleSheet("border: none; background: transparent;")
+            head_r.addWidget(ic_lbl)
+
             bn_lbl = QLabel(b_name)
-            bn_lbl.setFont(cyber_font(12, QFont.Weight.Bold, "Sora"))
-            bn_lbl.setStyleSheet(f"color: {b_color};")
-            b_lo.addWidget(bn_lbl)
+            bn_lbl.setFont(cyber_font(11, QFont.Weight.Bold, "Sora"))
+            bn_lbl.setStyleSheet(f"color: {b_color}; border: none; background: transparent;")
+            head_r.addWidget(bn_lbl)
+            head_r.addStretch(1)
+            b_lo.addLayout(head_r)
 
             bd_lbl = QLabel(b_desc)
-            bd_lbl.setFont(cyber_font(10, family="Hanken"))
-            bd_lbl.setStyleSheet("color: #BAC9CC;")
+            bd_lbl.setFont(cyber_font(9, family="Hanken"))
+            bd_lbl.setStyleSheet("color: #8C9BAE; line-height: 140%; border: none; background: transparent;")
             bd_lbl.setWordWrap(True)
             b_lo.addWidget(bd_lbl)
 
@@ -4333,8 +4484,26 @@ class TournamentsBonusesPage(QWidget):
             b_grid.addWidget(b_card, 1)
 
         c_lo.addLayout(b_grid)
-        c_lo.addStretch(1)
 
+        # ── Info Note ──
+        note_strip = QFrame()
+        note_strip.setStyleSheet("""
+            QFrame {
+                background: rgba(255, 255, 255, 0.03);
+                border: none;
+                border-radius: 10px;
+            }
+        """)
+        note_lo = QHBoxLayout(note_strip)
+        note_lo.setContentsMargins(16, 10, 16, 10)
+        note_txt = QLabel("ℹ️  Turnirlarga yozilish yoki bonuslarni faollashtirish uchun administratorga murojaat qiling.")
+        note_txt.setFont(cyber_font(9, family="Hanken"))
+        note_txt.setStyleSheet("color: #6C7A8C; border: none; background: transparent;")
+        note_lo.addWidget(note_txt)
+        note_lo.addStretch(1)
+        c_lo.addWidget(note_strip)
+
+        c_lo.addStretch(1)
         scroll.setWidget(container)
         root.addWidget(scroll, 1)
 

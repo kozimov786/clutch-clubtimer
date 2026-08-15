@@ -316,7 +316,7 @@ class Game(models.Model):
     objects = models.Manager()
 
     name = models.CharField(max_length=150)
-    cover_path = models.CharField(max_length=500, help_text="Cover banner image URL or local file path")
+    cover_path = models.CharField(max_length=500, blank=True, default='', help_text="Cover banner image URL or local file path")
     executable_path = models.CharField(max_length=500, help_text="Executable file path or launch command")
     working_directory = models.CharField(max_length=500, blank=True, null=True, help_text="Working directory path for executable")
     category = models.CharField(max_length=50, choices=GAME_CATEGORY_CHOICES, default='FPS')
@@ -325,6 +325,24 @@ class Game(models.Model):
 
     def __str__(self):
         return f"{self.name} [{self.category}]"
+
+
+class GamePathOverride(models.Model):
+    """Diskless emas (har PC'ga alohida o'rnatiladi) tizimda ba'zi
+    PC'larda o'yin boshqa diskda/papkada bo'lishi mumkin — shu PC uchun
+    Game'ning executable_path/working_directory'sini almashtiradi."""
+    objects = models.Manager()
+
+    game = models.ForeignKey(Game, on_delete=models.CASCADE, related_name='path_overrides')
+    computer = models.ForeignKey(Computer, on_delete=models.CASCADE, related_name='game_path_overrides')
+    executable_path = models.CharField(max_length=500)
+    working_directory = models.CharField(max_length=500, blank=True, null=True)
+
+    class Meta:
+        unique_together = ('game', 'computer')
+
+    def __str__(self):
+        return f"{self.game.name} @ {self.computer.name}"
 
 
 class ClientBuild(models.Model):

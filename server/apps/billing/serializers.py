@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.utils import timezone
 from .models import (
-    Computer, Tariff, Session, Category, Product, Order, OrderItem, Expense, Game, StockSupply,
+    Computer, Tariff, Session, Category, Product, Order, OrderItem, Expense, Game, GamePathOverride, StockSupply,
     Customer, CustomerTransaction, ClientBuild, AuditLog
 )
 
@@ -83,8 +83,16 @@ class ExpenseSerializer(serializers.ModelSerializer):
         model = Expense
         fields = '__all__'
 
+class GamePathOverrideSerializer(serializers.ModelSerializer):
+    computer_name = serializers.CharField(source='computer.name', read_only=True)
+
+    class Meta:
+        model = GamePathOverride
+        fields = '__all__'
+
 class GameSerializer(serializers.ModelSerializer):
     category_display = serializers.CharField(source='get_category_display', read_only=True)
+    path_overrides = GamePathOverrideSerializer(many=True, read_only=True)
 
     class Meta:
         model = Game

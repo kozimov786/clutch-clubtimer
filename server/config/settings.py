@@ -71,21 +71,34 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 ASGI_APPLICATION = 'config.asgi.application'
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-        # SQLite bir vaqtning o'zida faqat BITTA yozuvchi ulanishga
-        # ruxsat beradi. select_for_update() bilan qulflangan yozuvlar
-        # (masalan bir xil mahsulotga bir vaqtda kelgan bir nechta bar
-        # buyurtmasi) uchun standart kutish vaqti juda qisqa bo'lsa,
-        # ikkinchi so'rov toza xato (masalan "omborda yetarli emas")
-        # o'rniga "database is locked" bilan yiqilib tushadi. Bu yerda
-        # 20 soniyagacha kutishga ruxsat berilyapti — real hayotda
-        # bunday to'qnashuv juda qisqa (millisekundlar) davom etadi.
-        'OPTIONS': {'timeout': 20},
+# POSTGRES_DB muhit o'zgaruvchisi o'rnatilgan bo'lsa — PostgreSQL
+# ishlatiladi (bir nechta yozuvchi bir vaqtda ishlashi mumkin, 40 PC
+# uchun tavsiya etiladi). O'rnatilmagan bo'lsa — standart SQLite
+# (bitta faylga asoslangan, kichik/sinov muhitlar uchun qulay, lekin
+# bir vaqtning o'zida faqat BITTA yozuvchi ulanishga ruxsat beradi —
+# yuqori yuklama ostida "database is locked" xatolariga sabab bo'ladi).
+_pg_name = os.environ.get('POSTGRES_DB')
+if _pg_name:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': _pg_name,
+            'USER': os.environ.get('POSTGRES_USER', 'clutchzone'),
+            'PASSWORD': os.environ.get('POSTGRES_PASSWORD', ''),
+            'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),
+            'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+            # 20 soniyagacha kutishga ruxsat berilyapti — real hayotda
+            # bunday to'qnashuv juda qisqa (millisekundlar) davom etadi.
+            'OPTIONS': {'timeout': 20},
+        }
+    }
 
 CHANNEL_LAYERS = {
     'default': {

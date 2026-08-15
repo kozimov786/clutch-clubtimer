@@ -25,13 +25,13 @@ from rest_framework.permissions import AllowAny
 from rest_framework.throttling import ScopedRateThrottle
 
 from .models import (
-    Computer, Tariff, Session, Category, Product, Order, OrderItem, Expense, Game, StockSupply,
+    Computer, Tariff, Session, Category, Product, Order, OrderItem, Expense, Game, GamePathOverride, StockSupply,
     Customer, CustomerTransaction, ClientBuild, AuditLog, award_balance_spend_points
 )
 from .serializers import (
     ComputerSerializer, TariffSerializer, SessionSerializer,
     CategorySerializer, ProductSerializer, OrderSerializer, OrderItemSerializer, ExpenseSerializer,
-    GameSerializer, StockSupplySerializer,
+    GameSerializer, GamePathOverrideSerializer, StockSupplySerializer,
     CustomerSerializer, CustomerTransactionSerializer, ClientBuildSerializer, AuditLogSerializer
 )
 from .consumers import notify_pc_status_change, notify_bar_order_change
@@ -270,13 +270,44 @@ class TariffViewSet(viewsets.ModelViewSet):
             )
 
 class GameViewSet(viewsets.ModelViewSet):
-    queryset = Game.objects.filter(is_active=True).order_by('name')
+    # is_active bo'yicha filtr faqat list() ichida, faqat kiosk (pc=)
+    # so'rovlari uchun qo'llanadi — bu yerda filtr yo'q, aks holda
+    # dashboard'dan bir o'yinni "nofaol" qilib saqlagach, uni qayta
+    # tahrirlash/faollashtirish/o'chirish imkonsiz bo'lib qolardi
+    # (get_object() ham shu queryset'dan foydalanadi).
+    queryset = Game.objects.all().order_by('name')
     serializer_class = GameSerializer
 
     def get_permissions(self):
         if self.action == 'list':
             return [IsStaffOrHasApiKey()]
         return super().get_permissions()
+
+    def list(self, request, *args, **kwargs):
+        pc_name = request.query_params.get('pc')
+        queryset = self.get_queryset()
+        if pc_name:
+            # Kiosk klienti — faqat faol o'yinlar ko'rsatiladi.
+            # Dashboard (pc parametrisiz) esa hammasini ko'radi, shunda
+            # xodim nofaol o'yinni ham topib qayta yoqa oladi.
+            queryset = queryset.filter(is_active=True)
+        data = self.get_serializer(queryset, many=True).data
+        if pc_name:
+            overrides = {
+                ov.game_id: ov
+                for ov in GamePathOverride.objects.filter(computer__name=pc_name)
+            }
+            for row in data:
+                ov = overrides.get(row['id'])
+                if ov:
+                    row['executable_path'] = ov.executable_path
+                    if ov.working_directory:
+                        row['working_directory'] = ov.working_directory
+        return Response(data)
+
+class GamePathOverrideViewSet(viewsets.ModelViewSet):
+    queryset = GamePathOverride.objects.all().select_related('computer', 'game').order_by('computer__name')
+    serializer_class = GamePathOverrideSerializer
 
 class SessionViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Session.objects.all().order_by('-start_time')

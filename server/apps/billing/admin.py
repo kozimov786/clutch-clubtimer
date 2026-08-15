@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models import (
-    Computer, Session, Tariff, Category, Product, Order, OrderItem, Expense, Game, StockSupply,
+    Computer, Session, Tariff, Category, Product, Order, OrderItem, Expense, Game, GamePathOverride, StockSupply,
     Customer, CustomerTransaction, ClientBuild, AuditLog
 )
 
@@ -16,6 +16,12 @@ class GameAdmin(admin.ModelAdmin):
     list_filter = ('category', 'is_active')
     search_fields = ('name', 'executable_path', 'working_directory')
 
+
+@admin.register(GamePathOverride)
+class GamePathOverrideAdmin(admin.ModelAdmin):
+    list_display = ('id', 'game', 'computer', 'executable_path', 'working_directory')
+    list_filter = ('computer',)
+    search_fields = ('game__name', 'computer__name', 'executable_path')
 
 @admin.register(Tariff)
 class TariffAdmin(admin.ModelAdmin):

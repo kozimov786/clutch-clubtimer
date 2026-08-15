@@ -5,8 +5,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CLUTCH ZONE - Gaming Lounge Billing Suite</title>
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Tailwind CSS — mahalliy fayl (internet uzilganda ham LAN orqali ishlashi uchun, avval CDN'dan yuklab olingan) -->
+  <script src="{% static 'vendor/tailwind.js' %}"></script>
   <!-- Custom Glassmorphism Styles -->
   <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
 </head>
@@ -133,6 +133,10 @@
       <svg class="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
       <span data-i18n="settings.analytics">Ombor & Hisobot</span>
     </button>
+    <button onclick="switchTab('games')" data-tab="games" class="main-nav-btn w-full text-left px-3.5 py-2.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800/60 border border-transparent transition-all flex items-center gap-2.5">
+      <svg class="w-4 h-4 text-violet-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+      <span data-i18n="settings.games">O'yinlar</span>
+    </button>
     <button onclick="switchTab('auditlog')" data-tab="auditlog" class="main-nav-btn w-full text-left px-3.5 py-2.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800/60 border border-transparent transition-all flex items-center gap-2.5">
       <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
       <span data-i18n="settings.auditlog">Faoliyat Jurnali</span>
@@ -231,6 +235,16 @@
       <div>
         <div data-i18n="mobile.analytics_title" class="font-bold text-sm">Ombor & Hisobot</div>
         <div data-i18n="mobile.analytics_sub" class="text-[11px] text-slate-500 font-normal">Inventar va analitika</div>
+      </div>
+    </button>
+
+    <button onclick="mobileSwitchTab('games')" data-mobile-tab="games" class="mobile-nav-drawer-btn" id="mnav-games">
+      <span class="mobile-nav-icon text-violet-400">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+      </span>
+      <div>
+        <div data-i18n="mobile.games_title" class="font-bold text-sm">O'yinlar</div>
+        <div data-i18n="mobile.games_sub" class="text-[11px] text-slate-500 font-normal">O'yinlar ro'yxati va PC-yo'llar</div>
       </div>
     </button>
 
@@ -399,6 +413,33 @@
           </div>
         </div>
 
+      </div>
+    </div>
+
+    <!-- TAB: GAMES MANAGEMENT -->
+    <div id="tab-view-games" class="hidden space-y-6">
+      <div class="glass-panel p-6 rounded-2xl border border-slate-800">
+        <div class="flex items-center justify-between mb-4">
+          <h3 data-i18n="games.title" class="text-lg font-bold font-orbitron text-white">O'yinlar Ro'yxati</h3>
+          <button onclick="openGameModal()" data-i18n="games.add_new" class="px-4 py-2.5 rounded-xl glow-btn-cyan text-xs font-bold">+ Yangi O'yin</button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead>
+              <tr class="border-b border-slate-800 text-xs text-slate-400 uppercase font-mono">
+                <th data-i18n="games.col_name" class="py-3 px-4">Nomi</th>
+                <th data-i18n="games.col_category" class="py-3 px-4">Kategoriya</th>
+                <th data-i18n="games.col_exe" class="py-3 px-4">Exe Yo'li</th>
+                <th data-i18n="games.col_overrides" class="py-3 px-4">PC-bo'yicha Yo'llar</th>
+                <th data-i18n="games.col_active" class="py-3 px-4">Holati</th>
+                <th data-i18n="games.col_actions" class="py-3 px-4">Amallar</th>
+              </tr>
+            </thead>
+            <tbody id="games-table-body">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -1545,6 +1586,92 @@
           </button>
         </div>
       </form>
+
+    </div>
+  </div>
+
+  <!-- GAME MODAL (add/edit + PC-bo'yicha yo'l override) -->
+  <div id="game-modal" class="modal-wrapper fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="modal-sheet-inner glass-panel w-full max-w-lg rounded-2xl p-6 relative border border-slate-700 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 id="game-modal-title" class="text-lg font-bold font-orbitron text-white flex items-center gap-2">
+          <span class="text-violet-400">🎮</span> <span data-i18n="games.modal_add_title">Yangi O'yin</span>
+        </h3>
+        <button onclick="closeGameModal()" class="w-8 h-8 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center border border-slate-800 transition-all font-bold">
+          ✕
+        </button>
+      </div>
+
+      <form onsubmit="saveGame(event)" class="space-y-4">
+        <input type="hidden" id="game-edit-id" value="">
+
+        <div>
+          <label data-i18n="games.name_label" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">O'yin Nomi</label>
+          <input type="text" id="game-name-input" required data-i18n-placeholder="games.name_placeholder" placeholder="Masalan: Counter Strike 2" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-violet-500 font-semibold">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label data-i18n="games.category_label" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Kategoriya</label>
+            <select id="game-category-input" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-violet-500 font-semibold">
+              <option value="FPS">FPS / Shooter</option>
+              <option value="Action">Action / Adventure</option>
+              <option value="Sports">Sports / Racing</option>
+              <option value="Strategy">Strategy / MOBA</option>
+            </select>
+          </div>
+          <div class="flex items-end pb-2.5">
+            <label class="flex items-center gap-2 text-xs font-semibold text-slate-300">
+              <input type="checkbox" id="game-active-input" checked class="w-4 h-4 rounded accent-violet-500">
+              <span data-i18n="games.active_label">Faol (kiosklarda ko'rinadi)</span>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label data-i18n="games.exe_label" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Exe Fayl Yo'li (barcha PC'lar uchun umumiy)</label>
+          <input type="text" id="game-exe-input" required data-i18n-placeholder="games.exe_placeholder" placeholder="D:\games\Game\game.exe" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-violet-500 font-mono">
+        </div>
+
+        <div>
+          <label data-i18n="games.workdir_label" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Ishchi Papka (ixtiyoriy)</label>
+          <input type="text" id="game-workdir-input" data-i18n-placeholder="games.workdir_placeholder" placeholder="D:\games\Game" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-violet-500 font-mono">
+        </div>
+
+        <div>
+          <label data-i18n="games.cover_label" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Rasm (URL yoki fayl yo'li)</label>
+          <input type="text" id="game-cover-input" data-i18n-placeholder="games.cover_placeholder" placeholder="https://... yoki D:\games\Game\cover.jpg" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-violet-500 font-mono">
+        </div>
+
+        <div class="flex items-center justify-end gap-3 pt-2">
+          <button type="button" onclick="closeGameModal()" data-i18n="common.cancel" class="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold text-xs border border-slate-800 transition-all">
+            Bekor qilish
+          </button>
+          <button type="submit" data-i18n="games.save" class="px-6 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-extrabold text-xs shadow-lg shadow-violet-600/30 transition-all font-orbitron tracking-wider">
+            O'yinni Saqlash
+          </button>
+        </div>
+      </form>
+
+      <!-- PC-bo'yicha alohida yo'l (faqat mavjud o'yinni tahrirlashda ko'rinadi) -->
+      <div id="game-overrides-section" class="hidden pt-4 border-t border-slate-800 space-y-3">
+        <h4 data-i18n="games.overrides_title" class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+          <span class="text-amber-400">⚠</span> Ba'zi PC'da yo'l boshqacha bo'lsa
+        </h4>
+        <div id="game-overrides-list" class="space-y-1.5 text-xs"></div>
+        <div class="flex items-end gap-2">
+          <div class="flex-1">
+            <label data-i18n="games.override_pc_label" class="block text-[10px] font-semibold text-slate-500 uppercase mb-1">PC</label>
+            <select id="game-override-pc" class="w-full bg-slate-900/90 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-violet-500"></select>
+          </div>
+          <div class="flex-1">
+            <label data-i18n="games.override_exe_label" class="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Exe Yo'li</label>
+            <input type="text" id="game-override-exe" placeholder="D:\games\..." class="w-full bg-slate-900/90 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-violet-500 font-mono">
+          </div>
+          <button type="button" onclick="addGameOverride()" data-i18n="games.override_add" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold border border-slate-700 shrink-0">+ Qo'shish</button>
+        </div>
+      </div>
 
     </div>
   </div>

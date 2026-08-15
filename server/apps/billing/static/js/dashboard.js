@@ -348,7 +348,7 @@ function handleSearch(val) {
 // "SETTINGS" ochiladigan menyusi ostidagi bo'limlar — shulardan biri
 // tanlangan bo'lsa, "SETTINGS" pillasining o'zi ham faol ko'rinishi
 // kerak (aks holda foydalanuvchi qaysi menyuda ekanini yo'qotib qo'yadi).
-const SETTINGS_SUB_TABS = ['tariffs', 'analytics', 'auditlog', 'sessions'];
+const SETTINGS_SUB_TABS = ['tariffs', 'analytics', 'games', 'auditlog', 'sessions'];
 
 function toggleSettingsMenu(event) {
   event.stopPropagation();
@@ -405,12 +405,15 @@ function switchTab(tabName) {
   if (custTab) custTab.classList.toggle('hidden', tabName !== 'customers');
   const auditTab = document.getElementById('tab-view-auditlog');
   if (auditTab) auditTab.classList.toggle('hidden', tabName !== 'auditlog');
+  const gamesTab = document.getElementById('tab-view-games');
+  if (gamesTab) gamesTab.classList.toggle('hidden', tabName !== 'games');
 
   if (tabName === 'bar') fetchBarOrders();
   if (tabName === 'analytics') fetchAnalytics();
   if (tabName === 'finance') fetchFinanceData();
   if (tabName === 'customers') fetchCustomers();
   if (tabName === 'auditlog') fetchAuditLog();
+  if (tabName === 'games') fetchGames();
 }
 
 
@@ -585,6 +588,190 @@ function renderTariffsTable() {
     `;
     tbody.appendChild(tr);
   });
+}
+
+let games = [];
+
+async function fetchGames() {
+  try {
+    const res = await fetch('/api/games/');
+    games = await res.json();
+    renderGamesTable();
+  } catch (err) {
+    console.error("Games fetch error:", err);
+  }
+}
+
+function renderGamesTable() {
+  const tbody = document.getElementById('games-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  if (!games.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="py-6 text-center text-slate-500 text-xs">${t('games.empty')}</td></tr>`;
+    return;
+  }
+  games.forEach(g => {
+    const tr = document.createElement('tr');
+    tr.className = 'border-b border-slate-800 hover:bg-slate-900/50 transition-colors';
+    const overrideCount = (g.path_overrides || []).length;
+    tr.innerHTML = `
+      <td class="py-3 px-4 font-bold text-white">${g.name}</td>
+      <td class="py-3 px-4 text-xs text-slate-400">${g.category_display || g.category}</td>
+      <td class="py-3 px-4 text-xs text-slate-500 font-mono truncate max-w-xs" title="${g.executable_path}">${g.executable_path}</td>
+      <td class="py-3 px-4 text-xs">${overrideCount > 0 ? `<span class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-bold">${overrideCount} PC</span>` : '<span class="text-slate-600">—</span>'}</td>
+      <td class="py-3 px-4">${g.is_active ? `<span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">${t('games.active_badge')}</span>` : `<span class="px-2 py-0.5 rounded-full bg-slate-700/50 text-slate-400 text-[10px] font-bold">${t('games.inactive_badge')}</span>`}</td>
+      <td class="py-3 px-4">
+        <div class="flex items-center gap-2">
+          <button onclick="openGameModal(${g.id})" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-[11px] font-bold border border-slate-700">${t('games.edit')}</button>
+          <button onclick="deleteGame(${g.id})" class="px-3 py-1.5 rounded-lg bg-rose-900/40 hover:bg-rose-800/50 text-rose-300 text-[11px] font-bold border border-rose-900/50">${t('games.delete')}</button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function openGameModal(gameId) {
+  const modal = document.getElementById('game-modal');
+  const title = document.getElementById('game-modal-title');
+  const overridesSection = document.getElementById('game-overrides-section');
+  document.getElementById('game-edit-id').value = gameId || '';
+
+  if (gameId) {
+    const g = games.find(x => x.id === gameId);
+    if (!g) return;
+    title.textContent = t('games.modal_edit_title');
+    document.getElementById('game-name-input').value = g.name;
+    document.getElementById('game-category-input').value = g.category;
+    document.getElementById('game-exe-input').value = g.executable_path;
+    document.getElementById('game-workdir-input').value = g.working_directory || '';
+    document.getElementById('game-cover-input').value = g.cover_path || '';
+    document.getElementById('game-active-input').checked = g.is_active;
+    overridesSection.classList.remove('hidden');
+    renderGameOverrides(g);
+    populateOverridePcSelect();
+  } else {
+    title.textContent = t('games.modal_add_title');
+    document.getElementById('game-name-input').value = '';
+    document.getElementById('game-category-input').value = 'FPS';
+    document.getElementById('game-exe-input').value = '';
+    document.getElementById('game-workdir-input').value = '';
+    document.getElementById('game-cover-input').value = '';
+    document.getElementById('game-active-input').checked = true;
+    overridesSection.classList.add('hidden');
+  }
+  modal.classList.remove('hidden');
+}
+
+function closeGameModal() {
+  document.getElementById('game-modal').classList.add('hidden');
+}
+
+async function saveGame(e) {
+  e.preventDefault();
+  const id = document.getElementById('game-edit-id').value;
+  const payload = {
+    name: document.getElementById('game-name-input').value,
+    category: document.getElementById('game-category-input').value,
+    executable_path: document.getElementById('game-exe-input').value,
+    working_directory: document.getElementById('game-workdir-input').value || null,
+    cover_path: document.getElementById('game-cover-input').value || '',
+    is_active: document.getElementById('game-active-input').checked,
+  };
+  try {
+    const url = id ? `/api/games/${id}/` : '/api/games/';
+    const method = id ? 'PATCH' : 'POST';
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      closeGameModal();
+      fetchGames();
+    } else {
+      alert(t('games.save_error'));
+    }
+  } catch (err) {
+    console.error("Save game error:", err);
+    alert(t('games.save_error'));
+  }
+}
+
+async function deleteGame(gameId) {
+  if (!confirm(t('games.confirm_delete'))) return;
+  try {
+    const res = await fetch(`/api/games/${gameId}/`, { method: 'DELETE' });
+    if (res.ok) fetchGames();
+  } catch (err) {
+    console.error("Delete game error:", err);
+  }
+}
+
+function renderGameOverrides(g) {
+  const list = document.getElementById('game-overrides-list');
+  const overrides = g.path_overrides || [];
+  if (!overrides.length) {
+    list.innerHTML = `<div class="text-slate-600 text-[11px]">${t('games.no_overrides')}</div>`;
+    return;
+  }
+  list.innerHTML = overrides.map(ov => `
+    <div class="flex items-center justify-between gap-2 bg-slate-900/60 rounded-lg px-3 py-2 border border-slate-800">
+      <div class="flex-1 min-w-0">
+        <span class="font-bold text-white">${ov.computer_name}</span>
+        <span class="text-slate-500 font-mono ml-2">${ov.executable_path}</span>
+      </div>
+      <button type="button" onclick="deleteGameOverride(${ov.id})" class="text-rose-400 hover:text-rose-300 font-bold shrink-0">✕</button>
+    </div>
+  `).join('');
+}
+
+function populateOverridePcSelect() {
+  const select = document.getElementById('game-override-pc');
+  if (!select) return;
+  select.innerHTML = computers
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(pc => `<option value="${pc.id}">${pc.name}</option>`)
+    .join('');
+}
+
+async function addGameOverride() {
+  const gameId = document.getElementById('game-edit-id').value;
+  const computerId = document.getElementById('game-override-pc').value;
+  const exePath = document.getElementById('game-override-exe').value.trim();
+  if (!gameId || !computerId || !exePath) return;
+  try {
+    const res = await fetch('/api/game-path-overrides/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ game: gameId, computer: computerId, executable_path: exePath })
+    });
+    if (res.ok) {
+      document.getElementById('game-override-exe').value = '';
+      await fetchGames();
+      const g = games.find(x => x.id == gameId);
+      if (g) renderGameOverrides(g);
+    } else {
+      alert(t('games.override_error'));
+    }
+  } catch (err) {
+    console.error("Add override error:", err);
+  }
+}
+
+async function deleteGameOverride(overrideId) {
+  const gameId = document.getElementById('game-edit-id').value;
+  try {
+    const res = await fetch(`/api/game-path-overrides/${overrideId}/`, { method: 'DELETE' });
+    if (res.ok) {
+      await fetchGames();
+      const g = games.find(x => x.id == gameId);
+      if (g) renderGameOverrides(g);
+    }
+  } catch (err) {
+    console.error("Delete override error:", err);
+  }
 }
 
 function renderSessionsTable() {

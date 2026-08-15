@@ -476,28 +476,36 @@ class ComputerViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def customer_stop_session(self, request, pk=None):
-        """Kiosk'dan: "Kabinet" oynasidan mijoz o'zi balansidan ochgan
-        seansni o'zi to'xtatadi. Faqat shu mijozga tegishli, BALANCE
-        to'lov usulidagi faol seans uchun ishlaydi — xodim boshlagan
-        naqd/plastik seansni mijoz o'zi yopa olmaydi (xodim to'lovni
-        yig'ib, rasmiylashtirishi shart)."""
+        """Kiosk'dan: "Kabinet" yoki yon menyudan mijoz seansni to'xtatganda
+        yoki logout qilganda. Agar balans seansi bo'lsa, balansdan yechish
+        yakunlanadi. Boshqa barcha seanslarda ham kompyuter LOCKED holatga
+        o'tkaziladi va Dashboard'ga darhol yangilanish yuboriladi."""
         pc = self.get_object()
-        customer, error_response = _resolve_kiosk_session_customer(request)
-        if error_response:
-            return error_response
+        customer, _ = _resolve_kiosk_session_customer(request)
 
         session = Session.objects.filter(computer=pc, is_active=True).first()
-        if not session or session.customer_id != customer.id:
-            return Response({'error': "Sizga tegishli faol seans topilmadi."}, status=status.HTTP_400_BAD_REQUEST)
-        if session.payment_method != 'BALANCE':
-            return Response(
-                {'error': "Bu seansni faqat xodim to'xtata oladi (naqd/plastik to'lov kerak)."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        now = timezone.now()
 
-        from . import balance_worker
-        balance_worker.stop_balance_session(pc, session, customer, timezone.now(), reason="mijoz o'zi to'xtatdi:")
-        return Response({'success': True})
+        if session and session.payment_method == 'BALANCE' and customer:
+            from . import balance_worker
+            balance_worker.stop_balance_session(pc, session, customer, now, reason="mijoz o'zi to'xtatdi:")
+        else:
+            if session:
+                session.is_active = False
+                session.end_time = now
+                session.save()
+            pc.status = 'LOCKED'
+            pc.is_open_time = False
+            pc.time_remaining = 0
+            pc.session_start_time = None
+            pc.session_end_time = None
+            pc.current_tariff = None
+            pc.save()
+
+            serializer = self.get_serializer(pc)
+            notify_pc_status_change({'action': 'SESSION_STOPPED', 'pc': serializer.data})
+
+        return Response({'success': True, 'status': 'LOCKED'})
 
     @action(detail=True, methods=['post'])
     def add_time(self, request, pk=None):

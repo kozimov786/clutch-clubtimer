@@ -2,6 +2,7 @@ from pathlib import Path
 from datetime import timedelta, datetime, time
 import calendar
 import secrets
+import uuid
 from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
@@ -916,6 +917,48 @@ class ProductViewSet(viewsets.ModelViewSet):
         if self.action == 'list':
             return [IsStaffOrHasApiKey()]
         return super().get_permissions()
+
+    def destroy(self, request, *args, **kwargs):
+        # Mahsulot allaqachon biror buyurtmada sotilgan bo'lsa, uni
+        # o'chirish OrderItem.product'ning on_delete=CASCADE qoidasi
+        # tufayli o'sha buyurtma qatorlarini ham yo'q qilib, savdo
+        # tarixini buzib qo'yardi. Shunday holatda o'chirishga ruxsat
+        # berilmaydi — xodim buning o'rniga mahsulotni "Nofaol" qilib
+        # qo'yishi (is_available=False) kerak.
+        product = self.get_object()
+        if product.order_items.exists():
+            return Response(
+                {'error': "Bu mahsulot avval sotilgan (buyurtmalarda mavjud), shuning uchun o'chirib bo'lmaydi — savdo tarixi buzilmasligi uchun. Buning o'rniga uni \"Nofaol\" qilib qo'yishingiz mumkin."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        return super().destroy(request, *args, **kwargs)
+
+    @action(detail=False, methods=['post'])
+    def upload_image(self, request):
+        """Dashboard'dan: mahsulot rasmini (tovar kirim qilinganda yoki
+        tahrirlashda) yuklab, natijada uning URL manzilini qaytaradi —
+        bu URL keyin Product.image (yoki tovar kirim so'rovidagi
+        product_image) maydoniga qo'yiladi."""
+        image_file = request.FILES.get('image')
+        if not image_file:
+            return Response({'error': "Rasm fayli topilmadi"}, status=status.HTTP_400_BAD_REQUEST)
+
+        allowed_ext = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
+        ext = Path(image_file.name).suffix.lower()
+        if ext not in allowed_ext:
+            return Response({'error': "Faqat rasm fayllari (jpg, png, webp, gif) qabul qilinadi"}, status=status.HTTP_400_BAD_REQUEST)
+        if image_file.size > 8 * 1024 * 1024:
+            return Response({'error': "Rasm hajmi 8MB dan katta bo'lmasligi kerak"}, status=status.HTTP_400_BAD_REQUEST)
+
+        products_dir = Path(settings.MEDIA_ROOT) / 'products'
+        products_dir.mkdir(parents=True, exist_ok=True)
+        filename = f"{uuid.uuid4().hex}{ext}"
+        with open(products_dir / filename, 'wb') as f:
+            for chunk in image_file.chunks():
+                f.write(chunk)
+
+        url = request.build_absolute_uri(f"{settings.MEDIA_URL}products/{filename}")
+        return Response({'url': url})
 
     @action(detail=True, methods=['post'])
     def restock(self, request, pk=None):

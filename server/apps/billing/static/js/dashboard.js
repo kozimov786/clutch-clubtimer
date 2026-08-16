@@ -1595,6 +1595,9 @@ function renderInventoryTable(products) {
         <button onclick="openSpisaniyeModal(${p.id})" class="py-1 px-2.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition-all flex items-center gap-1 shrink-0" title="${t('bar.writeoff')}">
           🗑️ ${t('bar.writeoff')}
         </button>
+        <button onclick="openProductEditModal(${p.id})" class="py-1 px-2.5 rounded-lg bg-slate-700/40 hover:bg-slate-700/70 text-slate-200 border border-slate-600/50 text-xs font-bold transition-all flex items-center gap-1 shrink-0" title="${t('games.edit')}">
+          ✏️
+        </button>
       </td>
     `;
     tbody.appendChild(tr);
@@ -2329,6 +2332,134 @@ function toggleRestockProductMode(mode) {
   updateRestockCalc();
 }
 
+async function openProductEditModal(productId) {
+  // cachedProducts faqat Bar/POS ro'yxati ochilganda to'ldiriladi — Ombor
+  // jadvali esa alohida (/api/orders/analytics/) manbadan keladi, shuning
+  // uchun bu yerda ishonch bilan to'g'ridan-to'g'ri serverdan olinadi.
+  let p;
+  try {
+    const res = await fetch(`/api/products/${productId}/`);
+    if (!res.ok) return;
+    p = await res.json();
+  } catch (err) {
+    console.error('Product fetch error:', err);
+    return;
+  }
+
+  document.getElementById('product-edit-id').value = p.id;
+  document.getElementById('product-edit-name').value = p.name;
+  document.getElementById('product-edit-cost-price').value = p.cost_price || 0;
+  document.getElementById('product-edit-price').value = p.price || 0;
+  document.getElementById('product-edit-active').checked = !!p.is_available;
+  document.getElementById('product-edit-image-url').value = p.image || '';
+  const preview = document.getElementById('product-edit-image-preview');
+  if (preview) preview.src = p.image || '';
+
+  const catSelect = document.getElementById('product-edit-category');
+  if (catSelect) {
+    try {
+      const res = await fetch('/api/categories/');
+      const categories = res.ok ? await res.json() : [];
+      catSelect.innerHTML = categories.map(c => `<option value="${c.id}" ${c.id === p.category ? 'selected' : ''}>${c.icon || ''} ${c.name}</option>`).join('');
+    } catch (err) {
+      console.error('Categories fetch error:', err);
+    }
+  }
+
+  document.getElementById('modal-product-edit')?.classList.remove('hidden');
+}
+
+function closeProductEditModal() {
+  document.getElementById('modal-product-edit')?.classList.add('hidden');
+}
+
+async function saveProductEdit(e) {
+  e.preventDefault();
+  const id = document.getElementById('product-edit-id').value;
+  const payload = {
+    name: document.getElementById('product-edit-name').value,
+    category: document.getElementById('product-edit-category').value || null,
+    cost_price: parseFloat(document.getElementById('product-edit-cost-price').value) || 0,
+    price: parseFloat(document.getElementById('product-edit-price').value) || 0,
+    is_available: document.getElementById('product-edit-active').checked,
+  };
+  const imageUrl = document.getElementById('product-edit-image-url').value.trim();
+  if (imageUrl) payload.image = imageUrl;
+
+  try {
+    const res = await fetch(`/api/products/${id}/`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      closeProductEditModal();
+      fetchAnalytics();
+      productsCacheHTML();
+    } else {
+      const errData = await res.json();
+      alert(errData.error || t('product_edit_modal.save_error'));
+    }
+  } catch (err) {
+    console.error('Product save error:', err);
+    alert(t('product_edit_modal.save_error'));
+  }
+}
+
+async function deleteProductFromEdit() {
+  const id = document.getElementById('product-edit-id').value;
+  if (!id) return;
+  if (!confirm(t('product_edit_modal.confirm_delete'))) return;
+
+  try {
+    const res = await fetch(`/api/products/${id}/`, { method: 'DELETE' });
+    if (res.ok) {
+      closeProductEditModal();
+      fetchAnalytics();
+      productsCacheHTML();
+    } else {
+      const errData = await res.json();
+      alert(errData.error || t('product_edit_modal.delete_error'));
+    }
+  } catch (err) {
+    console.error('Product delete error:', err);
+    alert(t('product_edit_modal.delete_error'));
+  }
+}
+
+async function uploadProductImage(fileInput, targetUrlInputId, previewImgId) {
+  const file = fileInput.files && fileInput.files[0];
+  if (!file) return;
+
+  const label = fileInput.closest('label')?.querySelector('span');
+  const originalLabelText = label ? label.textContent : '';
+  if (label) label.textContent = t('restock_modal.uploading');
+
+  try {
+    const formData = new FormData();
+    formData.append('image', file);
+    const res = await fetch('/api/products/upload_image/', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (res.ok && data.url) {
+      const targetInput = document.getElementById(targetUrlInputId);
+      if (targetInput) targetInput.value = data.url;
+      const preview = document.getElementById(previewImgId);
+      if (preview) {
+        preview.src = data.url;
+        preview.classList.remove('hidden');
+      }
+    } else {
+      alert(data.error || t('restock_modal.upload_error'));
+    }
+  } catch (err) {
+    console.error('Image upload error:', err);
+    alert(t('restock_modal.upload_error'));
+  } finally {
+    if (label) label.textContent = originalLabelText;
+    fileInput.value = '';
+  }
+}
+
 function openRestockModal(productId = null) {
   const modal = document.getElementById('modal-restock');
   const select = document.getElementById('restock-product-select');
@@ -2349,6 +2480,8 @@ function openRestockModal(productId = null) {
   if (nameInput) nameInput.value = '';
   const newImageInput = document.getElementById('restock-new-product-image');
   if (newImageInput) newImageInput.value = '';
+  const imagePreview = document.getElementById('restock-image-preview');
+  if (imagePreview) { imagePreview.classList.add('hidden'); imagePreview.src = ''; }
 
   if (productId) {
     toggleRestockProductMode('existing');

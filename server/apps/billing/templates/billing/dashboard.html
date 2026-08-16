@@ -1423,6 +1423,13 @@
           <div id="restock-new-container" class="hidden space-y-2">
             <input type="text" id="restock-new-product-name" data-i18n-placeholder="restock_modal.new_name_placeholder" placeholder="Yangi mahsulot nomi (masalan: RedBull 250ml)" class="w-full bg-slate-900/90 border border-cyan-500/50 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 font-semibold">
             <input type="url" id="restock-new-product-image" data-i18n-placeholder="restock_modal.image_placeholder" placeholder="Rasm URL manzili (ixtiyoriy, https://... boʻlmasa standart rasm qoʻyiladi)" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 font-semibold">
+            <div class="flex items-center gap-3">
+              <img id="restock-image-preview" class="hidden w-12 h-12 rounded-lg object-cover border border-slate-700 shrink-0">
+              <label class="flex-1 cursor-pointer">
+                <input type="file" id="restock-image-file" accept="image/*" class="hidden" onchange="uploadProductImage(this, 'restock-new-product-image', 'restock-image-preview')">
+                <span data-i18n="restock_modal.upload_photo" class="block text-center px-4 py-2.5 rounded-xl bg-slate-900/90 border border-slate-700 text-xs font-bold text-slate-300 hover:border-cyan-500 hover:text-cyan-300 transition-all">📷 Rasm Yuklash (kompyuterdan)</span>
+              </label>
+            </div>
           </div>
 
           <input type="hidden" id="restock-product-name">
@@ -1480,6 +1487,75 @@
           <button type="button" onclick="closeRestockModal()" data-i18n="common.cancel" class="flex-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-all">Bekor Qilish</button>
           <button type="submit" id="restock-submit-btn" data-i18n="restock_modal.submit" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-black text-xs font-black tracking-wide shadow-lg shadow-cyan-500/30 transition-all uppercase">
             Kirimni Saqlash
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Product Edit Modal (Mahsulotni Tahrirlash) -->
+  <div id="modal-product-edit" class="modal-wrapper fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden">
+    <div class="modal-sheet-inner glass-panel w-full max-w-lg rounded-2xl p-6 relative border border-slate-700 shadow-2xl overflow-hidden">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 font-bold">
+            ✏️
+          </div>
+          <div>
+            <h3 data-i18n="product_edit_modal.title" class="text-lg font-black font-orbitron text-white">MAHSULOTNI TAHRIRLASH</h3>
+          </div>
+        </div>
+        <button onclick="closeProductEditModal()" class="text-slate-400 hover:text-white p-1">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <form onsubmit="saveProductEdit(event)" class="mt-4 space-y-4">
+        <input type="hidden" id="product-edit-id">
+
+        <div>
+          <label data-i18n="product_edit_modal.name" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Nomi</label>
+          <input type="text" id="product-edit-name" required class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 font-semibold">
+        </div>
+
+        <div>
+          <label data-i18n="product_edit_modal.category" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Kategoriya</label>
+          <select id="product-edit-category" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500 font-semibold"></select>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label data-i18n="restock_modal.cost_price" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Tannarx (UZS)</label>
+            <input type="number" id="product-edit-cost-price" min="0" step="1" required class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-amber-400 focus:outline-none focus:border-amber-500 font-orbitron font-bold">
+          </div>
+          <div>
+            <label data-i18n="restock_modal.selling_price" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Sotish Narxi (UZS)</label>
+            <input type="number" id="product-edit-price" min="0" step="1" required class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-emerald-400 focus:outline-none focus:border-emerald-500 font-orbitron font-bold">
+          </div>
+        </div>
+
+        <div>
+          <label data-i18n="product_edit_modal.image" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Rasm</label>
+          <div class="flex items-center gap-3">
+            <img id="product-edit-image-preview" class="w-14 h-14 rounded-lg object-cover border border-slate-700 shrink-0">
+            <label class="flex-1 cursor-pointer">
+              <input type="file" id="product-edit-image-file" accept="image/*" class="hidden" onchange="uploadProductImage(this, 'product-edit-image-url', 'product-edit-image-preview')">
+              <span data-i18n="restock_modal.upload_photo" class="block text-center px-4 py-2.5 rounded-xl bg-slate-900/90 border border-slate-700 text-xs font-bold text-slate-300 hover:border-cyan-500 hover:text-cyan-300 transition-all">📷 Rasm Yuklash (kompyuterdan)</span>
+            </label>
+          </div>
+          <input type="hidden" id="product-edit-image-url">
+        </div>
+
+        <label class="flex items-center gap-2.5 cursor-pointer">
+          <input type="checkbox" id="product-edit-active" class="w-4 h-4 rounded accent-cyan-500">
+          <span data-i18n="product_edit_modal.active" class="text-xs font-semibold text-slate-300">Faol (POS'da sotuvga chiqadi)</span>
+        </label>
+
+        <div class="pt-2 flex items-center gap-3">
+          <button type="button" onclick="deleteProductFromEdit()" data-i18n="games.delete" class="px-5 py-3 rounded-xl bg-rose-900/40 hover:bg-rose-800/50 text-rose-300 border border-rose-900/50 text-xs font-bold transition-all">O'chirish</button>
+          <button type="button" onclick="closeProductEditModal()" data-i18n="common.cancel" class="flex-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-all">Bekor Qilish</button>
+          <button type="submit" data-i18n="product_edit_modal.save" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-black text-xs font-black tracking-wide shadow-lg shadow-cyan-500/30 transition-all uppercase">
+            Saqlash
           </button>
         </div>
       </form>

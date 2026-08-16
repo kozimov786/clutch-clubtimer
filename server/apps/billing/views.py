@@ -1651,7 +1651,7 @@ class CustomerViewSet(viewsets.ModelViewSet):
     serializer_class = CustomerSerializer
 
     def get_permissions(self):
-        if self.action in ('kiosk_login', 'my_activity', 'kiosk_change_password', 'whoami'):
+        if self.action in ('kiosk_login', 'my_activity', 'kiosk_change_password', 'update_profile', 'whoami'):
             return [HasClientApiKey()]
         return super().get_permissions()
 
@@ -1801,6 +1801,24 @@ class CustomerViewSet(viewsets.ModelViewSet):
             description=f"{customer.full_name} ({customer.phone}) parolini o'zi o'zgartirdi"
         )
         return Response({'success': True})
+
+    @action(detail=False, methods=['post'])
+    def update_profile(self, request):
+        """Kiosk'dan: login qilgan mijoz o'zining kabinetda ko'rinadigan
+        ismini (pilot tag) o'zgartiradi."""
+        customer, error_response = _resolve_kiosk_session_customer(request)
+        if error_response:
+            return error_response
+
+        full_name = str(request.data.get('full_name', '')).strip()
+        if not full_name:
+            return Response({'error': "Ism bo'sh bo'lishi mumkin emas!"}, status=status.HTTP_400_BAD_REQUEST)
+        if len(full_name) > 150:
+            return Response({'error': "Ism juda uzun!"}, status=status.HTTP_400_BAD_REQUEST)
+
+        customer.full_name = full_name
+        customer.save(update_fields=['full_name'])
+        return Response(CustomerSerializer(customer).data)
 
     @action(detail=True, methods=['post'])
     def top_up(self, request, pk=None):

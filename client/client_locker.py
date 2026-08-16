@@ -461,6 +461,26 @@ class ApiClient:
                     on_done(False, {"error": "Server bilan aloqa yo'q"})
         threading.Thread(target=_post, daemon=True).start()
 
+    def update_profile_async(self, session_token, full_name, on_done=None):
+        """Mijoz "Kabinet" oynasida "Pilot Tag" (ism) ni o'zgartirib
+        SAVE CHANGES bosganda."""
+        def _post():
+            try:
+                r = requests.post(
+                    f"{self.server_url}/api/customers/update_profile/",
+                    json={"session_token": session_token, "full_name": full_name},
+                    headers=self._headers(),
+                    timeout=10
+                )
+                ok = r.status_code == 200
+                if on_done:
+                    on_done(ok, r.json() if r.content else {})
+            except Exception as e:
+                print(f"[API] update_profile: {e}")
+                if on_done:
+                    on_done(False, {"error": "Server bilan aloqa yo'q"})
+        threading.Thread(target=_post, daemon=True).start()
+
     def customer_stop_session_async(self, pc_id, session_token, on_done=None):
         """Mijoz "Kabinet" oynasidan o'zi balansidan ochgan seansni
         o'zi to'xtatganda. Muvaffaqiyatli bo'lsa, PC odatdagi
@@ -1759,6 +1779,7 @@ class CustomerCabinetPage(QWidget):
     """Mijozning "SYSTEM PREFERENCES" (Shaxsiy Kabinet) sahifasi — 1:1 Cyber-Esports dizayni."""
     _pw_result_ready = pyqtSignal(bool, dict)
     _activity_result_ready = pyqtSignal(bool, dict)
+    _save_result_ready = pyqtSignal(bool, dict)
     stop_session_requested = pyqtSignal(str)
     back_requested = pyqtSignal()
 
@@ -1770,6 +1791,7 @@ class CustomerCabinetPage(QWidget):
 
         self._pw_result_ready.connect(self._apply_password_result)
         self._activity_result_ready.connect(self._apply_activity_result)
+        self._save_result_ready.connect(self._apply_save_result)
 
         main_lo = QVBoxLayout(self)
         main_lo.setContentsMargins(28, 20, 28, 20)
@@ -1880,12 +1902,22 @@ class CustomerCabinetPage(QWidget):
                     color: #E1E2EB;
                 }
             """)
+            # Bu bo'limlar hali qurilmagan — hech qanday reaksiyasiz
+            # "o'lik" tugma qoldirish o'rniga, kamida "tez orada"
+            # xabarini ko'rsatadi.
+            btn.clicked.connect(lambda _, name=label_s: QMessageBox.information(
+                self, "Tez orada", f"\"{name}\" bo'limi hali ishlab chiqilmoqda."
+            ))
             tabs_lo.addWidget(btn)
 
         tabs_lo.addStretch(1)
 
-        # LOGOUT / CHIQISH TUGMASI
-        logout_btn = QPushButton("  🚪  LOGOUT / CHIQISH")
+        # Bu tugma shunchaki kabinetdan chiqmaydi — haqiqiy (pulli)
+        # seansni to'xtatib, kompyuterni qulflaydi (_on_stop_session_clicked).
+        # Nomi shuni aniq aks ettirishi kerak, aks holda mijoz "Chiqish"
+        # deb bosib, tasodifan o'z seansini tugatib qo'yishi mumkin —
+        # kabinetdan shunchaki chiqish uchun yuqoridagi "✕ ORQAGA" tugmasi bor.
+        logout_btn = QPushButton("  ⏻  SEANSNI TUGATISH")
         logout_btn.setFont(cyber_font(9, QFont.Weight.Bold, "Mono"))
         logout_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         logout_btn.setFixedHeight(42)
@@ -2463,6 +2495,26 @@ class CustomerCabinetPage(QWidget):
         self.pw_form.setVisible(not self.pw_form.isVisible())
 
     def _on_save_clicked(self):
+        full_name = self.pilot_tag_input.text().strip()
+        if not full_name:
+            return
+        token = self.customer_data.get('session_token', '')
+        self.save_btn.setEnabled(False)
+        self.save_btn.setText("SAQLANMOQDA...")
+        self.api_client.update_profile_async(
+            token, full_name,
+            on_done=lambda ok, data: self._save_result_ready.emit(ok, data)
+        )
+
+    def _apply_save_result(self, ok, data):
+        self.save_btn.setEnabled(True)
+        if not ok:
+            self.save_btn.setText("SAVE CHANGES")
+            error = data.get('error', "Saqlashda xatolik yuz berdi") if isinstance(data, dict) else "Saqlashda xatolik yuz berdi"
+            QMessageBox.warning(self, "Xatolik", error)
+            return
+
+        self.customer_data['full_name'] = data.get('full_name', self.customer_data.get('full_name', ''))
         self.save_btn.setText("SAVED  ✓")
         self.save_btn.setStyleSheet("""
             QPushButton {
@@ -4343,6 +4395,13 @@ class TournamentsBonusesPage(QWidget):
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #00E5FF, stop:1 #52FFAC);
             }
         """)
+        # Turnir ma'lumotlari (yuqoridagi sarlavha, mukofot, sana) hozircha
+        # namoyish uchun qattiq yozilgan — buning ortida haqiqiy turnir
+        # tizimi (backend) yo'q, shuning uchun ro'yxatdan o'tish ham
+        # hozircha faqat "tez orada" xabarini ko'rsatadi.
+        reg_btn.clicked.connect(lambda: QMessageBox.information(
+            self, "Tez orada", "Turnirlarga ro'yxatdan o'tish funksiyasi hali ishlab chiqilmoqda."
+        ))
         h_action.addWidget(reg_btn)
 
         hero_lo.addLayout(h_action, 1)

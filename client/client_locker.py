@@ -47,7 +47,7 @@ import requests
 
 from PyQt6.QtCore import (
     Qt, QTimer, QEvent, pyqtSignal, QObject, QDate, QByteArray, QBuffer,
-    QIODevice, QPointF, QPropertyAnimation, QVariantAnimation, QEasingCurve, QRect
+    QIODevice, QPointF, QPropertyAnimation, QVariantAnimation, QEasingCurve, QRect, QSize
 )
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel,
@@ -832,6 +832,130 @@ class AdminOverrideDialog(QDialog):
             self.accept()
         else:
             self.pin_input.setStyleSheet(INPUT_QSS + "QLineEdit { border: 1px solid #ffb4ab; }")
+
+
+class MouseSettingsDialog(QDialog):
+    """Sichqoncha sezgirligi — Windows darajasida (SystemParametersInfo
+    orqali), shuning uchun har qanday sichqoncha bilan ishlaydi, alohida
+    drayver kerak emas. Login talab qilinmaydi — istalgan o'yinchi
+    (naqd/karta bilan boshlangan seansda ham) sozlashi mumkin. PC
+    qulflanganda standart holatga avtomatik qaytariladi (ClientLockerApp
+    tomonidan) — bir mijozning sezgirligi keyingisiga o'tib qolmasligi
+    uchun."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Sichqoncha sozlamalari")
+        self.setModal(True)
+        self.setFixedSize(380, 300)
+        self.setStyleSheet(f"""
+            QDialog {{
+                background: {COLOR_SURFACE_CONTAINER_LOW};
+                border: 1px solid {COLOR_PRIMARY_CONTAINER};
+                border-radius: 8px;
+            }}
+            QLabel {{ color: {COLOR_ON_SURFACE}; border: none; background: transparent; }}
+        """)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(24, 22, 24, 20)
+        root.setSpacing(14)
+
+        title = QLabel("🖱️  SICHQONCHA SOZLAMALARI")
+        title.setFont(cyber_font(12, QFont.Weight.Bold, "Sora"))
+        title.setStyleSheet(f"color: {COLOR_PRIMARY_CONTAINER}; letter-spacing: 1px;")
+        root.addWidget(title)
+
+        row1 = QHBoxLayout()
+        sens_lbl = QLabel("Sezgirlik (sensitivity)")
+        sens_lbl.setFont(cyber_font(10, family="Hanken"))
+        row1.addWidget(sens_lbl)
+        row1.addStretch(1)
+        self.speed_val_label = QLabel("10")
+        self.speed_val_label.setFont(QFont("Consolas", 12, QFont.Weight.Bold))
+        self.speed_val_label.setStyleSheet(f"color: {COLOR_CYAN};")
+        row1.addWidget(self.speed_val_label)
+        root.addLayout(row1)
+
+        self.speed_slider = QSlider(Qt.Orientation.Horizontal)
+        self.speed_slider.setMinimum(1)
+        self.speed_slider.setMaximum(20)
+        self.speed_slider.setStyleSheet(f"""
+            QSlider::groove:horizontal {{ height: 6px; background: {COLOR_INPUT_BG}; border-radius: 3px; }}
+            QSlider::handle:horizontal {{
+                width: 18px; margin: -6px 0; border-radius: 9px;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {COLOR_CYAN}, stop:1 {COLOR_VIOLET});
+            }}
+            QSlider::sub-page:horizontal {{ background: {COLOR_CYAN}; border-radius: 3px; }}
+        """)
+        self.speed_slider.valueChanged.connect(self._on_speed_changed)
+        root.addWidget(self.speed_slider)
+
+        low_high_row = QHBoxLayout()
+        low = QLabel("Past")
+        low.setStyleSheet(f"color: {COLOR_ON_SURFACE_VARIANT}; font-size: 10px;")
+        low_high_row.addWidget(low)
+        low_high_row.addStretch(1)
+        high = QLabel("Yuqori")
+        high.setStyleSheet(f"color: {COLOR_ON_SURFACE_VARIANT}; font-size: 10px;")
+        low_high_row.addWidget(high)
+        root.addLayout(low_high_row)
+
+        root.addSpacing(6)
+
+        self.accel_checkbox = QCheckBox("Sichqoncha tezlashishi (Enhance pointer precision)")
+        self.accel_checkbox.setStyleSheet(f"color: {COLOR_ON_SURFACE};")
+        self.accel_checkbox.toggled.connect(self._on_accel_toggled)
+        root.addWidget(self.accel_checkbox)
+        accel_hint = QLabel("FPS o'yinlarda ko'pchilik o'yinchilar buni o'chirib qo'yadi (aim uchun barqaror sezgirlik).")
+        accel_hint.setWordWrap(True)
+        accel_hint.setStyleSheet(f"color: {COLOR_OUTLINE}; font-size: 10px;")
+        root.addWidget(accel_hint)
+
+        root.addStretch(1)
+
+        btn_row = QHBoxLayout()
+        reset_btn = QPushButton("Standartga qaytarish")
+        reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        reset_btn.setFixedHeight(36)
+        reset_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255,255,255,0.06); color: #94a3b8;
+                border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;
+            }
+            QPushButton:hover { color: #e2e8f0; }
+        """)
+        reset_btn.clicked.connect(self._on_reset_clicked)
+        btn_row.addWidget(reset_btn)
+
+        close_btn = QPushButton("Yopish")
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.setFixedHeight(36)
+        close_btn.setStyleSheet(CYBER_PRIMARY_BTN_QSS)
+        close_btn.clicked.connect(self.accept)
+        btn_row.addWidget(close_btn)
+        root.addLayout(btn_row)
+
+        # Joriy qiymatlar bilan boshlanadi (oldingi mijoz o'zgartirgan
+        # bo'lsa ham, hozirgi haqiqiy holat ko'rsatiladi).
+        self.speed_slider.blockSignals(True)
+        self.speed_slider.setValue(get_mouse_speed())
+        self.speed_slider.blockSignals(False)
+        self.speed_val_label.setText(str(get_mouse_speed()))
+        self.accel_checkbox.blockSignals(True)
+        self.accel_checkbox.setChecked(get_mouse_acceleration())
+        self.accel_checkbox.blockSignals(False)
+
+    def _on_speed_changed(self, value):
+        self.speed_val_label.setText(str(value))
+        set_mouse_speed(value)
+
+    def _on_accel_toggled(self, checked):
+        set_mouse_acceleration(checked)
+
+    def _on_reset_clicked(self):
+        self.speed_slider.setValue(MOUSE_DEFAULT_SPEED)  # valueChanged -> set_mouse_speed
+        self.accel_checkbox.setChecked(True)              # toggled -> set_mouse_acceleration
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -4715,26 +4839,18 @@ class NexusFooterBar(QFrame):
         self.apps_layout.setSpacing(8)
         layout.addWidget(self.apps_container)
 
-        self._render_default_apps()
-
-    def _render_default_apps(self):
-        default_apps = [
-            {"label": "CS2", "icon": "🔫", "accent": "#00DAF3"},
-            {"label": "DOTA 2", "icon": "⚔️", "accent": "#FF5449"},
-            {"label": "VALORANT", "icon": "🎯", "accent": "#FF4655"},
-            {"label": "STEAM", "icon": "🎮", "accent": "#1B2838"},
-            {"label": "DISCORD", "icon": "💬", "accent": "#5865F2"},
-        ]
-        self.set_apps(default_apps)
-
     def set_apps(self, apps):
         while self.apps_layout.count():
             item = self.apps_layout.takeAt(0)
             if item.widget():
                 item.widget().setParent(None)
 
+        # Hech qanday o'yin/dastur haqiqatda ochiq bo'lmasa — bo'sh
+        # qoldiriladi. Avval bu yerda har doim CS2/DOTA2/VALORANT/STEAM/
+        # DISCORD kabi QATTIQ YOZILGAN (soxta) tugmalar ko'rsatilar edi —
+        # ular haqiqiy ochiq dasturlarga bog'liq emas edi, bosilganda
+        # "o'yinga qaytish" ishlamas edi.
         if not apps:
-            self._render_default_apps()
             return
 
         tag_lbl = QLabel("SO'NGGI APPLAR:")
@@ -4905,8 +5021,7 @@ class LauncherPage(QWidget):
 
     def set_running_apps(self, apps):
         self.apps_bar.set_apps(apps)
-        if apps:
-            self.footer_bar.set_apps(apps)
+        self.footer_bar.set_apps(apps)
 
     def set_logged_in_customer(self, data):
         self.logged_in_customer = data

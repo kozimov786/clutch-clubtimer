@@ -55,7 +55,7 @@ from PyQt6.QtWidgets import (
     QLineEdit, QGraphicsDropShadowEffect, QSizePolicy, QStackedWidget,
     QSpacerItem, QMessageBox, QDialog, QSlider, QCheckBox, QProgressBar
 )
-from PyQt6.QtGui import QFont, QColor, QPixmap, QGuiApplication, QIcon, QPainter, QPen
+from PyQt6.QtGui import QFont, QColor, QPixmap, QGuiApplication, QIcon, QPainter, QPen, QRadialGradient, QBrush
 
 ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
 CLIENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -764,76 +764,6 @@ class CyberQRWidget(QWidget):
         painter.end()
 
 
-class AdminOverrideDialog(QDialog):
-    """Admin Override / Favqulodda ochish dialogi."""
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Admin Override")
-        self.setFixedSize(360, 240)
-        self.setStyleSheet(f"""
-            QDialog {{
-                background: {COLOR_SURFACE_CONTAINER_LOW};
-                border: 1px solid {COLOR_PRIMARY_CONTAINER};
-                border-radius: 8px;
-            }}
-            QLabel {{ color: {COLOR_ON_SURFACE}; border: none; background: transparent; }}
-        """)
-        
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 20, 24, 20)
-        layout.setSpacing(14)
-        
-        title = QLabel("ADMIN OVERRIDE")
-        title.setFont(cyber_font(12, QFont.Weight.Bold, "Sora"))
-        title.setStyleSheet(f"color: {COLOR_PRIMARY_CONTAINER}; letter-spacing: 1.5px;")
-        layout.addWidget(title)
-        
-        desc = QLabel("Kiosk rejimini bekor qilish yoki seansni boshqarish uchun admin parolini kiriting:")
-        desc.setFont(cyber_font(10, family="Hanken"))
-        desc.setStyleSheet(f"color: {COLOR_ON_SURFACE_VARIANT};")
-        desc.setWordWrap(True)
-        layout.addWidget(desc)
-        
-        self.pin_input = QLineEdit()
-        self.pin_input.setPlaceholderText("Admin Code")
-        self.pin_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.pin_input.setFixedHeight(40)
-        self.pin_input.setStyleSheet(INPUT_QSS)
-        layout.addWidget(self.pin_input)
-        
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(10)
-        
-        cancel_btn = QPushButton("Bekor qilish")
-        cancel_btn.setFixedHeight(36)
-        cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        cancel_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent; color: #BAC9CC;
-                border: 1px solid rgba(132, 147, 150, 0.4); border-radius: 4px;
-            }
-            QPushButton:hover { color: #ffffff; border-color: #ffffff; }
-        """)
-        cancel_btn.clicked.connect(self.reject)
-        btn_row.addWidget(cancel_btn)
-        
-        confirm_btn = QPushButton("Tasdiqlash")
-        confirm_btn.setFixedHeight(36)
-        confirm_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        confirm_btn.setStyleSheet(CYBER_PRIMARY_BTN_QSS)
-        confirm_btn.clicked.connect(self._on_confirm)
-        btn_row.addWidget(confirm_btn)
-        
-        layout.addLayout(btn_row)
-
-    def _on_confirm(self):
-        entered = self.pin_input.text().strip()
-        if entered in ("1234", "admin", "clutch", "7777"):
-            self.accept()
-        else:
-            self.pin_input.setStyleSheet(INPUT_QSS + "QLineEdit { border: 1px solid #ffb4ab; }")
-
-
 class MouseSettingsDialog(QDialog):
     """Sichqoncha sezgirligi — Windows darajasida (SystemParametersInfo
     orqali), shuning uchun har qanday sichqoncha bilan ishlaydi, alohida
@@ -974,10 +904,6 @@ class LockScreenWidget(QWidget):
         self.logged_in_customer = None
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setStyleSheet(f"background-color: {COLOR_BG};")
-
-        # Fon rasmi (Cyber-Esports Grid / System Locked visual)
-        bg_path = os.path.join(ASSETS_DIR, "cyber_lock_bg.jpg")
-        self._bg_pixmap = QPixmap(bg_path) if os.path.exists(bg_path) else None
 
         root_layout = QVBoxLayout(self)
         root_layout.setContentsMargins(48, 28, 48, 28)
@@ -1340,32 +1266,17 @@ class LockScreenWidget(QWidget):
         footer_row.setContentsMargins(0, 16, 0, 0)
         footer_row.addStretch(1)
 
-        # O'ng: Admin Override + Version
+        # O'ng: Versiya
+        # (Ilgari shu yerda "Admin Override" tugmasi bo'lgan — bosilsa,
+        # 4 ta oddiy taxmin qilinadigan kod (1234/admin/clutch/7777)
+        # bilan kiosk rejimidan butunlay chiqib ketish mumkin edi.
+        # Bu qulf ekranida, ya'ni istalgan mijozga ko'rinadigan joyda
+        # turgani uchun jiddiy xavfsizlik teshigi edi — olib tashlandi.
+        # Xodim uchun favqulodda chiqish hamon klaviatura kombinatsiyasi
+        # orqali ishlaydi (Ctrl+Alt+Shift+U yoki Ctrl+Shift+P).)
         admin_col = QVBoxLayout()
         admin_col.setSpacing(4)
         admin_col.setAlignment(Qt.AlignmentFlag.AlignRight)
-
-        override_row = QHBoxLayout()
-        override_row.setSpacing(8)
-        override_row.addStretch(1)
-        override_txt = QLabel("Admin Override")
-        override_txt.setFont(cyber_font(8, QFont.Weight.Bold, "Mono"))
-        override_txt.setStyleSheet(f"color: {COLOR_ON_SURFACE_VARIANT};")
-        override_row.addWidget(override_txt)
-
-        self.override_toggle = QPushButton()
-        self.override_toggle.setFixedSize(36, 18)
-        self.override_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.override_toggle.setStyleSheet("""
-            QPushButton {
-                background: #32353C; border: 1px solid #849396;
-                border-radius: 9px;
-            }
-            QPushButton:hover { background: #93000A; border-color: #FFB4AB; }
-        """)
-        self.override_toggle.clicked.connect(self._on_admin_override_clicked)
-        override_row.addWidget(self.override_toggle)
-        admin_col.addLayout(override_row)
 
         ver_lbl = QLabel(f"V {get_local_client_version()}_BETA")
         ver_lbl.setFont(cyber_font(7, family="Mono"))
@@ -1389,18 +1300,29 @@ class LockScreenWidget(QWidget):
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        if self._bg_pixmap and not self._bg_pixmap.isNull():
-            # Rasm butun oynani to'liq egallaydi
-            scaled = self._bg_pixmap.scaled(
-                self.size(),
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation
-            )
-            x = (self.width() - scaled.width()) // 2
-            y = (self.height() - scaled.height()) // 2
-            painter.drawPixmap(x, y, scaled)
-            # Yengil shaffof qatlam
-            painter.fillRect(self.rect(), QColor(11, 14, 20, 100))
+
+        # Fon: to'q rang + yumshoq markaziy nur (referens dizayndagi
+        # "ambient glow" effekti).
+        painter.fillRect(self.rect(), QColor(COLOR_BG))
+        glow = QRadialGradient(self.width() / 2, self.height() * 0.4, self.width() * 0.6)
+        glow.setColorAt(0, QColor(0, 218, 243, 20))
+        glow.setColorAt(1, QColor(0, 218, 243, 0))
+        painter.fillRect(self.rect(), QBrush(glow))
+
+        # HUD-uslubidagi kibernetik panjara — avval shu joyda past
+        # aniqlikdagi (512x279) rasm bo'lgan, katta ekranga cho'zilganda
+        # xira/dog' bo'lib ko'rinardi. Vektor sifatida chizilgan panjara
+        # esa har qanday ekran o'lchamida doim tiniq (rezolyutsiyadan
+        # mustaqil).
+        pen = QPen(QColor(0, 218, 243, 14))
+        pen.setWidth(1)
+        painter.setPen(pen)
+        step = 48
+        for x in range(0, self.width(), step):
+            painter.drawLine(x, 0, x, self.height())
+        for y in range(0, self.height(), step):
+            painter.drawLine(0, y, self.width(), y)
+
         painter.end()
 
     def _switch_to_login_tab(self):
@@ -1450,12 +1372,6 @@ class LockScreenWidget(QWidget):
             title,
             f"Tanlangan tarif: {title} ({price})\nSeansni faollashtirish uchun kassaga murojaat qiling yoki hisobingiz orqali kiring."
         )
-
-    def _on_admin_override_clicked(self):
-        dialog = AdminOverrideDialog(parent=self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            global EMERGENCY_UNLOCK_REQUESTED
-            EMERGENCY_UNLOCK_REQUESTED = True
 
     def _update_clock(self):
         self.clock_label.setText(datetime.now().strftime("%H:%M:%S"))

@@ -1577,27 +1577,29 @@ function renderInventoryTable(products) {
     const totalAssetVal = costPrice * p.stock;
 
     tr.innerHTML = `
-      <td class="py-3 px-3 whitespace-nowrap">
-        <div class="flex items-center gap-2.5">
+      <td class="py-3 px-2.5">
+        <div class="flex items-center gap-2 min-w-0">
           <img src="${p.image}" class="w-8 h-8 rounded-lg object-cover border border-slate-700 shrink-0">
-          <span class="font-bold text-white text-sm truncate max-w-[160px] sm:max-w-xs inline-block" title="${p.name}">${p.name}</span>
+          <span class="font-bold text-white text-sm truncate inline-block" title="${p.name}">${p.name}</span>
         </div>
       </td>
-      <td class="py-3 px-3 text-xs text-slate-400 font-semibold whitespace-nowrap">${p.category_name || t('common.all')}</td>
-      <td class="py-3 px-3 font-mono text-amber-400 font-bold whitespace-nowrap">${formatMoney(costPrice)}</td>
-      <td class="py-3 px-3 font-mono text-emerald-400 font-bold whitespace-nowrap">${formatMoney(sellingPrice)}</td>
-      <td class="py-3 px-3 whitespace-nowrap">${stockBadge}</td>
-      <td class="py-3 px-3 font-mono text-slate-300 font-semibold whitespace-nowrap">${formatMoney(totalAssetVal)}</td>
-      <td class="py-3 px-3 text-right flex items-center justify-end gap-1.5 whitespace-nowrap">
-        <button onclick="openRestockModal(${p.id})" class="py-1 px-2.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold transition-all flex items-center gap-1 shrink-0" title="${t('analytics.stock_in')}">
-          📦 ${t('analytics.intake_short')}
-        </button>
-        <button onclick="openSpisaniyeModal(${p.id})" class="py-1 px-2.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition-all flex items-center gap-1 shrink-0" title="${t('bar.writeoff')}">
-          🗑️ ${t('bar.writeoff')}
-        </button>
-        <button onclick="openProductEditModal(${p.id})" class="py-1 px-2.5 rounded-lg bg-slate-700/40 hover:bg-slate-700/70 text-slate-200 border border-slate-600/50 text-xs font-bold transition-all flex items-center gap-1 shrink-0" title="${t('games.edit')}">
-          ✏️
-        </button>
+      <td class="py-3 px-2.5 text-xs text-slate-400 font-semibold truncate">${p.category_name || t('common.all')}</td>
+      <td class="py-3 px-2.5 font-mono text-amber-400 font-bold truncate">${formatMoney(costPrice)}</td>
+      <td class="py-3 px-2.5 font-mono text-emerald-400 font-bold truncate">${formatMoney(sellingPrice)}</td>
+      <td class="py-3 px-2.5 truncate">${stockBadge}</td>
+      <td class="py-3 px-2.5 font-mono text-slate-300 font-semibold truncate">${formatMoney(totalAssetVal)}</td>
+      <td class="py-3 px-2.5 text-right">
+        <div class="flex items-center justify-end gap-1">
+          <button onclick="openRestockModal(${p.id})" class="w-7 h-7 shrink-0 flex items-center justify-center rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs transition-all" title="${t('analytics.stock_in')}">
+            📦
+          </button>
+          <button onclick="openSpisaniyeModal(${p.id})" class="w-7 h-7 shrink-0 flex items-center justify-center rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs transition-all" title="${t('bar.writeoff')}">
+            🗑️
+          </button>
+          <button onclick="openProductEditModal(${p.id})" class="w-7 h-7 shrink-0 flex items-center justify-center rounded-lg bg-slate-700/40 hover:bg-slate-700/70 text-slate-200 border border-slate-600/50 text-xs transition-all" title="${t('games.edit')}">
+            ✏️
+          </button>
+        </div>
       </td>
     `;
     tbody.appendChild(tr);

@@ -5374,7 +5374,7 @@ if IS_WINDOWS:
     from PyQt6.QtCore import QAbstractNativeEventFilter
 
     WM_HOTKEY = 0x0312
-    MOD_ALT = 0x0001; MOD_CONTROL = 0x0002; MOD_SHIFT = 0x0004
+    MOD_ALT = 0x0001; MOD_CONTROL = 0x0002; MOD_SHIFT = 0x0004; MOD_WIN = 0x0008
     HOTKEY_EMERGENCY_1 = 1   # Ctrl+Alt+Shift+U
     HOTKEY_EMERGENCY_2 = 2   # Ctrl+Shift+P
     HOTKEY_SHOW_LAUNCHER = 3  # F9
@@ -5382,6 +5382,26 @@ if IS_WINDOWS:
     # ko'p (ayniqsa noutbuk) klaviaturalarda bu tugma umuman yo'q. Ctrl
     # va F9 esa HAR QANDAY klaviaturada kafolatlangan mavjud.
     HOTKEY_SHOW_LAUNCHER_2 = 4  # Ctrl+F9
+
+    # Windows tugmasining o'zi past darajali hook orqali yutib
+    # yuboriladi (pastda, low_level_keyboard_proc'da), LEKIN bu Win+HARF
+    # kombinatsiyalarini (Win+W, Win+D va h.k.) to'liq bloklamaydi —
+    # bu Windows'ning hujjatlashtirilgan cheklovi: bunday kombinatsiyalar
+    # hook darajasidan pastroqda, alohida aniqlanadi. Amalda buning
+    # natijasi: o'yin (masalan eski CS 1.6) bir necha daqiqa ishlagach,
+    # WASD bosilganda navbat bilan Widgets (Win+W), Quick Settings
+    # (Win+A), Qidiruv (Win+S), Ish stoli (Win+D) ochilib, o'yindan
+    # chiqarib yuboradi — real holatda kuzatilgan, ekran suratlari bilan
+    # tasdiqlangan xato. Yechim: har bir xavfli Win+HARF kombinatsiyasini
+    # ALOHIDA RegisterHotKey orqali "band qilib qo'yish" — shunda Windows
+    # bu kombinatsiyani bizning WM_HOTKEY navbatimizga yuboradi (va hech
+    # narsa qilmaymiz — pastdagi filtr noma'lum ID'larni jimgina
+    # e'tiborsiz qoldiradi), standart Explorer harakati esa umuman
+    # ishga tushmaydi.
+    HOTKEY_BLOCK_BASE = 100
+    _BLOCKED_WIN_COMBO_KEYS = "WASDEQRXILGM"  # W,A,S,D (aynan xabar qilingan) + boshqa keng tarqalgan xavfli birikmalar
+    HOTKEY_BLOCK_IDS = {ch: HOTKEY_BLOCK_BASE + i for i, ch in enumerate(_BLOCKED_WIN_COMBO_KEYS)}
+    HOTKEY_BLOCK_TAB = HOTKEY_BLOCK_BASE + len(_BLOCKED_WIN_COMBO_KEYS)  # Win+Tab (Task View)
 
     class HotkeyEventFilter(QAbstractNativeEventFilter):
         def nativeEventFilter(self, eventType, message):
@@ -5414,6 +5434,22 @@ if IS_WINDOWS:
         else:
             print(f"[Hotkey] OGOHLANTIRISH: ba'zi hotkeylar ro'yxatdan o'tmadi: {results} "
                   f"GetLastError={ctypes.get_last_error()}")
+
+        # Win+W/A/S/D/E/Q/R/X/I/L/G/M va Win+Tab — "band qilib qo'yiladi"
+        # (yuqoridagi izohga qarang). Muvaffaqiyatsiz bo'lgan alohida
+        # kombinatsiyalar (masalan boshqa dastur allaqachon band qilgan
+        # bo'lsa) kritik emas — asosiy hotkeylardan farqli ravishda,
+        # shu sabab alohida (yumshoqroq) ogohlantirish bilan loglanadi.
+        win_combo_results = []
+        for ch, hk_id in HOTKEY_BLOCK_IDS.items():
+            ok = user32.RegisterHotKey(None, hk_id, MOD_WIN, ord(ch))
+            win_combo_results.append((f"Win+{ch}", ok))
+        win_combo_results.append(("Win+Tab", user32.RegisterHotKey(None, HOTKEY_BLOCK_TAB, MOD_WIN, VK_TAB)))
+        failed = [name for name, ok in win_combo_results if not ok]
+        if failed:
+            print(f"[Hotkey] OGOHLANTIRISH: quyidagi Win+HARF kombinatsiyalari band qilinmadi: {failed}")
+        else:
+            print("[Hotkey] Win+W/A/S/D va boshqa xavfli kombinatsiyalar muvaffaqiyatli band qilindi")
 
     # ── Ishga tushirilgan o'yin/dastur oynasini majburan old planga
     #    chiqarish. yield_to_app() bizning oynamizni orqaga o'tkazadi,

@@ -15,10 +15,10 @@ API_KEY = "AKiv9qEeJqBlO8Xa4HJfJ_ZmMig6c5srmY7Nr1c4oOw"
 
 # Favqulodda chiqish (Ctrl+Alt+Shift+U / Ctrl+Shift+P) uchun parol —
 # OCHIQ MATN EMAS, SHA-256 xesh sifatida saqlanadi. Standart qiymat
-# "ClutchZoneExit2026" paroliga mos keladi — buni albatta o'zingizniki
-# bilan almashtiring: python3 -c "import hashlib;
+# "4747" paroliga mos keladi — buni albatta o'zingizniki bilan
+# almashtiring: python3 -c "import hashlib;
 # print(hashlib.sha256('YANGI_PAROL'.encode()).hexdigest())"
-ADMIN_EXIT_PASSWORD_HASH = "cba90bbae34e91bf3a86497221ed22331501466663ecefcfef50c843004d3449"
+ADMIN_EXIT_PASSWORD_HASH = "822a8e0aad6a68a99ee9db27651f1f6115414b7a772984b3f6609246ffbe3ef5"
 
 FALLBACK_GAMES = [
     {

@@ -4,7 +4,7 @@
   "pc_name": "PC-01",
   "heartbeat_interval_seconds": 5,
   "api_key": "AKiv9qEeJqBlO8Xa4HJfJ_ZmMig6c5srmY7Nr1c4oOw",
-  "admin_exit_password_hash": "cba90bbae34e91bf3a86497221ed22331501466663ecefcfef50c843004d3449",
+  "admin_exit_password_hash": "822a8e0aad6a68a99ee9db27651f1f6115414b7a772984b3f6609246ffbe3ef5",
   "fallback_games": [
     {
       "name": "Counter-Strike 2",

@@ -225,18 +225,22 @@ def _on_image_loaded(label, data):
         if pixmap.loadFromData(data):
             target_w = label.width() if label.width() > 0 else 280
             target_h = label.height() if label.height() > 0 else 150
-            # KeepAspectRatio ("object-fit: contain") — rasm butunlay
-            # ko'rinadi, hech qismi kesilmaydi. Oldin
-            # KeepAspectRatioByExpanding ishlatilgan edi ("cover"), bu esa
-            # nisbati mos kelmagan rasmlarni kuchli kattalashtirib,
-            # ko'pini kesib tashlar edi (xira/juda yaqinlashtirilgan
-            # ko'rinish sababi shu edi).
+            # KeepAspectRatioByExpanding ("object-fit: cover") — rasm
+            # nisbati saqlangan holda butun katakni to'ldiradi (ortiqcha
+            # qismi kesib tashlanadi). MUHIM: label'da setScaledContents(True)
+            # yoqilgan (hover'da rasm silliq kattalashishi uchun kerak),
+            # shuning uchun pixmap ANIQ target_w x target_h o'lchamda
+            # bo'lishi SHART — aks holda label uni yana cho'zib, nisbatni
+            # (proporsiyani) buzib qo'yar edi (avval aynan shu bo'lgan).
             scaled = pixmap.scaled(
                 target_w, target_h,
-                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                 Qt.TransformationMode.SmoothTransformation
             )
-            label.setPixmap(scaled)
+            x = max(0, (scaled.width() - target_w) // 2)
+            y = max(0, (scaled.height() - target_h) // 2)
+            cropped = scaled.copy(x, y, target_w, target_h)
+            label.setPixmap(cropped)
     except RuntimeError:
         pass  # widget o'chirilgan bo'lishi mumkin (grid qayta yuklanganda)
 
@@ -3602,7 +3606,7 @@ class SnackProductCard(QFrame):
             price_val = float(product.get('price', 0))
         except (TypeError, ValueError):
             price_val = 0.0
-        unit = product.get('price_unit', 'CP')
+        unit = product.get('price_unit', 'UZS')
         price_text = f"{price_val:,.0f} {unit}".replace(',', ' ')
         price_badge = QLabel(price_text)
         price_badge.setFont(cyber_font(10, QFont.Weight.Bold, "Sora"))
@@ -3789,7 +3793,7 @@ class CartItemWidget(QFrame):
             p_val = float(product.get('price', 0))
         except (TypeError, ValueError):
             p_val = 0.0
-        unit = product.get('price_unit', 'CP')
+        unit = product.get('price_unit', 'UZS')
         price_lbl = QLabel(f"{p_val:,.0f} {unit}".replace(',', ' '))
         price_lbl.setFont(cyber_font(10, QFont.Weight.Bold, "Sora"))
         price_lbl.setStyleSheet("color: #00DAF3; border: none; background: transparent;")
@@ -4080,7 +4084,7 @@ class BarPage(QWidget):
         sub_title.setFont(cyber_font(10, family="Hanken"))
         sub_title.setStyleSheet("color: #BAC9CC; border: none; background: transparent;")
         sub_row.addWidget(sub_title)
-        self.subtotal_val = QLabel("0 CP")
+        self.subtotal_val = QLabel("0 UZS")
         self.subtotal_val.setFont(cyber_font(11, QFont.Weight.Bold, "Sora"))
         self.subtotal_val.setStyleSheet("color: #E1E2EB; border: none; background: transparent;")
         sub_row.addWidget(self.subtotal_val, 0, Qt.AlignmentFlag.AlignRight)
@@ -4110,7 +4114,7 @@ class BarPage(QWidget):
         tot_title.setFont(cyber_font(11, QFont.Weight.Bold, "Mono"))
         tot_title.setStyleSheet("color: #E1E2EB; letter-spacing: 1.5px; border: none; background: transparent;")
         tot_row.addWidget(tot_title)
-        self.total_val = QLabel("0 CP")
+        self.total_val = QLabel("0 UZS")
         self.total_val.setFont(cyber_font(20, QFont.Weight.Bold, "Sora"))
         self.total_val.setStyleSheet("color: #00DAF3; border: none; background: transparent;")
         tot_row.addWidget(self.total_val, 0, Qt.AlignmentFlag.AlignRight)
@@ -4138,7 +4142,7 @@ class BarPage(QWidget):
         bal_tag.setFont(cyber_font(7, QFont.Weight.Bold, "Mono"))
         bal_tag.setStyleSheet("color: #849396; border: none; background: transparent; letter-spacing: 0.5px;")
         bal_info.addWidget(bal_tag)
-        self.avail_bal_lbl = QLabel("12,450 CP")
+        self.avail_bal_lbl = QLabel("—")
         self.avail_bal_lbl.setFont(cyber_font(9, QFont.Weight.Bold, "Sora"))
         self.avail_bal_lbl.setStyleSheet("color: #E1E2EB; border: none; background: transparent;")
         bal_info.addWidget(self.avail_bal_lbl)
@@ -4166,12 +4170,13 @@ class BarPage(QWidget):
         pm_row.setContentsMargins(0, 0, 0, 0)
         pm_row.setSpacing(6)
         self.pm_cash_btn = QPushButton("💵 NAQD")
-        self.pm_balance_btn = QPushButton("👛 BALANSDAN")
+        self.pm_balance_btn = QPushButton("👛 BALANS")
         for btn in (self.pm_cash_btn, self.pm_balance_btn):
-            btn.setFont(cyber_font(9, QFont.Weight.Bold, "Sora"))
+            btn.setFont(cyber_font(8, QFont.Weight.Bold, "Sora"))
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setFixedHeight(32)
-            pm_row.addWidget(btn)
+            btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            pm_row.addWidget(btn, 1)
         self.pm_cash_btn.clicked.connect(lambda: self._set_payment_method('CASH'))
         self.pm_balance_btn.clicked.connect(lambda: self._set_payment_method('BALANCE'))
         chk_lo.addWidget(self._pm_widget)
@@ -4395,7 +4400,7 @@ class BarPage(QWidget):
 
     def _update_total(self):
         total = 0.0
-        unit = "CP"
+        unit = "UZS"
         for product, qty in self.cart.values():
             try:
                 total += float(product.get('price', 0)) * qty
@@ -6308,13 +6313,13 @@ class ClientLockerApp:
 
         # Favqulodda chiqish paroli — config.json'da ochiq matn EMAS,
         # SHA-256 xesh sifatida saqlanadi. Sozlanmagan bo'lsa, standart
-        # "ClutchZoneExit2026" paroli ishlatiladi — buni albatta
-        # config.json'da o'zingiznikiga almashtiring (yangi parolning
-        # xeshini olish uchun: python3 -c "import hashlib;
+        # "4747" paroli ishlatiladi — buni albatta config.json'da
+        # o'zingiznikiga almashtiring (yangi parolning xeshini olish
+        # uchun: python3 -c "import hashlib;
         # print(hashlib.sha256('YANGI_PAROL'.encode()).hexdigest())").
         self.admin_exit_password_hash = cfg.get(
             "admin_exit_password_hash",
-            "cba90bbae34e91bf3a86497221ed22331501466663ecefcfef50c843004d3449"  # "ClutchZoneExit2026"
+            "822a8e0aad6a68a99ee9db27651f1f6115414b7a772984b3f6609246ffbe3ef5"  # "4747"
         )
         if "admin_exit_password_hash" not in cfg:
             print("[Config] OGOHLANTIRISH: 'admin_exit_password_hash' sozlanmagan — "

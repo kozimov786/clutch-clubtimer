@@ -3342,7 +3342,7 @@ class GamesPage(QWidget):
         pc_icon.setFont(QFont("Segoe UI Emoji", 10))
         hud_lo.addWidget(pc_icon)
         
-        pc_label = QLabel(f"PC: {self.pc_name}")
+        pc_label = QLabel(self.pc_name)
         pc_label.setFont(cyber_font(10, QFont.Weight.Bold, "Mono"))
         pc_label.setStyleSheet("color: #e1e2eb;")
         hud_lo.addWidget(pc_label)
@@ -4120,33 +4120,34 @@ class BarPage(QWidget):
         tot_row.addWidget(self.total_val, 0, Qt.AlignmentFlag.AlignRight)
         chk_lo.addLayout(tot_row)
 
-        # Balance Box (Available balance + sufficient status)
+        # Balance Box (Available balance + sufficient status) — raqam endi
+        # o'z alohida to'liq-kengliqdagi qatorida (avval belgi+yorliq+
+        # raqam+badge hammasi bitta tor qatorda yonma-yon bo'lib, raqamning
+        # oxiri "UZS" birligi bilan birga siqilib ko'rinmay qolayotgan edi).
         bal_box = QFrame()
         bal_box.setStyleSheet("""
-            background: rgba(11, 14, 20, 0.6);
-            border: 1px solid rgba(132, 147, 150, 0.15);
-            border-radius: 8px;
+            QFrame {
+                background: rgba(11, 14, 20, 0.6);
+                border: 1px solid rgba(132, 147, 150, 0.18);
+                border-radius: 10px;
+            }
         """)
-        b_lo = QHBoxLayout(bal_box)
-        b_lo.setContentsMargins(10, 6, 10, 6)
+        b_lo = QVBoxLayout(bal_box)
+        b_lo.setContentsMargins(12, 10, 12, 10)
         b_lo.setSpacing(6)
 
+        bal_top_row = QHBoxLayout()
+        bal_top_row.setSpacing(6)
         w_icon = QLabel("💳")
         w_icon.setFont(QFont("Segoe UI Emoji", 11))
         w_icon.setStyleSheet("border: none; background: transparent;")
-        b_lo.addWidget(w_icon)
+        bal_top_row.addWidget(w_icon)
 
-        bal_info = QVBoxLayout()
-        bal_info.setSpacing(1)
         bal_tag = QLabel("AVAILABLE BALANCE")
         bal_tag.setFont(cyber_font(7, QFont.Weight.Bold, "Mono"))
         bal_tag.setStyleSheet("color: #849396; border: none; background: transparent; letter-spacing: 0.5px;")
-        bal_info.addWidget(bal_tag)
-        self.avail_bal_lbl = QLabel("—")
-        self.avail_bal_lbl.setFont(cyber_font(9, QFont.Weight.Bold, "Sora"))
-        self.avail_bal_lbl.setStyleSheet("color: #E1E2EB; border: none; background: transparent;")
-        bal_info.addWidget(self.avail_bal_lbl)
-        b_lo.addLayout(bal_info, 1)
+        bal_top_row.addWidget(bal_tag)
+        bal_top_row.addStretch(1)
 
         self.suff_badge = QLabel("SUFFICIENT")
         self.suff_badge.setFont(cyber_font(7, QFont.Weight.Bold, "Mono"))
@@ -4154,11 +4155,17 @@ class BarPage(QWidget):
             color: #52FFAC;
             background: rgba(82, 255, 172, 0.12);
             border-radius: 4px;
-            padding: 2px 5px;
+            padding: 2px 6px;
             border: none;
             letter-spacing: 0.5px;
         """)
-        b_lo.addWidget(self.suff_badge, 0, Qt.AlignmentFlag.AlignVCenter)
+        bal_top_row.addWidget(self.suff_badge, 0, Qt.AlignmentFlag.AlignVCenter)
+        b_lo.addLayout(bal_top_row)
+
+        self.avail_bal_lbl = QLabel("—")
+        self.avail_bal_lbl.setFont(cyber_font(14, QFont.Weight.Bold, "Sora"))
+        self.avail_bal_lbl.setStyleSheet("color: #E1E2EB; border: none; background: transparent;")
+        b_lo.addWidget(self.avail_bal_lbl)
         chk_lo.addWidget(bal_box)
 
         # Payment Method Toggle — faqat mijoz Kabinetga kirgan bo'lsa
@@ -4174,7 +4181,7 @@ class BarPage(QWidget):
         for btn in (self.pm_cash_btn, self.pm_balance_btn):
             btn.setFont(cyber_font(8, QFont.Weight.Bold, "Sora"))
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setFixedHeight(32)
+            btn.setMinimumHeight(38)
             btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             pm_row.addWidget(btn, 1)
         self.pm_cash_btn.clicked.connect(lambda: self._set_payment_method('CASH'))
@@ -4243,10 +4250,10 @@ class BarPage(QWidget):
     def _set_payment_method(self, method):
         self.selected_payment_method = method
         active_qss = """
-            QPushButton { background: #00E5FF; color: #001F24; border: none; border-radius: 6px; font-weight: 800; }
+            QPushButton { background: #00E5FF; color: #001F24; border: none; border-radius: 6px; padding: 4px 6px; font-weight: 800; }
         """
         inactive_qss = """
-            QPushButton { background: rgba(255,255,255,0.06); color: #849396; border: 1px solid rgba(132,147,150,0.25); border-radius: 6px; }
+            QPushButton { background: rgba(255,255,255,0.06); color: #849396; border: 1px solid rgba(132,147,150,0.25); border-radius: 6px; padding: 4px 6px; }
             QPushButton:hover { color: #E1E2EB; border-color: rgba(132,147,150,0.4); }
         """
         self.pm_cash_btn.setStyleSheet(active_qss if method == 'CASH' else inactive_qss)
@@ -5943,6 +5950,35 @@ if IS_WINDOWS:
             user32.ShowWindow(hwnd, SW_SHOW)
         print(f"[Taskbar] Qaytarildi ({len(hwnds)} ta oyna)")
 
+    # ── Konsol oynasini Alt+Tab ro'yxatidan olib tashlash ──
+    # client_locker.py "python client_locker.py" (pythonw emas) orqali
+    # ishga tushirilgani uchun har doim bitta konsol (qora) oynaga ega
+    # bo'ladi — bu oyna Alt+Tab'da alohida band sifatida chiqib, mijozni
+    # chalg'itadi (u "Clutch Zone Client Locker"dan boshqa narsa emas,
+    # faqat debug chiqishi uchun). WS_EX_TOOLWINDOW belgisi oynani
+    # Alt+Tab/taskbar'dan yashiradi, lekin oynaning o'zi ishlashda davom
+    # etadi (kerak bo'lsa hali ham ko'rinadi/logga qarash mumkin).
+    GWL_EXSTYLE = -20
+    WS_EX_TOOLWINDOW = 0x00000080
+    WS_EX_APPWINDOW = 0x00040000
+    kernel32.GetConsoleWindow.restype = wintypes.HWND
+    user32.GetWindowLongW.restype = ctypes.c_long
+    user32.GetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int]
+    user32.SetWindowLongW.restype = ctypes.c_long
+    user32.SetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_long]
+
+    def hide_console_from_alttab():
+        try:
+            hwnd = kernel32.GetConsoleWindow()
+            if not hwnd:
+                return
+            style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+            style = (style | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW
+            user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style)
+            print("[Console] Alt+Tab ro'yxatidan yashirildi")
+        except Exception as e:
+            print(f"[Console] Alt+Tab'dan yashirishda xato: {e}")
+
     # ── Sichqoncha sezgirligi (Windows OS darajasida — har qanday
     # sichqoncha bilan ishlaydi, alohida drayver/dastur kerak emas) ──
     SPI_GETMOUSE = 0x0003
@@ -5988,6 +6024,29 @@ if IS_WINDOWS:
             set_mouse_acceleration(True)
         except Exception as e:
             print(f"[Mouse] Standart holatga qaytarishda xato: {e}")
+
+    # ── O'yin jarayoni tirikligini tekshirish (mijoz o'yindan chiqqanda
+    # launcher'ni avtomatik old planga qaytarish uchun) — PID orqali
+    # ishlaydi, shuning uchun oddiy subprocess.Popen bilan HAM,
+    # ShellExecuteEx "runas" (administrator) orqali ishga tushirilgan
+    # o'yinlar bilan HAM bir xil ishlaydi (ikkalasida ham .poll() mavjud
+    # emas/ishonchli emas — launch_elevated qaytargan pid uchun hproc
+    # bor, lekin oddiy Popen uchun yo'q, shuning uchun ikkalasi uchun
+    # ham umumiy, PID'ga asoslangan usul ishlatiladi).
+    PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+    STILL_ACTIVE = 259
+
+    def is_pid_running(pid):
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            return False
+        try:
+            exit_code = wintypes.DWORD()
+            if kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                return exit_code.value == STILL_ACTIVE
+            return False
+        finally:
+            kernel32.CloseHandle(handle)
 
     # ── Ovoz balandligi (Windows'ning o'zining multimedia tugmalarini
     # simulyatsiya qiladi — SPI kabi to'g'ridan-to'g'ri "aniq foizga
@@ -6079,6 +6138,8 @@ else:
     def enumerate_running_apps(own_hwnd=None): return {}
     def hide_taskbar(): pass
     def show_taskbar(): pass
+    def hide_console_from_alttab(): pass
+    def is_pid_running(pid): return False
     MOUSE_DEFAULT_SPEED = 10
     def get_mouse_speed(): return MOUSE_DEFAULT_SPEED
     def set_mouse_speed(value): pass
@@ -6462,6 +6523,22 @@ class ClientLockerApp:
                 except Exception:
                     pass
 
+    def _watch_game_exit(self, pid):
+        """O'yin jarayoni yopilishini kuzatib turadi (faqat to'g'ridan-
+        to'g'ri .exe orqali ishga tushirilgan o'yinlar uchun — .bat orqali
+        ishga tushganlarda PID ishonchli emas). Jarayon tugagach, launcher
+        avtomatik old planga chiqadi — mijoz endi buning uchun F9/Win+D
+        bosishi shart emas."""
+        global SHOW_LAUNCHER_REQUESTED
+        while is_pid_running(pid):
+            time.sleep(2)
+        if self.current_game_pid == pid:
+            print(f"[Launcher] O'yin jarayoni (PID {pid}) yopildi — launcher avtomatik qaytarilmoqda")
+            self.current_game_pid = None
+            self.current_game_name = None
+            self.current_game_exe = None
+            SHOW_LAUNCHER_REQUESTED = True
+
     def _handle_game_launch(self, game):
         exe = game.get('executable_path')
         cwd_ = game.get('working_directory')
@@ -6479,7 +6556,8 @@ class ClientLockerApp:
                     cwd = cwd_
                 elif exe and os.path.dirname(exe):
                     cwd = os.path.dirname(exe)
-                if os.path.splitext(exe)[1].lower() in ('.bat', '.cmd'):
+                is_bat_launch = os.path.splitext(exe)[1].lower() in ('.bat', '.cmd')
+                if is_bat_launch:
                     # .bat/.cmd fayllar CreateProcess orqali to'g'ridan-
                     # to'g'ri ishga tushmaydi ("WinError 193: %1 is not a
                     # valid Win32 application") — Windows ularni faqat
@@ -6543,6 +6621,21 @@ class ClientLockerApp:
                         kwargs={'exe_name': self.current_game_exe, 'own_hwnd': int(self.main_window.winId())},
                         daemon=True
                     ).start()
+
+                    # .bat/.cmd orqali ishga tushirilgan o'yinlarda (masalan
+                    # CS 1.6) proc.pid aslida cmd.exe'niki — .bat ko'pincha
+                    # "start" bilan haqiqiy o'yinni ALOHIDA jarayon sifatida
+                    # ishga tushirib, o'zi zudlik bilan yopiladi. Shu PID'ni
+                    # kuzatish o'yin hali davom etayotganda ham launcher'ni
+                    # ustiga chiqarib yuborardi — shuning uchun bunday
+                    # holatda avtomatik kuzatuv o'CHIRIB qo'yiladi (mijoz
+                    # F9/Win+D bilan qo'lda chaqiradi, avvalgidek).
+                    if not is_bat_launch:
+                        threading.Thread(
+                            target=self._watch_game_exit,
+                            args=(proc.pid,),
+                            daemon=True
+                        ).start()
             except Exception as e:
                 print(f"[Launcher] Error: {e}")
                 self.main_window.show_launch_error(f"Xatolik: {e}")
@@ -6894,8 +6987,16 @@ def main():
             hwnd = ctypes.windll.kernel32.GetConsoleWindow()
             if hwnd:
                 ctypes.windll.user32.ShowWindow(hwnd, 0)  # SW_HIDE
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[Console] Yashirishda xato: {e}")
+        # Ikkinchi, mustaqil himoya qatlami: yuqoridagi SW_HIDE biror
+        # sababga ko'ra ishlamay qolsa ham (masalan konsol qandaydir
+        # sababdan qayta ko'rsatilib qolsa), WS_EX_TOOLWINDOW konsolni
+        # hech bo'lmasa Alt+Tab ro'yxatidan chiqarib tashlaydi.
+        try:
+            hide_console_from_alttab()
+        except Exception as e:
+            print(f"[Console] Alt+Tab'dan yashirishda xato: {e}")
 
     # PyQt6 ba'zan Qt slot/callback ichidagi Python xatosini konsolga chiqarmasdan
     # yutib yuborishi mumkin — bu esa "sababsiz" shaffof/qotgan oyna kabi

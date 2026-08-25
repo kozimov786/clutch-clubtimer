@@ -1720,9 +1720,9 @@ class ProfileCapsule(QFrame):
             self.name_label.setText(name.upper())
             self.rank_label.setText("VIP MEMBER")
         else:
-            self.avatar.setText("🎮")
-            self.name_label.setText("CYBER_STRIKER")
-            self.rank_label.setText("PLATINUM RANK")
+            self.avatar.setText("👤")
+            self.name_label.setText("MEHMON")
+            self.rank_label.setText(station.upper() if station else "TIZIMGA KIRILMAGAN")
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -2016,7 +2016,7 @@ class TopBar(QFrame):
             self.profile_capsule.set_data(data.get('full_name', ''), f"STATION {self.pc_name}")
         else:
             self.balance_badge.setText("💳  0 UZS")
-            self.profile_capsule.set_data("", "")
+            self.profile_capsule.set_data("", f"STATION {self.pc_name}")
 
 
 # ──────────────────────────────────────────────────────────────────────────────

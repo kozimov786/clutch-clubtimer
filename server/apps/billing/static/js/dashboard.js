@@ -11,6 +11,8 @@ let barFilterStatus = 'ALL';
 let searchQuery = '';
 let currentTab = 'grid';
 let activeInputMode = 'money';
+let selectionModeActive = false;
+let selectedPcIds = new Set();
 
 // Server endi har bir API so'rovi uchun tizimga kirgan bo'lishni talab
 // qiladi. Har bir fetch() chaqiruvini alohida tekshirish o'rniga,
@@ -422,7 +424,10 @@ function generatePCCardHTML(pc) {
   let statusClass = 'card-status-locked';
   let statusBadge = `<span class="px-2.5 py-1 text-[10px] font-extrabold rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center gap-1.5 whitespace-nowrap"><span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> ${t('card.locked')}</span>`;
 
-  if (pc.status === 'ACTIVE') {
+  if (pc.status === 'OFFLINE') {
+    statusClass = 'card-status-offline';
+    statusBadge = `<span class="px-2.5 py-1 text-[10px] font-extrabold rounded-full bg-slate-500/20 text-slate-400 border border-slate-500/30 flex items-center gap-1.5 whitespace-nowrap"><span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span> ${t('card.offline')}</span>`;
+  } else if (pc.status === 'ACTIVE') {
     if (pc.is_open_time) {
       statusClass = 'card-status-active';
       statusBadge = `<span class="px-2.5 py-1 text-[10px] font-extrabold rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center gap-1.5 animate-pulse whitespace-nowrap"><span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span> ${t('card.open_time')}</span>`;
@@ -438,8 +443,20 @@ function generatePCCardHTML(pc) {
   const timerText = formatTime(pc.time_remaining) + (pc.is_open_time ? " ♾️" : "");
   const tariffName = pc.is_open_time ? "VIP Open Time" : (pc.current_tariff_name || 'Standard Plan');
 
+  const isSelectable = pc.status === 'LOCKED' || pc.status === 'OFFLINE';
+  const isSelected = selectedPcIds.has(pc.id);
+  const selectionOverlay = selectionModeActive ? (isSelectable ? `
+    <button onclick="event.stopPropagation(); togglePcSelection(${pc.id})" class="absolute top-2.5 left-2.5 z-10 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-cyan-500 border-cyan-400' : 'bg-slate-950/90 border-slate-600 hover:border-cyan-400'}">
+      ${isSelected ? `<svg class="w-4 h-4 text-slate-950" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>` : ''}
+    </button>
+  ` : '') : '';
+  const cardOpacity = selectionModeActive && !isSelectable ? 'opacity-40' : '';
+  const cardClickHandler = selectionModeActive && isSelectable ? `onclick="togglePcSelection(${pc.id})"` : '';
+  const cardCursor = selectionModeActive && isSelectable ? 'cursor-pointer' : '';
+
   return `
-    <div class="glass-card ${statusClass} rounded-2xl p-4 border border-slate-800/80 bg-slate-900/60 hover:border-cyan-500/40 hover:shadow-xl hover:shadow-cyan-500/5 transition-all duration-300 flex flex-col justify-between group">
+    <div ${cardClickHandler} class="relative glass-card ${statusClass} ${cardOpacity} ${cardCursor} rounded-2xl p-4 border ${isSelected ? 'border-cyan-500' : 'border-slate-800/80'} bg-slate-900/60 hover:border-cyan-500/40 hover:shadow-xl hover:shadow-cyan-500/5 transition-all duration-300 flex flex-col justify-between group">
+      ${selectionOverlay}
       <div>
         <!-- Top Row: Station Badge (name + zone caption) & Status -->
         <div class="flex items-start justify-between mb-3 gap-2">
@@ -455,7 +472,7 @@ function generatePCCardHTML(pc) {
         </div>
 
         <!-- Utility Icons Row (screenshot / force-close / shutdown) -->
-        <div class="flex items-center justify-end gap-1.5 mb-2.5">
+        <div class="flex items-center justify-end gap-1.5 mb-2.5 ${selectionModeActive ? 'hidden' : ''}">
           <button onclick="openScreenshotModal(${pc.id}, '${pc.name}')" title="${t('card.view_screen')}" class="w-6 h-6 rounded-md bg-slate-800/80 hover:bg-cyan-500/20 border border-slate-700 hover:border-cyan-500/40 text-slate-400 hover:text-cyan-400 flex items-center justify-center transition-all">
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
           </button>
@@ -486,7 +503,14 @@ function generatePCCardHTML(pc) {
 
       <!-- Action Buttons Footer -->
       <div class="pt-2.5 border-t border-slate-800/80">
-        ${(pc.status === 'LOCKED' || pc.status === 'OFFLINE') ? `
+        ${selectionModeActive ? `
+          <div class="w-full py-2.5 px-3"></div>
+        ` : pc.status === 'OFFLINE' ? `
+          <button onclick="wakeOnLanPc(${pc.id}, '${pc.name}')" class="w-full py-2.5 px-3 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 text-xs font-extrabold flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            ${t('card.wake_on_lan')}
+          </button>
+        ` : pc.status === 'LOCKED' ? `
           <button onclick="openStartModal(${pc.id})" class="w-full py-2.5 px-3 rounded-xl glow-btn-cyan text-xs font-extrabold flex items-center justify-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
             ${t('card.start_session')}
@@ -831,6 +855,98 @@ function closeStartModal() {
   selectedPcId = null;
 }
 
+// Multi-select: bir vaqtning o'zida bir nechta PC'ga (masalan 10ta) VIP/Open
+// Time seansini bitta amal bilan boshlash uchun.
+function toggleSelectionMode() {
+  selectionModeActive = !selectionModeActive;
+  selectedPcIds.clear();
+  const btn = document.getElementById('selection-mode-toggle-btn');
+  if (btn) {
+    btn.classList.toggle('bg-cyan-500/20', selectionModeActive);
+    btn.classList.toggle('text-cyan-400', selectionModeActive);
+    btn.classList.toggle('border-cyan-500/40', selectionModeActive);
+  }
+  updateBulkSelectBar();
+  renderPCGrid();
+}
+
+function exitSelectionMode() {
+  selectionModeActive = false;
+  selectedPcIds.clear();
+  const btn = document.getElementById('selection-mode-toggle-btn');
+  if (btn) {
+    btn.classList.remove('bg-cyan-500/20', 'text-cyan-400', 'border-cyan-500/40');
+  }
+  updateBulkSelectBar();
+  renderPCGrid();
+}
+
+function togglePcSelection(pcId) {
+  if (selectedPcIds.has(pcId)) {
+    selectedPcIds.delete(pcId);
+  } else {
+    selectedPcIds.add(pcId);
+  }
+  updateBulkSelectBar();
+  renderPCGrid();
+}
+
+function getSelectedPcIdsByStatus(pcStatus) {
+  return computers.filter(pc => selectedPcIds.has(pc.id) && pc.status === pcStatus).map(pc => pc.id);
+}
+
+function updateBulkSelectBar() {
+  const bar = document.getElementById('bulk-select-bar');
+  if (!bar) return;
+  if (selectionModeActive && selectedPcIds.size > 0) {
+    bar.classList.remove('hidden');
+    const countEl = document.getElementById('bulk-select-count');
+    if (countEl) countEl.textContent = `${selectedPcIds.size} ${t('grid.selected_suffix')}`;
+
+    const lockedCount = getSelectedPcIdsByStatus('LOCKED').length;
+    const offlineCount = getSelectedPcIdsByStatus('OFFLINE').length;
+    const startBtn = document.getElementById('bulk-start-btn');
+    const wakeBtn = document.getElementById('bulk-wake-btn');
+    if (startBtn) startBtn.classList.toggle('hidden', lockedCount === 0);
+    if (wakeBtn) wakeBtn.classList.toggle('hidden', offlineCount === 0);
+  } else {
+    bar.classList.add('hidden');
+  }
+}
+
+function openBulkStartModal() {
+  const ids = getSelectedPcIdsByStatus('LOCKED');
+  if (ids.length === 0) return;
+  selectedPcId = null;
+  document.getElementById('start-pc-title').textContent = `${ids.length} ${t('grid.selected_suffix')}`;
+  setStartPaymentMethod('CASH');
+  document.getElementById('start-modal').classList.remove('hidden');
+  setMoneyPreset(5000);
+}
+
+async function wakeSelectedPcs() {
+  const ids = getSelectedPcIdsByStatus('OFFLINE');
+  if (ids.length === 0) return;
+  try {
+    const results = await Promise.all(ids.map(id =>
+      fetch(`/api/computers/${id}/wake_on_lan/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      }).then(r => r.ok).catch(() => false)
+    ));
+    const failCount = results.filter(ok => !ok).length;
+    if (failCount > 0) {
+      alert(`${failCount} ${t('alert.bulk_start_fail_suffix')}`);
+    } else {
+      playSound('add');
+    }
+    exitSelectionMode();
+    fetchComputers();
+  } catch (err) {
+    console.error("Error in bulk wake:", err);
+  }
+}
+
 // Masofadan ekranni ko'rish
 let screenshotRefreshInterval = null;
 let screenshotPcId = null;
@@ -930,20 +1046,44 @@ function updateCalculatedPrice() {
 }
 
 async function confirmStartSession() {
-  if (!selectedPcId) return;
+  const bulkIdsRaw = selectionModeActive && selectedPcIds.size > 0 ? getSelectedPcIdsByStatus('LOCKED') : null;
+  const bulkIds = bulkIdsRaw && bulkIdsRaw.length > 0 ? bulkIdsRaw : null;
+  if (!bulkIds && !selectedPcId) return;
+
   const tariffId = document.getElementById('start-tariff-select').value;
   const amount = parseFloat(document.getElementById('start-amount-input').value) || 0;
   const minutes = parseInt(document.getElementById('start-minutes-input').value) || 60;
   const paymentMethod = document.getElementById('start-payment-method') ? document.getElementById('start-payment-method').value : 'CASH';
 
+  const bodyData = { tariff_id: tariffId, payment_method: paymentMethod };
+  if (activeInputMode === 'open') {
+    bodyData.is_open_time = true;
+  } else if (activeInputMode === 'money' && amount > 0) {
+    bodyData.amount = amount;
+  } else {
+    bodyData.minutes = minutes;
+  }
+
   try {
-    const bodyData = { tariff_id: tariffId, payment_method: paymentMethod };
-    if (activeInputMode === 'open') {
-      bodyData.is_open_time = true;
-    } else if (activeInputMode === 'money' && amount > 0) {
-      bodyData.amount = amount;
-    } else {
-      bodyData.minutes = minutes;
+    if (bulkIds) {
+      const results = await Promise.all(bulkIds.map(id =>
+        fetch(`/api/computers/${id}/start_session/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(bodyData)
+        }).then(r => r.ok).catch(() => false)
+      ));
+      const failCount = results.filter(ok => !ok).length;
+      if (failCount > 0) {
+        alert(`${failCount} ${t('alert.bulk_start_fail_suffix')}`);
+      } else {
+        playSound('start');
+      }
+      closeStartModal();
+      exitSelectionMode();
+      fetchComputers();
+      fetchSessions();
+      return;
     }
 
     const res = await fetch(`/api/computers/${selectedPcId}/start_session/`, {
@@ -1262,6 +1402,44 @@ async function remoteShutdownPc(pcId, pcName) {
     if (!res.ok) alert(t('alert.shutdown_pc_err'));
   } catch (err) {
     console.error("Error in remote shutdown:", err);
+  }
+}
+
+async function wakeOnLanPc(pcId, pcName) {
+  try {
+    const res = await fetch(`/api/computers/${pcId}/wake_on_lan/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || t('alert.wake_pc_err'));
+    } else {
+      playSound('add');
+    }
+  } catch (err) {
+    console.error("Error in wake on lan:", err);
+    alert(t('alert.wake_pc_err'));
+  }
+}
+
+async function wakeAllPcs() {
+  if (!confirm(t('confirm.wake_all'))) return;
+  try {
+    const res = await fetch(`/api/computers/wake_all/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await res.json();
+    if (res.ok) {
+      playSound('add');
+      alert(`${t('alert.wake_all_ok')}: ${data.woken.length}`);
+    } else {
+      alert(t('alert.wake_all_err'));
+    }
+  } catch (err) {
+    console.error("Error in wake all:", err);
+    alert(t('alert.wake_all_err'));
   }
 }
 
@@ -2472,6 +2650,8 @@ function openRestockModal(productId = null) {
 
   if (!modal || !select) return;
 
+  _pendingRestockClientOrderId = null;
+
   select.innerHTML = `
     <option value="">-- Ro'yxatdan Mahsulotni Tanlang --</option>
     <option value="__NEW__">➕ Yangi Mahsulot Qo'shish...</option>
@@ -2551,8 +2731,18 @@ function updateRestockCalc() {
   if (unitProfitEl) unitProfitEl.textContent = formatMoney(unitProfit);
 }
 
+let _pendingRestockClientOrderId = null;
+
 async function handleRestockSubmit(e) {
   e.preventDefault();
+
+  // Idempotentlik: javob tarmoq nosozligi tufayli kelmay qolib,
+  // "Saqlash" yana bosilsa ham, bir xil ID bilan qayta yuborilgan
+  // so'rov ombor/rasxodni ikki marta yozib qo'ymaydi (server buni
+  // client_order_id orqali tanib, oldingi yozuvni qaytaradi).
+  if (!_pendingRestockClientOrderId) {
+    _pendingRestockClientOrderId = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+  }
 
   const selectVal = document.getElementById('restock-product-select')?.value || '';
   const newNameInputVal = document.getElementById('restock-new-product-name')?.value.trim() || '';
@@ -2602,12 +2792,14 @@ async function handleRestockSubmit(e) {
         cost_price: costPrice,
         selling_price: sellingPrice,
         payment_method: paymentMethod,
-        supplier_note: supplierNote
+        supplier_note: supplierNote,
+        client_order_id: _pendingRestockClientOrderId
       })
     });
 
     if (res.ok) {
       playSound('add');
+      _pendingRestockClientOrderId = null;
       closeRestockModal();
       productsCacheHTML();
       fetchAnalytics();

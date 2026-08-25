@@ -68,6 +68,11 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.636 5.636a9 9 0 1012.728 0M12 3v9"/>
             </svg>
           </button>
+          <button onclick="wakeAllPcs()" data-i18n-title="header.wake_all" title="Hammasini yoqish (WOL)" class="w-8 h-8 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center transition-all">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+            </svg>
+          </button>
         </div>
 
         <!-- Hamburger Menu (mobile only) -->
@@ -278,6 +283,10 @@
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.636 5.636a9 9 0 1012.728 0M12 3v9"/></svg>
         <span data-i18n="mobile.shutdown_all">HAMMASINI O'CHIRISH — Barcha PC quvvatini</span>
       </button>
+      <button onclick="wakeAllPcs(); closeMobileNav();" class="w-full py-3.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-400 text-xs font-bold flex items-center justify-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        <span data-i18n="mobile.wake_all">HAMMASINI YOQISH — Wake-on-LAN</span>
+      </button>
     </div>
   </div>
 
@@ -360,8 +369,29 @@
             <input type="text" oninput="handleSearch(this.value)" data-i18n-placeholder="grid.search_placeholder" placeholder="Qidiruv: PC-05..." class="bg-slate-900/90 border border-slate-800 rounded-xl px-3.5 py-2 pl-9 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-mono w-full lg:w-48">
             <svg class="w-4 h-4 text-slate-500 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
           </div>
+
+          <button id="selection-mode-toggle-btn" onclick="toggleSelectionMode()" class="px-3.5 py-2 rounded-xl text-xs font-bold border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white hover:border-cyan-500/40 transition-all shrink-0 flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <span data-i18n="grid.multi_select">Ko'p tanlash</span>
+          </button>
         </div>
 
+      </div>
+
+      <!-- Bulk Selection Action Bar (hidden unless selection mode active with 1+ selected) -->
+      <div id="bulk-select-bar" class="hidden sticky top-2 z-30 glass-panel p-3.5 rounded-2xl border border-cyan-500/40 bg-slate-900/95 flex flex-wrap items-center justify-between gap-3">
+        <span id="bulk-select-count" class="text-sm font-bold text-cyan-400">0 ta tanlandi</span>
+        <div class="flex items-center gap-2">
+          <button id="bulk-wake-btn" onclick="wakeSelectedPcs()" class="hidden py-2 px-4 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 text-xs font-extrabold flex items-center justify-center gap-2" data-i18n="grid.bulk_wake">
+            Tanlanganlarni yoqish
+          </button>
+          <button id="bulk-start-btn" onclick="openBulkStartModal()" class="py-2 px-4 rounded-xl glow-btn-cyan text-xs font-extrabold flex items-center justify-center gap-2" data-i18n="grid.bulk_start_session">
+            Tanlanganlarga seans boshlash
+          </button>
+          <button onclick="exitSelectionMode()" class="py-2 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold" data-i18n="grid.cancel_selection">
+            Bekor qilish
+          </button>
+        </div>
       </div>
 
       <!-- Stations Cards Grid Container -->

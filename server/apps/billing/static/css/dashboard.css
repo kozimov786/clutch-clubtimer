@@ -80,6 +80,11 @@ body {
   border-top: 3px solid var(--accent-rose);
 }
 
+.card-status-offline {
+  border-top: 3px solid #64748b;
+  opacity: 0.7;
+}
+
 .card-status-active {
   border-top: 3px solid var(--accent-emerald);
   box-shadow: 0 0 20px rgba(16, 185, 129, 0.15);

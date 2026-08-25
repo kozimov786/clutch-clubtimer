@@ -13,6 +13,13 @@ PC_NAME = "PC-12"
 HEARTBEAT_INTERVAL_SECONDS = 5
 API_KEY = "AKiv9qEeJqBlO8Xa4HJfJ_ZmMig6c5srmY7Nr1c4oOw"
 
+# Favqulodda chiqish (Ctrl+Alt+Shift+U / Ctrl+Shift+P) uchun parol —
+# OCHIQ MATN EMAS, SHA-256 xesh sifatida saqlanadi. Standart qiymat
+# "ClutchZoneExit2026" paroliga mos keladi — buni albatta o'zingizniki
+# bilan almashtiring: python3 -c "import hashlib;
+# print(hashlib.sha256('YANGI_PAROL'.encode()).hexdigest())"
+ADMIN_EXIT_PASSWORD_HASH = "cba90bbae34e91bf3a86497221ed22331501466663ecefcfef50c843004d3449"
+
 FALLBACK_GAMES = [
     {
         "name": "Steam",
@@ -98,6 +105,7 @@ def main():
         "pc_name": PC_NAME,
         "heartbeat_interval_seconds": HEARTBEAT_INTERVAL_SECONDS,
         "api_key": API_KEY,
+        "admin_exit_password_hash": ADMIN_EXIT_PASSWORD_HASH,
         "fallback_games": FALLBACK_GAMES,
     }
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:

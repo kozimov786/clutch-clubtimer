@@ -41,8 +41,19 @@ def _process_once():
             continue
 
         tariff = session.tariff or pc.current_tariff
+        if tariff and float(tariff.price_per_hour) <= 0:
+            continue
+
         if tariff:
-            price_per_minute = tariff.get_effective_price_per_hour() / 60.0
+            # calculate_price_for_period() — seans boshlanishidan hozirgi
+            # daqiqagacha bo'lgan BUTUN oraliqni, kunlik 10:00-18:00
+            # chegirma oynasi bo'yicha to'g'ri (aralash) narxlaydi. Avval
+            # bu yerda hozirgi lahzadagi BITTA stavka butun o'tgan vaqtga
+            # (elapsed_minutes) qo'llanilardi — agar seans chegirma
+            # oynasi chegarasidan (10:00 yoki 18:00) o'tsa, BUTUN o'tgan
+            # vaqt (hatto chegaradan OLDINGI qismi ham) noto'g'ri stavka
+            # bo'yicha qayta hisoblanib qolardi.
+            total_due = round(tariff.calculate_price_for_period(session.start_time, now), 2)
         else:
             # Tarif seans boshlangandan keyin o'chirilgan/ajratilmagan
             # bo'lishi mumkin (customer_start_session yangi seans
@@ -53,12 +64,8 @@ def _process_once():
             # narxga tayaniladi, shunda hech bo'lmasa noto'g'ri (0) emas,
             # oqilona narx bo'yicha hisoblanadi.
             from .views import FALLBACK_PRICE_PER_HOUR
-            price_per_minute = FALLBACK_PRICE_PER_HOUR / 60.0
-        if price_per_minute <= 0:
-            continue
-
-        elapsed_minutes = max(0.0, (now - session.start_time).total_seconds() / 60.0)
-        total_due = round(price_per_minute * elapsed_minutes, 2)
+            elapsed_minutes = max(0.0, (now - session.start_time).total_seconds() / 60.0)
+            total_due = round((FALLBACK_PRICE_PER_HOUR / 60.0) * elapsed_minutes, 2)
         increment = round(total_due - float(session.balance_deducted), 2)
         if increment <= 0:
             continue

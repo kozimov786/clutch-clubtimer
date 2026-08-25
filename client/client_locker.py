@@ -35,6 +35,7 @@ if sys.platform == 'win32':
 
 import time
 import json
+import hashlib
 import socket
 import subprocess
 import platform
@@ -328,12 +329,14 @@ class ApiClient:
         data = self._get("/api/products/")
         return data if isinstance(data, list) else []
 
-    def create_order_async(self, pc_name, items, client_order_id=None, on_done=None):
+    def create_order_async(self, pc_name, items, client_order_id=None, payment_method="CASH", session_token=None, on_done=None):
         def _post():
             try:
-                payload = {"pc_name": pc_name, "items": items, "payment_method": "CASH"}
+                payload = {"pc_name": pc_name, "items": items, "payment_method": payment_method}
                 if client_order_id:
                     payload["client_order_id"] = client_order_id
+                if session_token:
+                    payload["session_token"] = session_token
                 r = requests.post(
                     f"{self.server_url}/api/orders/",
                     json=payload,
@@ -764,6 +767,96 @@ class CyberQRWidget(QWidget):
         painter.end()
 
 
+class EmergencyExitDialog(QDialog):
+    """Favqulodda chiqish klaviatura kombinatsiyasi (Ctrl+Alt+Shift+U
+    yoki Ctrl+Shift+P) bosilganda chiqadigan parol so'rovi. Ilgari bu
+    kombinatsiya HECH QANDAY tekshiruvsiz, bir zumda kiosk rejimidan
+    chiqarib yuborardi — kombinatsiyani bilgan har qanday mijoz
+    (masalan tasodifan yoki boshqadan eshitib) darhol Windows'ga
+    chiqib ketishi mumkin edi. Parol config.json'da ochiq matn emas,
+    SHA-256 xesh sifatida saqlanadi (admin_exit_password_hash)."""
+    def __init__(self, password_hash, parent=None):
+        super().__init__(parent)
+        self._password_hash = password_hash
+        self.setWindowTitle("Chiqish uchun parol")
+        self.setModal(True)
+        self.setFixedSize(360, 220)
+        self.setStyleSheet(f"""
+            QDialog {{
+                background: {COLOR_SURFACE_CONTAINER_LOW};
+                border: 1px solid {COLOR_PRIMARY_CONTAINER};
+                border-radius: 8px;
+            }}
+            QLabel {{ color: {COLOR_ON_SURFACE}; border: none; background: transparent; }}
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(14)
+
+        title = QLabel("🔐 KIOSK REJIMIDAN CHIQISH")
+        title.setFont(cyber_font(12, QFont.Weight.Bold, "Sora"))
+        title.setStyleSheet(f"color: {COLOR_PRIMARY_CONTAINER}; letter-spacing: 1px;")
+        layout.addWidget(title)
+
+        desc = QLabel("Faqat administrator uchun. Davom etish uchun parolni kiriting:")
+        desc.setFont(cyber_font(10, family="Hanken"))
+        desc.setStyleSheet(f"color: {COLOR_ON_SURFACE_VARIANT};")
+        desc.setWordWrap(True)
+        layout.addWidget(desc)
+
+        self.pw_input = QLineEdit()
+        self.pw_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.pw_input.setPlaceholderText("Parol")
+        self.pw_input.setFixedHeight(40)
+        self.pw_input.setStyleSheet(INPUT_QSS)
+        self.pw_input.returnPressed.connect(self._on_confirm)
+        layout.addWidget(self.pw_input)
+
+        self.error_label = QLabel("")
+        self.error_label.setStyleSheet("color: #ffb4ab; font-size: 11px;")
+        self.error_label.setWordWrap(True)
+        self.error_label.hide()
+        layout.addWidget(self.error_label)
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(10)
+
+        cancel_btn = QPushButton("Bekor qilish")
+        cancel_btn.setFixedHeight(36)
+        cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent; color: #BAC9CC;
+                border: 1px solid rgba(132, 147, 150, 0.4); border-radius: 4px;
+            }
+            QPushButton:hover { color: #ffffff; border-color: #ffffff; }
+        """)
+        cancel_btn.clicked.connect(self.reject)
+        btn_row.addWidget(cancel_btn)
+
+        confirm_btn = QPushButton("Tasdiqlash")
+        confirm_btn.setFixedHeight(36)
+        confirm_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        confirm_btn.setStyleSheet(CYBER_PRIMARY_BTN_QSS)
+        confirm_btn.clicked.connect(self._on_confirm)
+        btn_row.addWidget(confirm_btn)
+
+        layout.addLayout(btn_row)
+        self.pw_input.setFocus()
+
+    def _on_confirm(self):
+        entered = self.pw_input.text()
+        entered_hash = hashlib.sha256(entered.encode('utf-8')).hexdigest()
+        if self._password_hash and entered_hash == self._password_hash:
+            self.accept()
+        else:
+            self.error_label.setText("Parol xato!")
+            self.error_label.show()
+            self.pw_input.clear()
+            self.pw_input.setFocus()
+
+
 class MouseSettingsDialog(QDialog):
     """Sichqoncha sezgirligi — Windows darajasida (SystemParametersInfo
     orqali), shuning uchun har qanday sichqoncha bilan ishlaydi, alohida
@@ -888,6 +981,100 @@ class MouseSettingsDialog(QDialog):
         self.accel_checkbox.setChecked(True)              # toggled -> set_mouse_acceleration
 
 
+class HeadphoneSettingsDialog(QDialog):
+    """Ovoz balandligi — Windows'ning o'zining multimedia tugmalarini
+    simulyatsiya qiladi (fizik klaviaturadagi ovoz tugmalari bosilgandek),
+    shuning uchun har qanday quloqchin/audio qurilma bilan ishlaydi,
+    alohida drayver kerak emas. Login talab qilinmaydi. Aniq foizni
+    ko'rsatib bo'lmaydi (Windows bu ma'lumotni shu usulda bermaydi) —
+    shuning uchun +/- tugmalari, real vaqtdagi slider emas."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Ovoz sozlamalari")
+        self.setModal(True)
+        self.setFixedSize(380, 260)
+        self.setStyleSheet(f"""
+            QDialog {{
+                background: {COLOR_SURFACE_CONTAINER_LOW};
+                border: 1px solid {COLOR_PRIMARY_CONTAINER};
+                border-radius: 8px;
+            }}
+            QLabel {{ color: {COLOR_ON_SURFACE}; border: none; background: transparent; }}
+        """)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(24, 22, 24, 20)
+        root.setSpacing(14)
+
+        title = QLabel("🎧  OVOZ SOZLAMALARI")
+        title.setFont(cyber_font(12, QFont.Weight.Bold, "Sora"))
+        title.setStyleSheet(f"color: {COLOR_PRIMARY_CONTAINER}; letter-spacing: 1px;")
+        root.addWidget(title)
+
+        hint = QLabel("Quloqchin yoki karnay ovozini shu yerdan sozlang — kompyuterning fizik ovoz tugmalari kabi ishlaydi.")
+        hint.setWordWrap(True)
+        hint.setFont(cyber_font(9, family="Hanken"))
+        hint.setStyleSheet(f"color: {COLOR_ON_SURFACE_VARIANT};")
+        root.addWidget(hint)
+
+        root.addSpacing(4)
+
+        step_row = QHBoxLayout()
+        step_row.setSpacing(10)
+
+        down_btn = QPushButton("🔉  PASAYTIRISH")
+        down_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        down_btn.setFixedHeight(46)
+        down_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255,255,255,0.06); color: #E1E2EB;
+                border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
+                font-weight: 700;
+            }
+            QPushButton:hover { background: rgba(255,255,255,0.12); }
+        """)
+        down_btn.clicked.connect(volume_down)
+        step_row.addWidget(down_btn)
+
+        up_btn = QPushButton("🔊  BALANDLASHTIRISH")
+        up_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        up_btn.setFixedHeight(46)
+        up_btn.setStyleSheet(CYBER_PRIMARY_BTN_QSS)
+        up_btn.clicked.connect(volume_up)
+        step_row.addWidget(up_btn)
+
+        root.addLayout(step_row)
+
+        mute_btn = QPushButton("🔇  OVOZNI O'CHIRISH / YOQISH")
+        mute_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        mute_btn.setFixedHeight(40)
+        mute_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent; color: #94a3b8;
+                border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;
+            }
+            QPushButton:hover { color: #e2e8f0; border-color: rgba(255,255,255,0.25); }
+        """)
+        mute_btn.clicked.connect(volume_toggle_mute)
+        root.addWidget(mute_btn)
+
+        root.addStretch(1)
+
+        close_btn = QPushButton("Yopish")
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.setFixedHeight(36)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255,255,255,0.06); color: #94a3b8;
+                border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;
+            }
+            QPushButton:hover { color: #e2e8f0; }
+        """)
+        close_btn.clicked.connect(self.accept)
+        root.addWidget(close_btn)
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 #  5. LOCK SCREEN (CYBER-ESPORTS DESIGN)
 # ──────────────────────────────────────────────────────────────────────────────
@@ -904,6 +1091,10 @@ class LockScreenWidget(QWidget):
         self.logged_in_customer = None
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setStyleSheet(f"background-color: {COLOR_BG};")
+
+        # Fon rasmi (Cyber-Esports Grid / System Locked visual)
+        bg_path = os.path.join(ASSETS_DIR, "cyber_lock_bg.jpg")
+        self._bg_pixmap = QPixmap(bg_path) if os.path.exists(bg_path) else None
 
         root_layout = QVBoxLayout(self)
         root_layout.setContentsMargins(48, 28, 48, 28)
@@ -1300,28 +1491,40 @@ class LockScreenWidget(QWidget):
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
 
-        # Fon: to'q rang + yumshoq markaziy nur (referens dizayndagi
-        # "ambient glow" effekti).
         painter.fillRect(self.rect(), QColor(COLOR_BG))
-        glow = QRadialGradient(self.width() / 2, self.height() * 0.4, self.width() * 0.6)
-        glow.setColorAt(0, QColor(0, 218, 243, 20))
-        glow.setColorAt(1, QColor(0, 218, 243, 0))
-        painter.fillRect(self.rect(), QBrush(glow))
 
-        # HUD-uslubidagi kibernetik panjara — avval shu joyda past
-        # aniqlikdagi (512x279) rasm bo'lgan, katta ekranga cho'zilganda
-        # xira/dog' bo'lib ko'rinardi. Vektor sifatida chizilgan panjara
-        # esa har qanday ekran o'lchamida doim tiniq (rezolyutsiyadan
-        # mustaqil).
-        pen = QPen(QColor(0, 218, 243, 14))
-        pen.setWidth(1)
-        painter.setPen(pen)
-        step = 48
-        for x in range(0, self.width(), step):
-            painter.drawLine(x, 0, x, self.height())
-        for y in range(0, self.height(), step):
-            painter.drawLine(0, y, self.width(), y)
+        if self._bg_pixmap and not self._bg_pixmap.isNull():
+            # Fon rasmi butun oynani to'liq qoplaydi (nisbat saqlanib,
+            # keraksiz qismlari kesiladi).
+            scaled = self._bg_pixmap.scaled(
+                self.size(),
+                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                Qt.TransformationMode.SmoothTransformation
+            )
+            x = (self.width() - scaled.width()) // 2
+            y = (self.height() - scaled.height()) // 2
+            painter.drawPixmap(x, y, scaled)
+            # Rasmning o'zida ham matn/panel elementlari bor (dekorativ) —
+            # ustiga qo'yiladigan haqiqiy login kartasi bilan aralashib
+            # ketmasligi uchun ancha qorong'ilashtiriladi, shunda rasm
+            # faqat atmosfera sifatida qoladi.
+            painter.fillRect(self.rect(), QColor(11, 14, 20, 150))
+        else:
+            # Zaxira: rasm topilmasa, oldingi vektor panjara.
+            glow = QRadialGradient(self.width() / 2, self.height() * 0.4, self.width() * 0.6)
+            glow.setColorAt(0, QColor(0, 218, 243, 20))
+            glow.setColorAt(1, QColor(0, 218, 243, 0))
+            painter.fillRect(self.rect(), QBrush(glow))
+            pen = QPen(QColor(0, 218, 243, 14))
+            pen.setWidth(1)
+            painter.setPen(pen)
+            step = 48
+            for x in range(0, self.width(), step):
+                painter.drawLine(x, 0, x, self.height())
+            for y in range(0, self.height(), step):
+                painter.drawLine(0, y, self.width(), y)
 
         painter.end()
 
@@ -1923,31 +2126,24 @@ class CustomerCabinetPage(QWidget):
             ("🔔", "NOTIFICATIONS")
         ]
         for icon_s, label_s in other_tabs:
-            btn = QPushButton(f"  {icon_s}  {label_s}")
+            btn = QPushButton(f"  {icon_s}  {label_s}  ·  SOON")
             btn.setFont(cyber_font(8, QFont.Weight.Bold, "Mono"))
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setFixedHeight(40)
             btn.setStyleSheet("""
                 QPushButton {
                     background: transparent;
-                    color: #BAC9CC;
+                    color: #4F5560;
                     border: none;
                     border-radius: 10px;
                     text-align: left;
                     padding-left: 12px;
                     letter-spacing: 1px;
                 }
-                QPushButton:hover {
-                    background: rgba(39, 42, 49, 0.45);
-                    color: #E1E2EB;
-                }
             """)
-            # Bu bo'limlar hali qurilmagan — hech qanday reaksiyasiz
-            # "o'lik" tugma qoldirish o'rniga, kamida "tez orada"
-            # xabarini ko'rsatadi.
-            btn.clicked.connect(lambda _, name=label_s: QMessageBox.information(
-                self, "Tez orada", f"\"{name}\" bo'limi hali ishlab chiqilmoqda."
-            ))
+            # Bu bo'limlar hali qurilmagan — funksiya tayyor bo'lguncha
+            # o'chirilgan (bosilmaydigan) holatda turadi, kerak bo'lganda
+            # setEnabled(True) + real handler bilan yoqiladi.
+            btn.setEnabled(False)
             tabs_lo.addWidget(btn)
 
         tabs_lo.addStretch(1)
@@ -2190,42 +2386,47 @@ class CustomerCabinetPage(QWidget):
         b1_tag.setFont(cyber_font(7, QFont.Weight.Bold, "Mono"))
         b1_tag.setStyleSheet("color: #849396; border: none; background: transparent;")
         b1_lo.addWidget(b1_tag)
-        self.hours_val = QLabel("1,248")
+        self.hours_val = QLabel("0h 0m")
         self.hours_val.setFont(cyber_font(14, QFont.Weight.Bold, "Sora"))
         self.hours_val.setStyleSheet("color: #00DAF3; border: none; background: transparent;")
         b1_lo.addWidget(self.hours_val)
         grid_stats.addWidget(b1, 0, 0)
 
-        # Box 2: Tournament wins
+        # Box 2: Jami seanslar (haqiqiy — CustomerSerializer.session_count).
+        # Ilgari bu yerda "TOURNAMENT WINS" turib, doim qattiq yozilgan
+        # "42" ni ko'rsatardi — bizda haqiqiy turnir tizimi yo'q, shuning
+        # uchun bu HAR BIR mijozga soxta raqam ko'rsatib turardi.
         b2 = QFrame()
         b2.setStyleSheet("background: #0B0E14; border: 1px solid rgba(132, 147, 150, 0.15); border-radius: 8px;")
         b2_lo = QVBoxLayout(b2)
         b2_lo.setContentsMargins(12, 8, 12, 8)
         b2_lo.setSpacing(2)
-        b2_tag = QLabel("TOURNAMENT WINS")
+        b2_tag = QLabel("JAMI SEANSLAR")
         b2_tag.setFont(cyber_font(7, QFont.Weight.Bold, "Mono"))
         b2_tag.setStyleSheet("color: #849396; border: none; background: transparent;")
         b2_lo.addWidget(b2_tag)
-        self.wins_val = QLabel("42")
-        self.wins_val.setFont(cyber_font(14, QFont.Weight.Bold, "Sora"))
-        self.wins_val.setStyleSheet("color: #D1BCFF; border: none; background: transparent;")
-        b2_lo.addWidget(self.wins_val)
+        self.sessions_val = QLabel("0")
+        self.sessions_val.setFont(cyber_font(14, QFont.Weight.Bold, "Sora"))
+        self.sessions_val.setStyleSheet("color: #D1BCFF; border: none; background: transparent;")
+        b2_lo.addWidget(self.sessions_val)
         grid_stats.addWidget(b2, 0, 1)
 
-        # Box 3: Win Rate (Full width)
+        # Box 3: Jami sarflangan (haqiqiy — CustomerSerializer.total_spent).
+        # Ilgari "WIN RATE" turib, doim qattiq yozilgan "68.5%" ni
+        # ko'rsatardi — xuddi shu sabab bilan almashtirildi.
         b3 = QFrame()
         b3.setStyleSheet("background: #0B0E14; border: 1px solid rgba(132, 147, 150, 0.15); border-radius: 8px;")
         b3_lo = QHBoxLayout(b3)
         b3_lo.setContentsMargins(12, 8, 12, 8)
-        b3_tag = QLabel("WIN RATE")
+        b3_tag = QLabel("JAMI SARFLANGAN")
         b3_tag.setFont(cyber_font(8, QFont.Weight.Bold, "Mono"))
         b3_tag.setStyleSheet("color: #849396; border: none; background: transparent;")
         b3_lo.addWidget(b3_tag)
         b3_lo.addStretch(1)
-        self.winrate_val = QLabel("68.5%")
-        self.winrate_val.setFont(cyber_font(14, QFont.Weight.Bold, "Sora"))
-        self.winrate_val.setStyleSheet("color: #52FFAC; border: none; background: transparent;")
-        b3_lo.addWidget(self.winrate_val)
+        self.spent_val = QLabel("0 UZS")
+        self.spent_val.setFont(cyber_font(14, QFont.Weight.Bold, "Sora"))
+        self.spent_val.setStyleSheet("color: #52FFAC; border: none; background: transparent;")
+        b3_lo.addWidget(self.spent_val)
         grid_stats.addWidget(b3, 1, 0, 1, 2)
 
         lc_lo.addLayout(grid_stats)
@@ -2466,18 +2667,31 @@ class CustomerCabinetPage(QWidget):
         first_char = (full_name or '?')[:1].upper()
         self.avatar_label.setText(first_char)
 
-        # Rank / Bonus ball hisoblash tizimi
+        # Rank / Bonus ball hisoblash tizimi — HAQIQIY qiymat ko'rsatiladi.
+        # (Ilgari bu yerda aniqlanmagan 'bal' o'zgaruvchisi ishlatilgan
+        # edi — bu yangi/0 ballli mijoz kabinetni ochganda NameError
+        # bilan yiqilishi kerak edi. Undan keyin ham, xato yuz bermagan
+        # taqdirda ham, 0 ball o'rniga soxta "3450" ko'rsatilardi —
+        # bu haqiqiy mijozga yolg'on ma'lumot bo'lardi.)
         try:
             pts = int(self.customer_data.get('bonus_points', 0))
         except (TypeError, ValueError):
             pts = 0
-
-        if pts <= 0 and bal > 0:
-            pts = int(bal / 100)
-        if pts <= 0:
-            pts = 3450  # Default namoyish
+        pts = max(0, pts)
 
         self.rp_val.setText(f"{pts:,}".replace(',', ' '))
+
+        try:
+            session_count = int(self.customer_data.get('session_count', 0))
+        except (TypeError, ValueError):
+            session_count = 0
+        self.sessions_val.setText(f"{session_count:,}".replace(',', ' '))
+
+        try:
+            total_spent = float(self.customer_data.get('total_spent', 0))
+        except (TypeError, ValueError):
+            total_spent = 0.0
+        self.spent_val.setText(f"{total_spent:,.0f} UZS".replace(',', ' '))
 
         if pts < 500:
             tier_name = "BRONZE"
@@ -2650,7 +2864,7 @@ class CustomerCabinetPage(QWidget):
             except (TypeError, ValueError):
                 pass
         hours, mins = divmod(total_minutes, 60)
-        self.hours_val.setText(f"{hours}h {mins}m" if total_minutes else "1,248")
+        self.hours_val.setText(f"{hours}h {mins}m")
 
         rows = []
         for t in data.get('transactions', []):
@@ -3304,81 +3518,6 @@ class GamesPage(QWidget):
 # ──────────────────────────────────────────────────────────────────────────────
 #  10. NEXUS FUEL & SNACKS (BAR / SHOP PAGE)
 # ──────────────────────────────────────────────────────────────────────────────
-FALLBACK_SNACK_PRODUCTS = [
-    {
-        "id": "snack-1",
-        "name": "Clutch Overdrive Energy",
-        "category_name": "ENERGY",
-        "price": 450,
-        "price_unit": "CP",
-        "description": "Maximum caffeine, zero sugar. Enhances reaction times.",
-        "stock": 14,
-        "is_hot": False,
-        "icon": "⚡",
-        "bg_gradient": "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #0B1E2E, stop:0.5 #081420, stop:1 #060B12)"
-    },
-    {
-        "id": "snack-2",
-        "name": "Focus Flow Elixir",
-        "category_name": "ENERGY",
-        "price": 350,
-        "price_unit": "CP",
-        "description": "Nootropic blend for sustained concentration.",
-        "stock": 8,
-        "is_hot": False,
-        "icon": "🧪",
-        "bg_gradient": "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1E102E, stop:0.5 #140A20, stop:1 #0A0612)"
-    },
-    {
-        "id": "snack-3",
-        "name": "Spicy Cyber Ramen",
-        "category_name": "HOT FOOD",
-        "price": 1200,
-        "price_unit": "CP",
-        "description": "Intense heat, rich pork broth. The classic late-night grind fuel.",
-        "stock": 10,
-        "is_hot": True,
-        "icon": "🍜",
-        "bg_gradient": "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #2E1212, stop:0.5 #1F0A0A, stop:1 #120505)"
-    },
-    {
-        "id": "snack-4",
-        "name": "Quantum Crunch Chips",
-        "category_name": "SNACKS",
-        "price": 600,
-        "price_unit": "CP",
-        "description": "Spicy nacho flavor. Dust-free formula keeps your gear clean.",
-        "stock": 25,
-        "is_hot": False,
-        "icon": "🍿",
-        "bg_gradient": "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #251633, stop:0.5 #180D24, stop:1 #0E0717)"
-    },
-    {
-        "id": "snack-5",
-        "name": "Glacier Pure Hydration",
-        "category_name": "HYDRATION",
-        "price": 250,
-        "price_unit": "CP",
-        "description": "Alkaline electrolyte water with essential minerals.",
-        "stock": 30,
-        "is_hot": False,
-        "icon": "💧",
-        "bg_gradient": "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #0D2436, stop:0.5 #081724, stop:1 #040E17)"
-    },
-    {
-        "id": "snack-6",
-        "name": "Cyber Burger Royale",
-        "category_name": "HOT FOOD",
-        "price": 1500,
-        "price_unit": "CP",
-        "description": "Double smash beef, melted cheddar, crispy caramelized onions.",
-        "stock": 6,
-        "is_hot": True,
-        "icon": "🍔",
-        "bg_gradient": "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #2E1D0E, stop:0.5 #1E1208, stop:1 #120A04)"
-    }
-]
-
 
 def _snack_category_icon(name):
     n = (name or '').lower()
@@ -4018,6 +4157,26 @@ class BarPage(QWidget):
         b_lo.addWidget(self.suff_badge, 0, Qt.AlignmentFlag.AlignVCenter)
         chk_lo.addWidget(bal_box)
 
+        # Payment Method Toggle — faqat mijoz Kabinetga kirgan bo'lsa
+        # ko'rinadi (kirmagan bo'lsa balansi yo'q, faqat naqd/PC hisobiga
+        # yoziladi, oldingi xatti-harakat saqlanadi).
+        self.selected_payment_method = 'CASH'
+        self._pm_widget = QWidget()
+        pm_row = QHBoxLayout(self._pm_widget)
+        pm_row.setContentsMargins(0, 0, 0, 0)
+        pm_row.setSpacing(6)
+        self.pm_cash_btn = QPushButton("💵 NAQD")
+        self.pm_balance_btn = QPushButton("👛 BALANSDAN")
+        for btn in (self.pm_cash_btn, self.pm_balance_btn):
+            btn.setFont(cyber_font(9, QFont.Weight.Bold, "Sora"))
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFixedHeight(32)
+            pm_row.addWidget(btn)
+        self.pm_cash_btn.clicked.connect(lambda: self._set_payment_method('CASH'))
+        self.pm_balance_btn.clicked.connect(lambda: self._set_payment_method('BALANCE'))
+        chk_lo.addWidget(self._pm_widget)
+        self._pm_widget.hide()
+
         # Authorize Purchase Button
         self.order_btn = QPushButton("AUTHORIZE PURCHASE  ⚡")
         self.order_btn.setFont(cyber_font(11, QFont.Weight.Bold, "Sora"))
@@ -4046,11 +4205,11 @@ class BarPage(QWidget):
         chk_lo.addWidget(self.order_btn)
 
         # Subtext hint
-        subtext = QLabel("FUNDS WILL BE DEDUCTED FROM ACCOUNT")
-        subtext.setFont(cyber_font(8, family="Mono"))
-        subtext.setStyleSheet("color: #849396; border: none; background: transparent;")
-        subtext.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        chk_lo.addWidget(subtext)
+        self.checkout_subtext = QLabel("PAYMENT WILL BE ADDED TO PC TAB (CASH)")
+        self.checkout_subtext.setFont(cyber_font(8, family="Mono"))
+        self.checkout_subtext.setStyleSheet("color: #849396; border: none; background: transparent;")
+        self.checkout_subtext.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        chk_lo.addWidget(self.checkout_subtext)
 
         right_lo.addWidget(checkout_box)
         body_lo.addWidget(right_sidebar)
@@ -4069,12 +4228,41 @@ class BarPage(QWidget):
             except (TypeError, ValueError):
                 bal = 0.0
             self.avail_bal_lbl.setText(f"{bal:,.0f} UZS".replace(',', ' '))
+            self._pm_widget.show()
         else:
-            self.avail_bal_lbl.setText("12,450 CP")
+            self.avail_bal_lbl.setText("—")
+            self._pm_widget.hide()
+            self.selected_payment_method = 'CASH'
+        self._set_payment_method(self.selected_payment_method)
+
+    def _set_payment_method(self, method):
+        self.selected_payment_method = method
+        active_qss = """
+            QPushButton { background: #00E5FF; color: #001F24; border: none; border-radius: 6px; font-weight: 800; }
+        """
+        inactive_qss = """
+            QPushButton { background: rgba(255,255,255,0.06); color: #849396; border: 1px solid rgba(132,147,150,0.25); border-radius: 6px; }
+            QPushButton:hover { color: #E1E2EB; border-color: rgba(132,147,150,0.4); }
+        """
+        self.pm_cash_btn.setStyleSheet(active_qss if method == 'CASH' else inactive_qss)
+        self.pm_balance_btn.setStyleSheet(active_qss if method == 'BALANCE' else inactive_qss)
+        if method == 'BALANCE':
+            self.checkout_subtext.setText("FUNDS WILL BE DEDUCTED FROM ACCOUNT")
+        else:
+            self.checkout_subtext.setText("PAYMENT WILL BE ADDED TO PC TAB (CASH)")
         self._update_total()
 
     def set_products(self, products):
-        self.all_products = products if products else list(FALLBACK_SNACK_PRODUCTS)
+        # Ilgari bu yerda ro'yxat bo'sh bo'lsa (masalan serverga vaqtincha
+        # ulanib bo'lmasa), qattiq yozilgan SOXTA mahsulotlar (FALLBACK_
+        # SNACK_PRODUCTS) ko'rsatilardi — ularning "id"lari haqiqiy
+        # emasligiga qaramay, "Savatga qo'shish" va sotib olish tugmasi
+        # ISHLAB TURARDI, ya'ni mijoz mavjud bo'lmagan mahsulotni "sotib
+        # olishga" urinib, chekout serverda muvaffaqiyatsiz tugar edi —
+        # bu do'kon "ishlamay qoldi"dek ko'rinardi. Endi haqiqiy ro'yxat
+        # bo'sh bo'lsa, mahsulotlar sotilmaydi — buning o'rniga aniq
+        # "aloqa yo'q" xabari ko'rsatiladi.
+        self.all_products = products or []
         self._build_category_tabs()
         self._render_products()
 
@@ -4140,6 +4328,15 @@ class BarPage(QWidget):
                 """)
 
     def _render_products(self):
+        if not self.all_products:
+            empty_lbl = QLabel("📡  Server bilan aloqa yo'q yoki mahsulotlar hali yuklanmadi.\nBiroz kutib, qayta urinib ko'ring.")
+            empty_lbl.setFont(cyber_font(10, family="Hanken"))
+            empty_lbl.setStyleSheet("color: #849396; border: none; background: transparent; padding: 30px;")
+            empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            empty_lbl.setWordWrap(True)
+            self.products_flow.set_items([empty_lbl])
+            return
+
         filtered = []
         for p in self.all_products:
             c = (p.get('category_name') or 'SNACKS').upper()
@@ -4211,15 +4408,19 @@ class BarPage(QWidget):
         self.total_val.setText(formatted)
 
         has_items = len(self.cart) > 0
-        self.order_btn.setEnabled(has_items)
 
-        # Balance sufficiency check
+        # Balans yetarliligi — faqat "Balansdan" tanlangan bo'lsa haqiqiy
+        # to'lov manbai balans bo'ladi, shuning uchun tugmani ham faqat
+        # shu holatda yetarsizlikka qarab o'chiramiz (NAQD tanlansa,
+        # to'lov PC hisobiga yoziladi, balansga bog'liq emas).
+        insufficient = False
         if self.customer_data:
             try:
                 bal = float(self.customer_data.get('balance', 0))
             except (TypeError, ValueError):
                 bal = 0.0
-            if total > bal and total > 0:
+            insufficient = total > bal and total > 0
+            if insufficient:
                 self.suff_badge.setText("INSUFFICIENT")
                 self.suff_badge.setStyleSheet("""
                     color: #FFB4AB;
@@ -4238,6 +4439,9 @@ class BarPage(QWidget):
                     letter-spacing: 0.5px;
                 """)
 
+        blocked_by_balance = self.selected_payment_method == 'BALANCE' and insufficient
+        self.order_btn.setEnabled(has_items and not blocked_by_balance)
+
     def _place_order(self):
         items = [{"product_id": pid, "quantity": qty} for pid, (_, qty) in self.cart.items()]
         if not items:
@@ -4248,8 +4452,11 @@ class BarPage(QWidget):
 
         self.order_btn.setEnabled(False)
         self.order_btn.setText("PROCESSING...")
+        session_token = self.customer_data.get('session_token') if self.customer_data else None
         self.api_client.create_order_async(
             self.pc_name, items, client_order_id=self._pending_client_order_id,
+            payment_method=self.selected_payment_method,
+            session_token=session_token if self.selected_payment_method == 'BALANCE' else None,
             on_done=lambda ok, data: self._order_result.emit(ok, data)
         )
 
@@ -4682,8 +4889,9 @@ class RunningAppsBar(QFrame):
 #  11c. FOOTER BAR (MOUSE SETTINGS, NVIDIA APP, RECENT ACTIVITY, RETURN TO GAME)
 # ──────────────────────────────────────────────────────────────────────────────
 class NexusFooterBar(QFrame):
-    """Nexus / Cyber-Esports pastki footer paneli (Mouse Settings + NVIDIA App + So'nggi ochilgan applar)."""
+    """Nexus / Cyber-Esports pastki footer paneli (Mouse Settings + Sound Settings + NVIDIA App + So'nggi ochilgan applar)."""
     mouse_settings_requested = pyqtSignal()
+    sound_settings_requested = pyqtSignal()
     nvidia_app_requested = pyqtSignal()
     app_clicked = pyqtSignal(str)
 
@@ -4723,6 +4931,28 @@ class NexusFooterBar(QFrame):
         """)
         mouse_btn.clicked.connect(self.mouse_settings_requested.emit)
         layout.addWidget(mouse_btn)
+
+        # SOUND SETTINGS tugmasi
+        sound_btn = QPushButton("🎧  SOUND SETTINGS")
+        sound_btn.setFont(cyber_font(9, QFont.Weight.Bold, "Mono"))
+        sound_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        sound_btn.setFixedHeight(36)
+        sound_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(39, 42, 49, 0.5);
+                color: {COLOR_PRIMARY_CONTAINER};
+                border: 1px solid rgba(0, 229, 255, 0.35);
+                border-radius: 8px;
+                padding: 0 14px;
+                letter-spacing: 1px;
+            }}
+            QPushButton:hover {{
+                background: rgba(0, 229, 255, 0.12);
+                border-color: {COLOR_PRIMARY_CONTAINER};
+            }}
+        """)
+        sound_btn.clicked.connect(self.sound_settings_requested.emit)
+        layout.addWidget(sound_btn)
 
         # NVIDIA APP tugmasi
         nvidia_btn = QPushButton("🎮  NVIDIA APP")
@@ -4894,6 +5124,7 @@ class LauncherPage(QWidget):
         # Pastki Footer Bar
         self.footer_bar = NexusFooterBar()
         self.footer_bar.mouse_settings_requested.connect(self._open_mouse_settings)
+        self.footer_bar.sound_settings_requested.connect(self._open_sound_settings)
         self.footer_bar.nvidia_app_requested.connect(self._open_nvidia_app)
         self.footer_bar.app_clicked.connect(self.app_switch_requested.emit)
         right_vlayout.addWidget(self.footer_bar)
@@ -4947,18 +5178,16 @@ class LauncherPage(QWidget):
             self._close_cabinet()
 
     def _open_cabinet(self):
-        data = self.logged_in_customer or {
-            "username": "CYBER_STRIKER",
-            "full_name": "CYBER_STRIKER",
-            "balance": 12450,
-            "bonus_points": 345,
-            "phone": "+998 90 123 45 67",
-            "email": "striker@nexus.gg"
-        }
+        if not self.logged_in_customer:
+            QMessageBox.information(
+                self, "Tizimga kirilmagan",
+                "Kabinetni ko'rish uchun avval qulf ekranida telefon raqamingiz bilan tizimga kiring."
+            )
+            return
         current = self.inner_stack.currentIndex()
         if current != self.inner_stack.indexOf(self.cabinet_page):
             self._pre_cabinet_index = current
-        self.cabinet_page.set_customer(data)
+        self.cabinet_page.set_customer(self.logged_in_customer)
         self.inner_stack.setCurrentWidget(self.cabinet_page)
 
     def _close_cabinet(self):
@@ -4966,6 +5195,10 @@ class LauncherPage(QWidget):
 
     def _open_mouse_settings(self):
         dialog = MouseSettingsDialog(parent=self)
+        dialog.exec()
+
+    def _open_sound_settings(self):
+        dialog = HeadphoneSettingsDialog(parent=self)
         dialog.exec()
 
     def _open_nvidia_app(self):
@@ -5166,7 +5399,7 @@ if IS_WINDOWS:
     kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
     WH_KEYBOARD_LL = 13
     VK_TAB = 0x09; VK_LWIN = 0x5B; VK_RWIN = 0x5C; VK_F4 = 0x73; VK_ESCAPE = 0x1B
-    VK_U = 0x55; VK_F9 = 0x78; VK_P = 0x50
+    VK_U = 0x55; VK_F9 = 0x78; VK_P = 0x50; VK_D = 0x44
 
     class KBDLLHOOKSTRUCT(ctypes.Structure):
         _fields_ = [
@@ -5238,14 +5471,36 @@ if IS_WINDOWS:
             print(f"[Hook] force_foreground_window xato: {e}")
 
     hook_id = None; is_hook_enabled = False
-    WM_KEYDOWN = 0x0100; WM_SYSKEYDOWN = 0x0104
+    _win_key_held = False
+    WM_KEYDOWN = 0x0100; WM_KEYUP = 0x0101; WM_SYSKEYDOWN = 0x0104; WM_SYSKEYUP = 0x0105
 
     def low_level_keyboard_proc(nCode, wParam, lParam):
-        global is_hook_enabled, SHOW_LAUNCHER_REQUESTED
+        global is_hook_enabled, SHOW_LAUNCHER_REQUESTED, _win_key_held
         if nCode >= 0 and is_hook_enabled:
             kb = lParam.contents; vk = kb.vkCode; alt = (kb.flags & 0x20) != 0
-            if (alt and vk == VK_TAB) or (vk in (VK_LWIN, VK_RWIN)) or \
-               (alt and vk == VK_F4) or (alt and vk == VK_ESCAPE):
+            is_keydown = wParam in (WM_KEYDOWN, WM_SYSKEYDOWN)
+            is_keyup = wParam in (WM_KEYUP, WM_SYSKEYUP)
+
+            # Windows tugmasining O'ZI hech narsa qilmaydi (faqat
+            # bloklanadi) — lekin uning "bosilgan" holati kuzatiladi,
+            # shunda Win+D (mijozlar "ish stoliga chiqish" deb
+            # o'rgangan kombinatsiya) alohida aniqlanib, F9 bilan bir
+            # xil — bizning launcher menyumizni ko'rsatadi.
+            if vk in (VK_LWIN, VK_RWIN):
+                if is_keydown:
+                    _win_key_held = True
+                elif is_keyup:
+                    _win_key_held = False
+                return 1
+            if _win_key_held and vk == VK_D:
+                if is_keydown:
+                    SHOW_LAUNCHER_REQUESTED = True
+                return 1
+
+            # Alt+Tab — o'zining odatiy ishini qiladi (bloklanmaydi,
+            # launcher'ni ham ko'rsatmaydi) — quyidagi CallNextHookEx
+            # orqali Windows'ga o'tkaziladi.
+            if (alt and vk == VK_F4) or (alt and vk == VK_ESCAPE):
                 return 1
             # F9 va Ctrl+F9 — IKKALASI HAM shu past darajali hook orqali
             # DARHOL aniqlanadi va yutib yuboriladi (ba'zi eski,
@@ -5729,6 +5984,34 @@ if IS_WINDOWS:
         except Exception as e:
             print(f"[Mouse] Standart holatga qaytarishda xato: {e}")
 
+    # ── Ovoz balandligi (Windows'ning o'zining multimedia tugmalarini
+    # simulyatsiya qiladi — SPI kabi to'g'ridan-to'g'ri "aniq foizga
+    # o'rnatish" imkoni yo'q, lekin har qanday audio drayver/qurilma
+    # (quloqchin, USB DAC, HDMI va h.k.) bilan ishonchli ishlaydi, chunki
+    # bu aynan klaviaturadagi jismoniy ovoz tugmalari bosilganda Windows
+    # o'zi bajaradigan amal). WASAPI orqali "aniq" foiz o'rnatish COM
+    # interop talab qiladi — 40ta turli drayverli PC'da beqaror ishlashi
+    # yoki xato berish xavfi yuqoriroq, shuning uchun ataylab soddaroq va
+    # ishonchliroq yo'l tanlandi.
+    VK_VOLUME_MUTE = 0xAD
+    VK_VOLUME_DOWN = 0xAE
+    VK_VOLUME_UP = 0xAF
+    KEYEVENTF_EXTENDEDKEY = 0x0001
+    KEYEVENTF_KEYUP = 0x0002
+
+    def _send_media_key(vk):
+        user32.keybd_event(vk, 0, KEYEVENTF_EXTENDEDKEY, 0)
+        user32.keybd_event(vk, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0)
+
+    def volume_up():
+        _send_media_key(VK_VOLUME_UP)
+
+    def volume_down():
+        _send_media_key(VK_VOLUME_DOWN)
+
+    def volume_toggle_mute():
+        _send_media_key(VK_VOLUME_MUTE)
+
     # ── Administrator huquqi talab qiladigan o'yinlar (masalan ICCup
     # Launcher) uchun — oddiy CreateProcess (subprocess.Popen) ularni
     # ISHGA TUSHIRA OLMAYDI, "WinError 740: The requested operation
@@ -5797,6 +6080,9 @@ else:
     def get_mouse_acceleration(): return True
     def set_mouse_acceleration(enabled): pass
     def reset_mouse_settings(): pass
+    def volume_up(): print("[Volume] up (sim)")
+    def volume_down(): print("[Volume] down (sim)")
+    def volume_toggle_mute(): print("[Volume] mute toggle (sim)")
     def launch_elevated(exe, cwd=None): return None
 
 
@@ -5911,11 +6197,17 @@ class ClientLockerApp:
     def _check_global_hotkeys(self):
         global EMERGENCY_UNLOCK_REQUESTED, SHOW_LAUNCHER_REQUESTED
         if EMERGENCY_UNLOCK_REQUESTED:
-            print("[Emergency] Ctrl+Alt+Shift+U yoki Ctrl+Shift+P aniqlandi — kiosk rejimi o'chirilmoqda")
-            uninstall_keyboard_hook()
-            if IS_WINDOWS:
-                show_taskbar()
-            os._exit(0)
+            EMERGENCY_UNLOCK_REQUESTED = False
+            print("[Emergency] Ctrl+Alt+Shift+U yoki Ctrl+Shift+P aniqlandi — parol so'ralmoqda")
+            dialog = EmergencyExitDialog(self.admin_exit_password_hash, parent=self.main_window)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                print("[Emergency] Parol to'g'ri — kiosk rejimi o'chirilmoqda")
+                uninstall_keyboard_hook()
+                if IS_WINDOWS:
+                    show_taskbar()
+                os._exit(0)
+            else:
+                print("[Emergency] Bekor qilindi (parol xato yoki rad etildi)")
         if SHOW_LAUNCHER_REQUESTED:
             SHOW_LAUNCHER_REQUESTED = False
             self._show_launcher_over_game()
@@ -6013,6 +6305,21 @@ class ClientLockerApp:
             print("[Config] OGOHLANTIRISH: 'api_key' config.json'da yo'q yoki bo'sh — "
                   "server endi API kalitini talab qiladi, heartbeat/o'yinlar/buyurtmalar "
                   "so'rovlari 401/403 xatosi bilan rad etilishi mumkin.")
+
+        # Favqulodda chiqish paroli — config.json'da ochiq matn EMAS,
+        # SHA-256 xesh sifatida saqlanadi. Sozlanmagan bo'lsa, standart
+        # "ClutchZoneExit2026" paroli ishlatiladi — buni albatta
+        # config.json'da o'zingiznikiga almashtiring (yangi parolning
+        # xeshini olish uchun: python3 -c "import hashlib;
+        # print(hashlib.sha256('YANGI_PAROL'.encode()).hexdigest())").
+        self.admin_exit_password_hash = cfg.get(
+            "admin_exit_password_hash",
+            "cba90bbae34e91bf3a86497221ed22331501466663ecefcfef50c843004d3449"  # "ClutchZoneExit2026"
+        )
+        if "admin_exit_password_hash" not in cfg:
+            print("[Config] OGOHLANTIRISH: 'admin_exit_password_hash' sozlanmagan — "
+                  "standart parol ishlatilmoqda. Xavfsizlik uchun config.json'ga "
+                  "o'zingizning parolingiz xeshini qo'shing.")
 
     def _handle_status(self, data):
         new_status = data.get('status', 'LOCKED')
@@ -6355,9 +6662,22 @@ class ClientLockerApp:
     def _handle_customer_stop_request(self, session_token):
         """Mijoz Kabinet/Menyudan Vaqtni to'xtatish yoki Logout'ni bosganda —
         darhol barcha o'yinlarni o'chiradi, hisobdan chiqadi, serverda seansni
-        to'xtatadi va LockScreen'ga o'tadi."""
+        to'xtatadi va LockScreen'ga o'tadi.
+
+        MUHIM: server so'rovi avval "otib-unut" (fire-and-forget) edi —
+        natija (muvaffaqiyatli/xato) hech qayerda tekshirilmasdi. Agar
+        tarmoq vaqtincha uzilgan/kechikkan bo'lsa, ekran allaqachon
+        QULFLANGAN ko'rinardi, lekin serverda seans hali FAOL qolib,
+        balance_worker.py mijoz balansidan har 30 soniyada yechishni
+        DAVOM ETTIRARDI — hech kim buni bilmasdi. Endi so'rov
+        muvaffaqiyatsiz bo'lsa, bir necha marta qayta uriniladi;
+        barcha urinishlar tugagach ham muvaffaqiyatsiz bo'lsa, xodimga
+        ko'rinadigan xato ko'rsatiladi."""
         print(f"[Session] Logout / Stop session requested (pc_name={self.pc_name}, pc_id={self.pc_id})")
         token = session_token or (self.main_window.launcher_page.logged_in_customer.get('session_token', '') if self.main_window.launcher_page.logged_in_customer else '')
+
+        MAX_ATTEMPTS = 5
+        RETRY_DELAY_SECONDS = 5
 
         def _do_server_stop():
             target_id = self.pc_id
@@ -6371,8 +6691,36 @@ class ClientLockerApp:
                             break
                 except Exception as e:
                     print(f"[Session] Fetch pc_id error: {e}")
-            if target_id:
-                self.main_window.api_client.customer_stop_session_async(target_id, token)
+            if not target_id:
+                self.signals.customer_stop_failed.emit(
+                    "PC ID topilmadi — server bilan aloqa yo'q. Iltimos, administratorga murojaat qiling."
+                )
+                return
+
+            for attempt in range(1, MAX_ATTEMPTS + 1):
+                done_event = threading.Event()
+                result = {'ok': False, 'data': {}}
+
+                def _on_done(ok, data):
+                    result['ok'] = ok
+                    result['data'] = data
+                    done_event.set()
+
+                self.main_window.api_client.customer_stop_session_async(target_id, token, on_done=_on_done)
+                done_event.wait(timeout=15)
+
+                if result['ok']:
+                    print(f"[Session] Stop session serverda tasdiqlandi ({attempt}-urinishda)")
+                    return
+
+                print(f"[Session] Stop session urinishi {attempt}/{MAX_ATTEMPTS} muvaffaqiyatsiz: {result['data']}")
+                if attempt < MAX_ATTEMPTS:
+                    time.sleep(RETRY_DELAY_SECONDS)
+
+            error_msg = result['data'].get('error') if isinstance(result['data'], dict) else None
+            self.signals.customer_stop_failed.emit(
+                error_msg or "Seansni to'xtatishda server bilan aloqa o'rnatib bo'lmadi. Administratorga murojaat qiling — balansdan yechish davom etayotgan bo'lishi mumkin!"
+            )
 
         threading.Thread(target=_do_server_stop, daemon=True).start()
         self._lock()
@@ -6406,15 +6754,35 @@ class ClientLockerApp:
         finally:
             s.close()
 
+    @staticmethod
+    def _get_mac_address():
+        # Wake-on-LAN uchun kerak — dashboard "yoqish" tugmasi shu
+        # manzilga "sehrli paket" yuboradi. Avval bu umuman
+        # yuborilmagan edi, shuning uchun Computer.mac_address doim
+        # bo'sh qolar edi.
+        try:
+            mac_int = uuid.getnode()
+            mac = ':'.join(f'{(mac_int >> ele) & 0xff:02x}' for ele in range(40, -1, -8))
+            # uuid.getnode() haqiqiy tarmoq kartasi topilmasa, tasodifiy
+            # (dastur ishga tushgan har safar boshqacha) manzil qaytarishi
+            # mumkin — bunday "soxta" manzillarning eng yuqori biti doim
+            # 1 (multicast bit) bo'ladi, shuning uchun ularni yubormaymiz.
+            if mac_int & 0x010000000000:
+                return ''
+            return mac
+        except Exception:
+            return ''
+
     def _run_sync(self):
         threading.Thread(target=self._run_ws, daemon=True).start()
         local_ip = self._get_local_ip()
+        local_mac = self._get_mac_address()
         while True:
             try:
                 headers = {"X-API-Key": self.api_key} if self.api_key else {}
                 r = requests.post(
                     f"{self.server_url}/api/computers/heartbeat/",
-                    json={"pc_name": self.pc_name, "ip_address": local_ip},
+                    json={"pc_name": self.pc_name, "ip_address": local_ip, "mac_address": local_mac},
                     headers=headers, timeout=4
                 )
                 if r.status_code == 200:

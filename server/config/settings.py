@@ -122,13 +122,27 @@ REST_FRAMEWORK = {
     # "qo'pol kuch" (brute-force) bilan topishga urinishning oldini oladi.
     'DEFAULT_THROTTLE_RATES': {
         'kiosk_login': '20/minute',
+        # Telefon raqami bo'yicha, IP'dan mustaqil — bitta mijozga
+        # nisbatan real hayotda soatiga 5 martadan ko'p kirish urinishi
+        # bo'lmaydi (parolni unutib, xato kiritishlar hisobga olinsa
+        # ham), shuning uchun bu chegara oddiy foydalanishga xalaqit
+        # bermaydi, lekin telefon raqamlarini "sinab ko'rib" hisob
+        # egallashga urinishni sezilarli qiyinlashtiradi.
+        'kiosk_login_phone': '5/hour',
     },
 }
 
 # client_locker.py kiosk ilovalari shu kalitni X-API-Key header orqali
 # yuboradi (foydalanuvchi hisobi bo'lmagani uchun login qila olmaydi).
-# Har bir klub o'z serverida buni o'zgartirishi tavsiya etiladi.
-CLIENT_API_KEY = 'AKiv9qEeJqBlO8Xa4HJfJ_ZmMig6c5srmY7Nr1c4oOw'
+#
+# MUHIM: bu kalit ochiq GitHub repo'sida (va har bir kiosk PC'ning
+# config.json faylida) saqlanadi — ya'ni repo'ni o'qiy oladigan HAR
+# QANDAY kishi standart qiymatni bilib oladi va o'zini kiosk sifatida
+# tanitib, heartbeat/skrinshot/seans buyruqlarini soxtalashtira oladi.
+# Shuning uchun DJANGO_CLIENT_API_KEY muhit o'zgaruvchisi orqali
+# almashtirilishi SHART (SECRET_KEY bilan bir xil andoza) — pastdagi
+# qiymat faqat mahalliy sinov/standart uchun zaxira.
+CLIENT_API_KEY = os.environ.get('DJANGO_CLIENT_API_KEY', 'AKiv9qEeJqBlO8Xa4HJfJ_ZmMig6c5srmY7Nr1c4oOw')
 
 AUTH_PASSWORD_VALIDATORS = []
 

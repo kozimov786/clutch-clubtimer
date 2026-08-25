@@ -2,6 +2,7 @@ from pathlib import Path
 from datetime import timedelta, datetime, time
 import calendar
 import secrets
+import socket
 import uuid
 from django.conf import settings
 from django.core.cache import cache
@@ -23,7 +24,7 @@ from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
-from rest_framework.throttling import ScopedRateThrottle
+from rest_framework.throttling import ScopedRateThrottle, SimpleRateThrottle
 
 from .models import (
     Computer, Tariff, Session, Category, Product, Order, OrderItem, Expense, Game, GamePathOverride, StockSupply,
@@ -109,6 +110,36 @@ def _log_action(request, action_key, description):
     AuditLog.objects.create(user=user, action=action_key, description=description)
 
 
+def _send_wol_magic_packet(mac_address):
+    """Berilgan MAC manzilga Wake-on-LAN "magic packet" (6 baytlik
+    0xFF + MAC manzil 16 marta takrorlangan) UDP orqali (255-portga)
+    keng-translyatsiya (broadcast) qiladi. Bu paket faqat kompyuterni
+    "uyg'otishi" mumkin — buning uchun o'sha kompyuterda BIOS/UEFI'da
+    "Wake on LAN" yoqilgan, Windows tarmoq kartasi sozlamalarida
+    "Wake on Magic Packet" yoqilgan va SIMLI (Ethernet) ulanish
+    bo'lishi SHART (Wi-Fi odatda WOL'ni qo'llab-quvvatlamaydi) — bu
+    sozlamalarni serverdan masofadan o'rnatib bo'lmaydi, har bir PC'da
+    bir martalik qo'lda sozlash kerak."""
+    mac_clean = re.sub(r'[^0-9a-fA-F]', '', str(mac_address or ''))
+    if len(mac_clean) != 12:
+        return False
+    mac_bytes = bytes.fromhex(mac_clean)
+    packet = b'\xff' * 6 + mac_bytes * 16
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        sock.sendto(packet, ('255.255.255.255', 9))
+    except OSError:
+        # Ba'zi tarmoq/xost sozlamalarida keng-translyatsiya (broadcast)
+        # yuborish rad etilishi mumkin (masalan tarmoq interfeysi
+        # broadcast'ni cheklagan) — bu holatda ham serverni butunlay
+        # yiqitmasdan, aniq xato qaytaramiz.
+        return False
+    finally:
+        sock.close()
+    return True
+
+
 def _normalize_phone_core(phone):
     """Telefon raqamni solishtirish uchun "asosiy" (mamlakat kodisiz)
     9 xonali shaklga keltiradi — xodim dashboard'da "+998 90 111 22 33"
@@ -173,18 +204,20 @@ def _calculate_session_duration_and_price(pc, active_session, start_time, tariff
     if pc.is_open_time and start_time:
         elapsed_seconds = max(0, (now - start_time).total_seconds())
         duration_minutes = round(elapsed_seconds / 60.0)
-        price_per_min = (tariff.get_effective_price_per_hour() / 60.0) if tariff else (FALLBACK_PRICE_PER_HOUR / 60.0)
-        time_price = round(price_per_min * duration_minutes)
+        if tariff:
+            time_price = round(tariff.calculate_price_for_period(start_time, now))
+        else:
+            time_price = round((FALLBACK_PRICE_PER_HOUR / 60.0) * duration_minutes)
     elif active_session and active_session.duration_minutes > 0:
         duration_minutes = active_session.duration_minutes
         time_price = float(active_session.total_price)
     elif start_time:
-        if pc.session_end_time:
-            duration_minutes = round(max(0, (pc.session_end_time - start_time).total_seconds()) / 60.0)
+        end_dt = pc.session_end_time or now
+        duration_minutes = round(max(0, (end_dt - start_time).total_seconds()) / 60.0)
+        if tariff:
+            time_price = round(tariff.calculate_price_for_period(start_time, end_dt))
         else:
-            duration_minutes = round(max(0, (now - start_time).total_seconds()) / 60.0)
-        price_per_min = (tariff.get_effective_price_per_hour() / 60.0) if tariff else (FALLBACK_PRICE_PER_HOUR / 60.0)
-        time_price = round(price_per_min * duration_minutes)
+            time_price = round((FALLBACK_PRICE_PER_HOUR / 60.0) * duration_minutes)
 
     return duration_minutes, time_price
 
@@ -480,21 +513,32 @@ class ComputerViewSet(viewsets.ModelViewSet):
         """Kiosk'dan: "Kabinet" yoki yon menyudan mijoz seansni to'xtatganda
         yoki logout qilganda. Agar balans seansi bo'lsa, balansdan yechish
         yakunlanadi. Boshqa barcha seanslarda ham kompyuter LOCKED holatga
-        o'tkaziladi va Dashboard'ga darhol yangilanish yuboriladi."""
+        o'tkaziladi va Dashboard'ga darhol yangilanish yuboriladi.
+
+        MUHIM: avval bu action HECH QANDAY egalik tekshiruvisiz ishlar
+        edi — shared API kalitini bilgan istalgan client, session
+        haqiqatan o'ziniki bo'lmasa ham (yoki hatto customer tokeni
+        umuman noto'g'ri bo'lsa ham), istalgan PC'ni qulflab qo'ya
+        olardi. Endi so'rov FAQAT o'sha PC'dagi FAOL seans aynan shu
+        mijozga tegishli bo'lsagina bajariladi."""
         pc = self.get_object()
-        customer, _ = _resolve_kiosk_session_customer(request)
+        customer, error_response = _resolve_kiosk_session_customer(request)
+        if error_response:
+            return error_response
 
         session = Session.objects.filter(computer=pc, is_active=True).first()
         now = timezone.now()
 
-        if session and session.payment_method == 'BALANCE' and customer:
+        if not session or session.customer_id != customer.id:
+            return Response({'error': "Bu PC'da sizga tegishli faol seans topilmadi"}, status=status.HTTP_403_FORBIDDEN)
+
+        if session.payment_method == 'BALANCE':
             from . import balance_worker
             balance_worker.stop_balance_session(pc, session, customer, now, reason="mijoz o'zi to'xtatdi:")
         else:
-            if session:
-                session.is_active = False
-                session.end_time = now
-                session.save()
+            session.is_active = False
+            session.end_time = now
+            session.save()
             pc.status = 'LOCKED'
             pc.is_open_time = False
             pc.time_remaining = 0
@@ -621,60 +665,150 @@ class ComputerViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def stop_session(self, request, pk=None):
-        pc = self.get_object()
-        now = timezone.now()
-        payment_method = request.data.get('payment_method', 'CASH')
-        req_cash = float(request.data.get('cash_amount', 0.0))
-        req_card = float(request.data.get('card_amount', 0.0))
+        # get_object() faqat ruxsat tekshiruvi uchun — haqiqiy o'qish va
+        # yozish pastda, select_for_update() bilan qulflangan holda
+        # amalga oshiriladi (approve/deliver/cancel'dagi bilan bir xil
+        # andoza). Buning ikkita sababi bor:
+        # 1) Ikki marta ketma-ket (masalan tarmoq kechikishi tufayli
+        #    qayta yuborilgan) stop_session so'rovi bir xil buyurtmani
+        #    IKKI MARTA yetkazilgan deb belgilab, ombordan ikki marta
+        #    kamaytirib yubormasligi uchun.
+        # 2) session_orders so'roviga ENDI YUQORI CHEGARA (created_at__lte)
+        #    ham qo'shildi — avval faqat pastki chegara bor edi, ya'ni
+        #    agar shu so'rov kechikib bajarilsa-yu, shu orada AYNAN shu
+        #    PC'da YANGI seans allaqachon boshlangan bo'lsa, o'sha yangi
+        #    (hali to'lanmagan) mijozning buyurtmalarini ham eski
+        #    so'rovning to'lov taqsimotiga qo'shib, ularni noto'g'ri
+        #    yakunlab qo'yishi mumkin edi.
+        self.get_object()
+        with transaction.atomic():
+            pc = Computer.objects.select_for_update().get(pk=pk)
+            now = timezone.now()
+            payment_method = request.data.get('payment_method', 'CASH')
+            req_cash = float(request.data.get('cash_amount', 0.0))
+            req_card = float(request.data.get('card_amount', 0.0))
 
-        active_session = Session.objects.filter(computer=pc, is_active=True).first()
-        if not active_session:
-            active_session = Session.objects.filter(computer=pc).order_by('-start_time').first()
+            active_session = Session.objects.select_for_update().filter(computer=pc, is_active=True).first()
+            if not active_session:
+                active_session = Session.objects.select_for_update().filter(computer=pc).order_by('-start_time').first()
 
-        start_time = active_session.start_time if (active_session and active_session.start_time) else pc.session_start_time
-        tariff = (active_session.tariff if active_session else None) or pc.current_tariff or Tariff.objects.first()
+            start_time = active_session.start_time if (active_session and active_session.start_time) else pc.session_start_time
+            tariff = (active_session.tariff if active_session else None) or pc.current_tariff or Tariff.objects.first()
 
-        duration_minutes, time_price = _calculate_session_duration_and_price(pc, active_session, start_time, tariff, now)
+            duration_minutes, time_price = _calculate_session_duration_and_price(pc, active_session, start_time, tariff, now)
 
-        # payment_method='BALANCE' buyurtmalar bar buyurtma yaratilgan
-        # zahoti mijoz balansidan allaqachon yechilgan (OrderViewSet.create)
-        # — shuning uchun bu yerda xodimga QAYTA naqd/plastik sifatida
-        # hisoblanmasligi kerak (aks holda mijoz ikki marta to'lagan
-        # bo'lib chiqardi).
-        if start_time:
-            session_orders = Order.objects.filter(computer=pc, created_at__gte=start_time - timedelta(seconds=30)).exclude(status='CANCELLED').exclude(payment_method='BALANCE')
-        else:
-            session_orders = Order.objects.filter(computer=pc).exclude(status='CANCELLED').exclude(payment_method='BALANCE')
+            # payment_method='BALANCE' buyurtmalar bar buyurtma yaratilgan
+            # zahoti mijoz balansidan allaqachon yechilgan (OrderViewSet.create)
+            # — shuning uchun bu yerda xodimga QAYTA naqd/plastik sifatida
+            # hisoblanmasligi kerak (aks holda mijoz ikki marta to'lagan
+            # bo'lib chiqardi).
+            if start_time:
+                session_orders = list(Order.objects.select_for_update().filter(
+                    computer=pc, created_at__gte=start_time - timedelta(seconds=30), created_at__lte=now
+                ).exclude(status='CANCELLED').exclude(payment_method='BALANCE'))
+            else:
+                session_orders = list(Order.objects.select_for_update().filter(
+                    computer=pc, created_at__lte=now
+                ).exclude(status='CANCELLED').exclude(payment_method='BALANCE'))
 
-        bar_total_price = float(sum(o.total_price for o in session_orders))
+            bar_total_price = float(sum(o.total_price for o in session_orders))
 
-        if active_session and active_session.payment_method == 'BALANCE':
-            # Vaqt narxi allaqachon fon ishchisi (balance_worker.py)
-            # orqali bosqichma-bosqich mijoz balansidan yechilgan —
-            # bu yerda uni QAYTA naqd/plastik sifatida hisoblab
-            # bo'lmaydi (aks holda mijoz ikki marta to'lagan bo'lib
-            # chiqardi). Faqat shu seans davomidagi bar buyurtmalari
-            # (bo'lsa) xodim ko'rsatgan to'lov usuli bilan alohida
-            # hisoblanadi.
-            bar_final_cash, bar_final_card = _split_payment(payment_method, bar_total_price, req_cash, req_card)
+            if active_session and active_session.payment_method == 'BALANCE':
+                # Vaqt narxi allaqachon fon ishchisi (balance_worker.py)
+                # orqali bosqichma-bosqich mijoz balansidan yechilgan —
+                # bu yerda uni QAYTA naqd/plastik sifatida hisoblab
+                # bo'lmaydi (aks holda mijoz ikki marta to'lagan bo'lib
+                # chiqardi). Faqat shu seans davomidagi bar buyurtmalari
+                # (bo'lsa) xodim ko'rsatgan to'lov usuli bilan alohida
+                # hisoblanadi.
+                bar_final_cash, bar_final_card = _split_payment(payment_method, bar_total_price, req_cash, req_card)
 
-            active_session.duration_minutes = duration_minutes
-            active_session.total_price = float(active_session.balance_deducted)
-            active_session.cash_amount = 0.0
-            active_session.card_amount = 0.0
-            active_session.end_time = now
-            active_session.is_active = False
-            active_session.save()
+                active_session.duration_minutes = duration_minutes
+                active_session.total_price = float(active_session.balance_deducted)
+                active_session.cash_amount = 0.0
+                active_session.card_amount = 0.0
+                active_session.end_time = now
+                active_session.is_active = False
+                active_session.save()
+
+                for order in session_orders:
+                    order.payment_method = payment_method
+                    if bar_total_price > 0:
+                        o_ratio = float(order.total_price) / bar_total_price
+                        order.cash_amount = round(bar_final_cash * o_ratio, 2)
+                        order.card_amount = round(bar_final_card * o_ratio, 2)
+                    else:
+                        order.cash_amount = 0.0
+                        order.card_amount = 0.0
+                    if order.status == 'PENDING':
+                        _deduct_stock_for_order(order)
+                        order.status = 'DELIVERED'
+                    order.save()
+
+                pc.status = 'LOCKED'
+                pc.is_open_time = False
+                pc.time_remaining = 0
+                pc.session_start_time = None
+                pc.session_end_time = None
+                pc.current_tariff = None
+                pc.save()
+
+                _log_action(
+                    request, 'SESSION_STOPPED',
+                    f"{pc.name}: balans seansi yakunlandi, jami {float(active_session.balance_deducted):,.0f} UZS balansdan"
+                    + (f" + {bar_total_price:,.0f} UZS bar ({payment_method})" if bar_total_price > 0 else "")
+                )
+
+                serializer = self.get_serializer(pc)
+                notify_pc_status_change({'action': 'SESSION_STOPPED', 'pc': serializer.data})
+                return Response(serializer.data, status=status.HTTP_200_OK)
+
+            grand_total = float(time_price) + bar_total_price
+
+            final_cash, final_card = _split_payment(payment_method, grand_total, req_cash, req_card)
+
+            if grand_total > 0:
+                time_ratio = float(time_price) / grand_total
+                sess_cash = round(final_cash * time_ratio, 2)
+                sess_card = round(final_card * time_ratio, 2)
+            else:
+                sess_cash = final_cash
+                sess_card = final_card
+
+            if active_session:
+                active_session.duration_minutes = duration_minutes
+                active_session.total_price = time_price
+                active_session.payment_method = payment_method
+                active_session.cash_amount = sess_cash
+                active_session.card_amount = sess_card
+                active_session.end_time = now
+                active_session.is_active = False
+                active_session.save()
+            else:
+                active_session = Session.objects.create(
+                    computer=pc,
+                    tariff=tariff,
+                    is_open_time=pc.is_open_time,
+                    start_time=start_time or now,
+                    end_time=now,
+                    duration_minutes=duration_minutes,
+                    total_price=time_price,
+                    payment_method=payment_method,
+                    cash_amount=sess_cash,
+                    card_amount=sess_card,
+                    is_active=False
+                )
 
             for order in session_orders:
                 order.payment_method = payment_method
-                if bar_total_price > 0:
-                    o_ratio = float(order.total_price) / bar_total_price
-                    order.cash_amount = round(bar_final_cash * o_ratio, 2)
-                    order.card_amount = round(bar_final_card * o_ratio, 2)
+                if grand_total > 0:
+                    o_ratio = float(order.total_price) / grand_total
+                    order.cash_amount = round(final_cash * o_ratio, 2)
+                    order.card_amount = round(final_card * o_ratio, 2)
                 else:
-                    order.cash_amount = 0.0
-                    order.card_amount = 0.0
+                    order.cash_amount = float(order.total_price) if payment_method == 'CASH' else 0.0
+                    order.card_amount = float(order.total_price) if payment_method == 'CARD' else 0.0
+
                 if order.status == 'PENDING':
                     _deduct_stock_for_order(order)
                     order.status = 'DELIVERED'
@@ -688,83 +822,14 @@ class ComputerViewSet(viewsets.ModelViewSet):
             pc.current_tariff = None
             pc.save()
 
-            _log_action(
-                request, 'SESSION_STOPPED',
-                f"{pc.name}: balans seansi yakunlandi, jami {float(active_session.balance_deducted):,.0f} UZS balansdan"
-                + (f" + {bar_total_price:,.0f} UZS bar ({payment_method})" if bar_total_price > 0 else "")
-            )
+            _log_action(request, 'SESSION_STOPPED', f"{pc.name}: seans yakunlandi, jami {grand_total:,.0f} UZS ({payment_method})")
 
             serializer = self.get_serializer(pc)
-            notify_pc_status_change({'action': 'SESSION_STOPPED', 'pc': serializer.data})
+            notify_pc_status_change({
+                'action': 'SESSION_STOPPED',
+                'pc': serializer.data
+            })
             return Response(serializer.data, status=status.HTTP_200_OK)
-
-        grand_total = float(time_price) + bar_total_price
-
-        final_cash, final_card = _split_payment(payment_method, grand_total, req_cash, req_card)
-
-        if grand_total > 0:
-            time_ratio = float(time_price) / grand_total
-            sess_cash = round(final_cash * time_ratio, 2)
-            sess_card = round(final_card * time_ratio, 2)
-        else:
-            sess_cash = final_cash
-            sess_card = final_card
-
-        if active_session:
-            active_session.duration_minutes = duration_minutes
-            active_session.total_price = time_price
-            active_session.payment_method = payment_method
-            active_session.cash_amount = sess_cash
-            active_session.card_amount = sess_card
-            active_session.end_time = now
-            active_session.is_active = False
-            active_session.save()
-        else:
-            active_session = Session.objects.create(
-                computer=pc,
-                tariff=tariff,
-                is_open_time=pc.is_open_time,
-                start_time=start_time or now,
-                end_time=now,
-                duration_minutes=duration_minutes,
-                total_price=time_price,
-                payment_method=payment_method,
-                cash_amount=sess_cash,
-                card_amount=sess_card,
-                is_active=False
-            )
-
-        for order in session_orders:
-            order.payment_method = payment_method
-            if grand_total > 0:
-                o_ratio = float(order.total_price) / grand_total
-                order.cash_amount = round(final_cash * o_ratio, 2)
-                order.card_amount = round(final_card * o_ratio, 2)
-            else:
-                order.cash_amount = float(order.total_price) if payment_method == 'CASH' else 0.0
-                order.card_amount = float(order.total_price) if payment_method == 'CARD' else 0.0
-
-            if order.status == 'PENDING':
-                _deduct_stock_for_order(order)
-                order.status = 'DELIVERED'
-            order.save()
-
-        pc.status = 'LOCKED'
-        pc.is_open_time = False
-        pc.time_remaining = 0
-        pc.session_start_time = None
-        pc.session_end_time = None
-        pc.current_tariff = None
-        pc.save()
-
-        _log_action(request, 'SESSION_STOPPED', f"{pc.name}: seans yakunlandi, jami {grand_total:,.0f} UZS ({payment_method})")
-
-        serializer = self.get_serializer(pc)
-        notify_pc_status_change({
-            'action': 'SESSION_STOPPED',
-            'pc': serializer.data
-        })
-        return Response(serializer.data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'])
     def emergency_lock(self, request, pk=None):
@@ -853,6 +918,46 @@ class ComputerViewSet(viewsets.ModelViewSet):
         })
         return Response({'success': True})
 
+    @action(detail=True, methods=['post'])
+    def wake_on_lan(self, request, pk=None):
+        """Dashboarddan: shu kompyuterni Windows BUTUNLAY o'chiq
+        bo'lsa ham masofadan yoqadi (Wake-on-LAN "magic packet").
+        Kiosk klientiga bog'liq EMAS (aksincha — u ishlashi uchun
+        aynan klient/Windows o'chiq bo'lgan holatda ham tarmoq kartasi
+        signal kutib turishi kerak)."""
+        pc = self.get_object()
+        if not pc.mac_address:
+            return Response(
+                {'error': f"{pc.name} uchun MAC manzil hali aniqlanmagan — kamida bir marta klient ishga tushib, "
+                           "heartbeat yuborishi kerak."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        sent = _send_wol_magic_packet(pc.mac_address)
+        if not sent:
+            return Response(
+                {'error': f"{pc.name}: WOL signalini yuborib bo'lmadi (MAC manzil formati noto'g'ri "
+                           f"yoki server tarmog'i broadcast'ga ruxsat bermayapti: {pc.mac_address})"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        _log_action(request, 'WAKE_ON_LAN', f"{pc.name}: uzoqdan yoqish (WOL) signali yuborildi")
+        return Response({'success': True})
+
+    @action(detail=False, methods=['post'])
+    def wake_all(self, request):
+        """Barcha MAC manzili ma'lum kompyuterlarga WOL signalini
+        birdaniga yuboradi (klub ochilishidan oldin hammasini
+        yoqib qo'yish uchun)."""
+        computers = Computer.objects.exclude(mac_address='').exclude(mac_address__isnull=True)
+        woken = []
+        skipped = []
+        for pc in computers:
+            if _send_wol_magic_packet(pc.mac_address):
+                woken.append(pc.name)
+            else:
+                skipped.append(pc.name)
+        _log_action(request, 'WAKE_ON_LAN', f"Barcha kompyuterlarga WOL signali yuborildi ({len(woken)} ta)")
+        return Response({'success': True, 'woken': woken, 'skipped': skipped})
+
     @action(detail=False, methods=['post'])
     def heartbeat(self, request):
         pc_name = request.data.get('pc_name')
@@ -871,8 +976,23 @@ class ComputerViewSet(viewsets.ModelViewSet):
             pc.ip_address = ip_addr
         if mac_addr:
             pc.mac_address = mac_addr
+
+        was_offline = pc.status == 'OFFLINE'
+        if was_offline:
+            # offline_worker.py PC'ni OFFLINE deb belgilagandan keyin,
+            # heartbeat davri o'zi hech qachon bu holatni qaytarib
+            # o'zgartirmas edi (calculate_time_remaining faqat status
+            # ACTIVE bo'lganda ishlaydi) — PC qayta ulansa ham abadiy
+            # "OFFLINE" bo'lib qolar edi. Faol seans bo'lsa ACTIVE'ga,
+            # bo'lmasa LOCKED'ga qaytaramiz.
+            has_active_session = Session.objects.filter(computer=pc, is_active=True).exists()
+            pc.status = 'ACTIVE' if has_active_session else 'LOCKED'
+
         pc.calculate_time_remaining()
         pc.save()
+
+        if was_offline:
+            notify_pc_status_change({'action': 'PC_ONLINE', 'pc': ComputerSerializer(pc).data})
 
         serializer = self.get_serializer(pc)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -979,15 +1099,21 @@ class ProductViewSet(viewsets.ModelViewSet):
         if not product_id:
             return Response({'error': 'Mahsulot tanlanmagan!'}, status=status.HTTP_400_BAD_REQUEST)
 
-        product = Product.objects.filter(id=product_id).first()
-        if not product:
-            return Response({'error': 'Mahsulot topilmadi!'}, status=status.HTTP_400_BAD_REQUEST)
+        # select_for_update() bilan — _deduct_stock_for_order'dagi kabi.
+        # Avval bu yerda oddiy o'qi-tekshir-yoz (check-then-act) qilingan
+        # edi — ikkita deyarli bir vaqtdagi spisaniye so'rovi (masalan
+        # ikki marta bosilsa) ombor miqdorini MANFIY qiymatgacha
+        # tushirib, ikkita alohida rasxod yozuvini yaratishi mumkin edi.
+        with transaction.atomic():
+            product = Product.objects.select_for_update().filter(id=product_id).first()
+            if not product:
+                return Response({'error': 'Mahsulot topilmadi!'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if product.stock < quantity:
-            return Response({'error': f'{product.name} omborda yetarli emas! (Mavjud: {product.stock})'}, status=status.HTTP_400_BAD_REQUEST)
+            if product.stock < quantity:
+                return Response({'error': f'{product.name} omborda yetarli emas! (Mavjud: {product.stock})'}, status=status.HTTP_400_BAD_REQUEST)
 
-        product.stock -= quantity
-        product.save()
+            product.stock = max(0, product.stock - quantity)
+            product.save()
 
         total_cost = float(product.price * quantity)
 
@@ -1110,29 +1236,41 @@ class OrderViewSet(viewsets.ModelViewSet):
         """OrderViewSet.create()'ning transaction.atomic() bloki ichida chaqiriladi —
         shu sababli pastdagi Product.stock yozuvlari hali ham qulflangan holda qoladi."""
 
-        # Agar bu PC'da hozir mijoz o'z balansidan ochgan (BALANCE) seans
-        # faol bo'lsa — bar buyurtmasi ham darhol o'sha mijozning
-        # balansidan yechiladi (naqd/plastik emas), xuddi vaqt kabi.
-        # Buning sababi: mijoz o'zi Kabinetdan seansni tugatib ketganda,
-        # xodim hech qachon "ko'rmagan" holda to'lanmagan bar buyurtmasi
-        # osilib qolmasligi kerak — mijoz allaqachon jismonan ketgan
-        # bo'lishi mumkin.
+        # Bar buyurtmasi ikki holatda mijoz balansidan yechiladi:
+        # 1) Bu PC'da hozir mijoz o'z balansidan ochgan (BALANCE) seans
+        #    faol bo'lsa — buyurtma ham darhol o'sha mijozning balansidan
+        #    yechiladi (mijoz boshqa to'lov turini so'ramagan bo'lsa ham),
+        #    chunki bu holatda naqd/karta to'lovchi xodim yo'q — mijoz
+        #    Kabinetdan seansni tugatib jismonan ketgan bo'lishi mumkin.
+        # 2) Mijoz seansi CASH/CARD bo'lsa ham, bar sahifasida o'zi
+        #    "Balansdan" ni tanlagan bo'lsa — session_token orqali
+        #    identifikatsiya qilinadi (xom customer_id'ga ISHONILMAYDI,
+        #    aks holda istalgan kiosk boshqa mijozning balansidan pul
+        #    yechishi mumkin edi).
         balance_session = None
         if computer:
             balance_session = Session.objects.filter(
                 computer=computer, is_active=True, payment_method='BALANCE', customer__isnull=False
             ).select_related('customer').first()
 
+        balance_customer = None
         if balance_session:
-            customer = balance_session.customer
+            balance_customer = balance_session.customer
+        elif payment_method == 'BALANCE':
+            resolved_customer, err = _resolve_kiosk_session_customer(request)
+            if err:
+                return err
+            balance_customer = resolved_customer
+
+        if balance_customer:
             charge = float(total_price)
-            updated = Customer.objects.filter(pk=customer.pk, balance__gte=charge).update(balance=F('balance') - charge)
+            updated = Customer.objects.filter(pk=balance_customer.pk, balance__gte=charge).update(balance=F('balance') - charge)
             if not updated:
                 return Response(
                     {'error': f"Balansda yetarli mablag' yo'q (kerak: {charge:,.0f} UZS)."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            customer.refresh_from_db(fields=['balance'])
+            balance_customer.refresh_from_db(fields=['balance'])
             payment_method = 'BALANCE'
             cash_amt, card_amt = 0.0, 0.0
         else:
@@ -1144,7 +1282,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
         order = Order.objects.create(
             computer=computer,
-            customer=balance_session.customer if balance_session else None,
+            customer=balance_customer,
             client_order_id=client_order_id,
             total_price=total_price,
             cash_amount=cash_amt,
@@ -1166,7 +1304,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 oi['product'].stock = max(0, oi['product'].stock - oi['quantity'])
                 oi['product'].save()
 
-        if balance_session:
+        if balance_customer:
             # Kabinetning "Jami harakatlar" ro'yxatida aniq nima
             # sotib olinganini ko'rsatish uchun — mahsulot nomi(lari)
             # to'g'ridan-to'g'ri note'ga yoziladi (masalan
@@ -1177,11 +1315,11 @@ class OrderViewSet(viewsets.ModelViewSet):
                 for oi in order_items_to_create
             )
             CustomerTransaction.objects.create(
-                customer=balance_session.customer, type='SPEND', amount=total_price,
-                balance_after=balance_session.customer.balance,
-                note=item_summary or f"{computer.name}: bar buyurtma #{order.id}"
+                customer=balance_customer, type='SPEND', amount=total_price,
+                balance_after=balance_customer.balance,
+                note=item_summary or (f"{computer.name}: bar buyurtma #{order.id}" if computer else f"Bar buyurtma #{order.id}")
             )
-            award_balance_spend_points(balance_session.customer.pk, float(total_price))
+            award_balance_spend_points(balance_customer.pk, float(total_price))
 
         serializer = self.get_serializer(order)
         notify_bar_order_change({
@@ -1328,6 +1466,19 @@ class StockSupplyViewSet(viewsets.ModelViewSet):
     serializer_class = StockSupplySerializer
 
     def create(self, request, *args, **kwargs):
+        # Idempotentlik: Order.create()dagi bilan bir xil andoza — agar
+        # javob tarmoq nosozligi tufayli kelmay qolib, xodim "Saqlash"ni
+        # yana bossa, bir xil client_order_id bilan qayta yuborilgan
+        # so'rov YANGI kirim yaratish o'rniga oldingi (allaqachon
+        # yaratilgan) yozuvni qaytaradi — ombor va rasxod ikki marta
+        # yozilib qolmaydi.
+        client_order_id = (request.data.get('client_order_id') or '').strip() or None
+        if client_order_id:
+            existing = StockSupply.objects.filter(client_order_id=client_order_id).first()
+            if existing:
+                serializer = self.get_serializer(existing)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+
         product_id = request.data.get('product_id')
         product_name = request.data.get('product_name', '').strip()
         product_image = request.data.get('product_image', '').strip()
@@ -1365,23 +1516,26 @@ class StockSupplyViewSet(viewsets.ModelViewSet):
                 product_kwargs['image'] = product_image
             product = Product.objects.create(**product_kwargs)
 
-        product.stock += quantity
-        if cost_price > 0:
-            product.cost_price = cost_price
-        if selling_price > 0:
-            product.price = selling_price
-        product.save()
+        with transaction.atomic():
+            product = Product.objects.select_for_update().get(pk=product.pk)
+            product.stock += quantity
+            if cost_price > 0:
+                product.cost_price = cost_price
+            if selling_price > 0:
+                product.price = selling_price
+            product.save()
 
-        supply = StockSupply.objects.create(
-            product=product,
-            product_name=product.name,
-            quantity=quantity,
-            cost_price=cost_price,
-            selling_price=selling_price,
-            total_cost=total_cost,
-            payment_method=payment_method,
-            supplier_note=supplier_note
-        )
+            supply = StockSupply.objects.create(
+                product=product,
+                product_name=product.name,
+                quantity=quantity,
+                cost_price=cost_price,
+                selling_price=selling_price,
+                total_cost=total_cost,
+                payment_method=payment_method,
+                supplier_note=supplier_note,
+                client_order_id=client_order_id
+            )
 
         note_str = f" ({supplier_note})" if supplier_note else ""
         Expense.objects.create(
@@ -1685,6 +1839,27 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         }, status=status.HTTP_200_OK)
 
 
+class PerPhoneKioskLoginThrottle(SimpleRateThrottle):
+    """kiosk_login uchun IP bo'yicha emas, TELEFON RAQAMI bo'yicha
+    cheklov. IP-throttle (ScopedRateThrottle, pastda) bitta kiosk PC'dan
+    parolni "qo'pol kuch" bilan topishni qiyinlashtiradi, lekin
+    kiosk_login'ning o'ziga xos xavfi boshqacha: birinchi marta parol
+    o'rnatilmagan mijozga (xodim ismi/telefonini kiritib, hali parol
+    qo'ymagan holatda) ISTALGAN parol bilan kirib, o'sha parolni doimiy
+    qilib olish mumkin — bu bitta muvaffaqiyatli so'rov, "qo'pol kuch"
+    emas, shuning uchun IP-throttle bunga deyarli yordam bermaydi. Bu
+    yerdagi telefon-bo'yicha cheklov esa bitta API kalitidan bir nechta
+    turli mijozning raqamini "sinab ko'rish" orqali OMMAVIY hisob
+    egallashni ancha qiyinlashtiradi."""
+    scope = 'kiosk_login_phone'
+
+    def get_cache_key(self, request, view):
+        phone_core = _normalize_phone_core(str(request.data.get('phone', '')))
+        if not phone_core:
+            return None
+        return self.cache_format % {'scope': self.scope, 'ident': phone_core}
+
+
 class CustomerViewSet(viewsets.ModelViewSet):
     """Mijozlar/a'zolik: ism, telefon, balans (bonus/depozit hisobi).
     Sessiya/buyurtmalar ixtiyoriy ravishda mijozga bog'lanishi mumkin —
@@ -1701,7 +1876,7 @@ class CustomerViewSet(viewsets.ModelViewSet):
     def get_throttles(self):
         if self.action == 'kiosk_login':
             self.throttle_scope = 'kiosk_login'
-            return [ScopedRateThrottle()]
+            return [ScopedRateThrottle(), PerPhoneKioskLoginThrottle()]
         return super().get_throttles()
 
     def get_queryset(self):

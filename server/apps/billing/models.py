@@ -1,6 +1,7 @@
 from django.db import models
 from django.db.models import F
 from django.utils import timezone
+from datetime import timedelta
 import math
 
 class Tariff(models.Model):
@@ -17,6 +18,51 @@ class Tariff(models.Model):
         if 10 <= dt.hour < 18:
             return float(self.price_per_hour) * 0.5
         return float(self.price_per_hour)
+
+    def calculate_price_for_period(self, start_dt, end_dt):
+        """[start_dt, end_dt) oralig'i uchun TO'G'RI (aralash/blended)
+        narxni hisoblaydi — kunlik 10:00-18:00 chegirma oynasidan
+        o'tgan har bir segment o'zining haqiqiy vaqtidagi narxi bo'yicha
+        alohida hisoblanadi.
+
+        Oldin narx FAQAT bitta lahzada (odatda "hozir") get_effective_
+        price_per_hour() orqali hisoblanib, BUTUN davomiylikka
+        qo'llanilardi — natijada 10:00 yoki 18:00 chegarasidan o'tgan
+        seanslar (masalan 17:40 dan 18:20 gacha) noto'g'ri — chegirma
+        yoki to'liq narx bo'yicha BUTUNLAY — hisoblanardi, real holatda
+        haqiqiy summadan sezilarli farq qilishi mumkin edi."""
+        if start_dt is None or end_dt is None or end_dt <= start_dt:
+            return 0.0
+
+        full_rate = float(self.price_per_hour)
+        discount_rate = full_rate * 0.5
+
+        total = 0.0
+        cursor = timezone.localtime(start_dt)
+        end_local = timezone.localtime(end_dt)
+
+        while cursor < end_local:
+            day_start = cursor.replace(hour=0, minute=0, second=0, microsecond=0)
+            discount_start = day_start.replace(hour=10)
+            discount_end = day_start.replace(hour=18)
+            next_day = day_start + timedelta(days=1)
+            day_boundary = min(end_local, next_day)
+
+            if cursor < discount_start:
+                piece_end = min(day_boundary, discount_start)
+                rate = full_rate
+            elif cursor < discount_end:
+                piece_end = min(day_boundary, discount_end)
+                rate = discount_rate
+            else:
+                piece_end = day_boundary
+                rate = full_rate
+
+            hours = (piece_end - cursor).total_seconds() / 3600.0
+            total += hours * rate
+            cursor = piece_end
+
+        return total
 
     def __str__(self):
         return f"{self.name} - {self.price_per_hour:,.0f} UZS/h"
@@ -246,6 +292,11 @@ class StockSupply(models.Model):
     payment_method = models.CharField(max_length=10, choices=PAYMENT_METHOD_CHOICES, default='CASH')
     supplier_note = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    # Order.client_order_id bilan bir xil andoza: forma tarmoq nosozligi
+    # tufayli qayta yuborilsa ham (masalan javob kelmay qolib, xodim
+    # "Saqlash"ni yana bossa), tovar ombor qoldig'i va rasxod ikki marta
+    # yozilib ketmasligi uchun.
+    client_order_id = models.CharField(max_length=64, null=True, blank=True, unique=True)
 
     def __str__(self):
         return f"Kirim: {self.quantity}x {self.product_name} @ {self.cost_price:,.0f} UZS ({self.get_payment_method_display()}) - Jami: {self.total_cost:,.0f} UZS"
@@ -381,6 +432,7 @@ AUDIT_ACTION_CHOICES = [
     ('STOCK_SUPPLY', 'Tovar kirim qilindi'),
     ('REMOTE_SHUTDOWN', 'Kompyuter uzoqdan o\'chirildi'),
     ('FORCE_CLOSE_APP', 'Dastur majburan yopildi'),
+    ('WAKE_ON_LAN', "Kompyuter uzoqdan yoqildi (WOL)"),
     ('OTHER', 'Boshqa'),
 ]
 

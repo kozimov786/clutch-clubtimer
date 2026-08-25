@@ -17,3 +17,5 @@ class BillingConfig(AppConfig):
             return
         from . import balance_worker
         balance_worker.start_balance_deduction_worker()
+        from . import offline_worker
+        offline_worker.start_offline_detector_worker()

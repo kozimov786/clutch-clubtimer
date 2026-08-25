@@ -23,6 +23,14 @@ client/client_locker.log
 # (har bir PC'da mahalliy, runtime-generated)
 client/session_state.json
 
+# Har bir PC'ga xos sozlamalar (PC nomi, server manzili, o'sha PC'dagi
+# o'yinlar ro'yxati) — bularni git kuzatishi HAR BIR "git pull"da
+# to'qnashuvga sabab bo'lardi (45+ marta shu muammo takrorlandi).
+# Namuna uchun client/config.example.json va
+# client/regenerate_config.example.py tracked holda qoladi.
+client/config.json
+client/regenerate_config.py
+
 # macOS
 .DS_Store
 

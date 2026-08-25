@@ -6347,6 +6347,26 @@ class ClientLockerApp:
                 uninstall_keyboard_hook()
                 if IS_WINDOWS:
                     show_taskbar()
+                    # Shell Replacement rejimida (explorer.exe umuman
+                    # ishlamaydi, bizning dasturimiz Windows'ning yagona
+                    # "qobig'i") — oddiy os._exit(0) qop-qora, bo'sh
+                    # ekran qoldirar edi, chunki Windows'da boshqa
+                    # ko'rsatadigan narsa qolmaydi. Shuning uchun
+                    # chiqishdan oldin, agar explorer.exe hali
+                    # ishlamayotgan bo'lsa (aynan shu holat), uni ishga
+                    # tushiramiz — oddiy (Task Scheduler) rejimda
+                    # explorer.exe allaqachon ishlab turadi, shuning
+                    # uchun u yerda bu qadam hech narsa qilmaydi.
+                    try:
+                        result = subprocess.run(
+                            ["tasklist", "/FI", "IMAGENAME eq explorer.exe"],
+                            capture_output=True, text=True
+                        )
+                        if "explorer.exe" not in result.stdout:
+                            subprocess.Popen(["explorer.exe"])
+                            print("[Emergency] explorer.exe ishga tushirildi (Shell Replacement rejimi)")
+                    except Exception as e:
+                        print(f"[Emergency] explorer.exe ishga tushirishda xato: {e}")
                 os._exit(0)
             else:
                 print("[Emergency] Bekor qilindi (parol xato yoki rad etildi)")

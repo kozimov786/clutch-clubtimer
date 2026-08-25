@@ -1079,6 +1079,89 @@ class HeadphoneSettingsDialog(QDialog):
         root.addWidget(close_btn)
 
 
+class ScreenSizeDialog(QDialog):
+    """CS 1.6 kabi .bat orqali ishga tushadigan o'yinlar uchun ekran
+    o'lchami tanlovi — tanlangan rejim KEYINGI safar o'sha o'yin
+    ishga tushirilganda qo'llaniladi (hozir ochiq turgan o'yinga ta'sir
+    qilmaydi, uni qayta ishga tushirish kerak)."""
+
+    def __init__(self, current_mode, parent=None):
+        super().__init__(parent)
+        self._selected_mode = current_mode
+        self.setWindowTitle("Ekran o'lchami")
+        self.setModal(True)
+        self.setFixedSize(380, 260)
+        self.setStyleSheet(f"""
+            QDialog {{
+                background: {COLOR_SURFACE_CONTAINER_LOW};
+                border: 1px solid {COLOR_PRIMARY_CONTAINER};
+                border-radius: 8px;
+            }}
+            QLabel {{ color: {COLOR_ON_SURFACE}; border: none; background: transparent; }}
+        """)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(24, 22, 24, 20)
+        root.setSpacing(14)
+
+        title = QLabel("🖥️  EKRAN O'LCHAMI")
+        title.setFont(cyber_font(12, QFont.Weight.Bold, "Sora"))
+        title.setStyleSheet(f"color: {COLOR_PRIMARY_CONTAINER}; letter-spacing: 1px;")
+        root.addWidget(title)
+
+        hint = QLabel("Bu tanlov CS 1.6 kabi o'yinlarga tegishli — keyingi safar o'sha o'yin ishga tushirilganda qo'llaniladi.")
+        hint.setWordWrap(True)
+        hint.setFont(cyber_font(9, family="Hanken"))
+        hint.setStyleSheet(f"color: {COLOR_ON_SURFACE_VARIANT};")
+        root.addWidget(hint)
+
+        root.addSpacing(4)
+
+        self.full_btn = QPushButton("🖵  TO'LIQ EKRAN")
+        self.small_btn = QPushButton("▭  640 x 480")
+        for btn in (self.full_btn, self.small_btn):
+            btn.setFont(cyber_font(10, QFont.Weight.Bold, "Sora"))
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFixedHeight(44)
+            root.addWidget(btn)
+        self.full_btn.clicked.connect(lambda: self._select('FULL'))
+        self.small_btn.clicked.connect(lambda: self._select('640x480'))
+
+        root.addStretch(1)
+
+        close_btn = QPushButton("Yopish")
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.setFixedHeight(36)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255,255,255,0.06); color: #94a3b8;
+                border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;
+            }
+            QPushButton:hover { color: #e2e8f0; }
+        """)
+        close_btn.clicked.connect(self.accept)
+        root.addWidget(close_btn)
+
+        self._refresh_styles()
+
+    def _select(self, mode):
+        self._selected_mode = mode
+        self._refresh_styles()
+
+    def _refresh_styles(self):
+        for btn, mode in ((self.full_btn, 'FULL'), (self.small_btn, '640x480')):
+            btn.setStyleSheet(CYBER_PRIMARY_BTN_QSS if self._selected_mode == mode else """
+                QPushButton {
+                    background: rgba(255,255,255,0.06); color: #94a3b8;
+                    border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;
+                }
+                QPushButton:hover { color: #e2e8f0; }
+            """)
+
+    def selected_mode(self):
+        return self._selected_mode
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 #  5. LOCK SCREEN (CYBER-ESPORTS DESIGN)
 # ──────────────────────────────────────────────────────────────────────────────
@@ -4904,7 +4987,7 @@ class NexusFooterBar(QFrame):
     """Nexus / Cyber-Esports pastki footer paneli (Mouse Settings + Sound Settings + NVIDIA App + So'nggi ochilgan applar)."""
     mouse_settings_requested = pyqtSignal()
     sound_settings_requested = pyqtSignal()
-    nvidia_app_requested = pyqtSignal()
+    screen_size_requested = pyqtSignal()
     app_clicked = pyqtSignal(str)
 
     def __init__(self, parent=None):
@@ -4966,12 +5049,12 @@ class NexusFooterBar(QFrame):
         sound_btn.clicked.connect(self.sound_settings_requested.emit)
         layout.addWidget(sound_btn)
 
-        # NVIDIA APP tugmasi
-        nvidia_btn = QPushButton("🎮  NVIDIA APP")
-        nvidia_btn.setFont(cyber_font(9, QFont.Weight.Bold, "Mono"))
-        nvidia_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        nvidia_btn.setFixedHeight(36)
-        nvidia_btn.setStyleSheet(f"""
+        # EKRAN O'LCHAMI tugmasi (avval NVIDIA APP turgan joyda)
+        screen_size_btn = QPushButton("🖥️  SCREEN SIZE")
+        screen_size_btn.setFont(cyber_font(9, QFont.Weight.Bold, "Mono"))
+        screen_size_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        screen_size_btn.setFixedHeight(36)
+        screen_size_btn.setStyleSheet(f"""
             QPushButton {{
                 background: rgba(39, 42, 49, 0.5);
                 color: {COLOR_PRIMARY_CONTAINER};
@@ -4985,8 +5068,8 @@ class NexusFooterBar(QFrame):
                 border-color: {COLOR_PRIMARY_CONTAINER};
             }}
         """)
-        nvidia_btn.clicked.connect(self.nvidia_app_requested.emit)
-        layout.addWidget(nvidia_btn)
+        screen_size_btn.clicked.connect(self.screen_size_requested.emit)
+        layout.addWidget(screen_size_btn)
 
         layout.addStretch(1)
 
@@ -5066,6 +5149,7 @@ class LauncherPage(QWidget):
     game_launch_requested = pyqtSignal(dict)
     app_switch_requested = pyqtSignal(str)
     cabinet_stop_requested = pyqtSignal(str)
+    screen_size_changed = pyqtSignal(str)
     _games_loaded = pyqtSignal(list)
     _products_loaded = pyqtSignal(list)
 
@@ -5075,6 +5159,7 @@ class LauncherPage(QWidget):
         self.api_client = api_client
         self.fallback_games = fallback_games or []
         self.logged_in_customer = None
+        self._screen_size_mode = 'FULL'
         self.setStyleSheet(f"background-color: {COLOR_BG};")
 
         # Asosiy gorizontal struktura (Chapda Sidebar, O'ngda Asosiy qism)
@@ -5137,7 +5222,7 @@ class LauncherPage(QWidget):
         self.footer_bar = NexusFooterBar()
         self.footer_bar.mouse_settings_requested.connect(self._open_mouse_settings)
         self.footer_bar.sound_settings_requested.connect(self._open_sound_settings)
-        self.footer_bar.nvidia_app_requested.connect(self._open_nvidia_app)
+        self.footer_bar.screen_size_requested.connect(self._open_screen_size)
         self.footer_bar.app_clicked.connect(self.app_switch_requested.emit)
         right_vlayout.addWidget(self.footer_bar)
 
@@ -5213,29 +5298,13 @@ class LauncherPage(QWidget):
         dialog = HeadphoneSettingsDialog(parent=self)
         dialog.exec()
 
-    def _open_nvidia_app(self):
-        """NVIDIA App yoki NVIDIA Control Panel'ni ishga tushiradi."""
-        if IS_WINDOWS:
-            nvidia_paths = [
-                r"C:\Program Files\NVIDIA Corporation\NVIDIA App\CEF\NVIDIA_app.exe",
-                r"C:\Program Files\NVIDIA Corporation\NVIDIA GeForce Experience\NVIDIA GeForce Experience.exe",
-                r"C:\Program Files\NVIDIA Corporation\Control Panel Client\nvcplui.exe",
-                r"C:\Windows\System32\nvcplui.exe",
-            ]
-            for p in nvidia_paths:
-                if os.path.exists(p):
-                    try:
-                        subprocess.Popen([p])
-                        print(f"[NVIDIA] Ishga tushirildi: {p}")
-                        return
-                    except Exception as e:
-                        print(f"[NVIDIA] Xatolik: {e}")
-            try:
-                subprocess.Popen(["cmd", "/c", "start", "shell:AppsFolder\\NVIDIACorp.NVIDIAControlPanel_56jybvy8sck8r!NVIDIACorp.NVIDIAControlPanel"], shell=True)
-            except Exception as e:
-                print(f"[NVIDIA] Universal launch xatosi: {e}")
-        else:
-            print("[NVIDIA] Faqat Windows'da ishlaydi (simulyatsiya)")
+    def _open_screen_size(self):
+        dialog = ScreenSizeDialog(self._screen_size_mode, parent=self)
+        dialog.exec()
+        new_mode = dialog.selected_mode()
+        if new_mode != self._screen_size_mode:
+            self._screen_size_mode = new_mode
+            self.screen_size_changed.emit(new_mode)
 
     def reload_games(self):
         def _fetch():
@@ -5266,6 +5335,7 @@ class LauncherPage(QWidget):
 # ──────────────────────────────────────────────────────────────────────────────
 class MainWindow(FullscreenMixin, QMainWindow):
     game_launched_signal = pyqtSignal(dict)
+    screen_size_mode_signal = pyqtSignal(str)
     app_switch_requested_signal = pyqtSignal(str)
     customer_login_signal = pyqtSignal(dict)
     customer_unlock_signal = pyqtSignal(str)
@@ -5301,6 +5371,7 @@ class MainWindow(FullscreenMixin, QMainWindow):
         # "Kabinet" ko'rinib turishi kerak.
         self.lock_page.login_succeeded.connect(self.launcher_page.set_logged_in_customer)
         self.launcher_page.game_launch_requested.connect(self.game_launched_signal.emit)
+        self.launcher_page.screen_size_changed.connect(self.screen_size_mode_signal.emit)
         self.launcher_page.app_switch_requested.connect(self.app_switch_requested_signal.emit)
         self.launcher_page.cabinet_stop_requested.connect(self.customer_stop_signal.emit)
 
@@ -6175,6 +6246,10 @@ class ClientLockerApp:
         self.signals.customer_session_restored.connect(self._apply_restored_customer_session)
         self.signals.customer_stop_failed.connect(self._show_customer_stop_error)
         self.launched_processes = []
+        # CS 1.6 kabi .bat orqali ishga tushadigan o'yinlar uchun ekran
+        # o'lchami tanlovi — mijoz Sound Settings kabi bir dialog orqali
+        # tanlaydi, keyingi safar o'yin shu rejimda ochiladi.
+        self.screen_size_mode = 'FULL'
         self.current_status = 'LOCKED'
         self.time_remaining = 0
         self.is_open_time = False
@@ -6216,6 +6291,7 @@ class ClientLockerApp:
             fallback_games=self.fallback_games, api_key=self.api_key
         )
         self.main_window.game_launched_signal.connect(self._handle_game_launch)
+        self.main_window.screen_size_mode_signal.connect(self._handle_screen_size_changed)
         self.main_window.app_switch_requested_signal.connect(self._handle_app_switch)
         self.main_window.customer_login_signal.connect(self._handle_customer_login)
         self.main_window.customer_unlock_signal.connect(self._handle_customer_unlock_request)
@@ -6523,6 +6599,10 @@ class ClientLockerApp:
                 except Exception:
                     pass
 
+    def _handle_screen_size_changed(self, mode):
+        self.screen_size_mode = mode
+        print(f"[Launcher] Ekran o'lchami rejimi: {mode}")
+
     def _watch_game_exit(self, pid):
         """O'yin jarayoni yopilishini kuzatib turadi (faqat to'g'ridan-
         to'g'ri .exe orqali ishga tushirilgan o'yinlar uchun — .bat orqali
@@ -6562,7 +6642,21 @@ class ClientLockerApp:
                     # to'g'ri ishga tushmaydi ("WinError 193: %1 is not a
                     # valid Win32 application") — Windows ularni faqat
                     # cmd.exe orqali bajaradi.
-                    proc = subprocess.Popen(["cmd.exe", "/c", exe], cwd=cwd)
+                    #
+                    # Ekran o'lchami: FAQAT "Counter Strike 1.6" nomli
+                    # o'yinlarga tegishli (GoldSrc dvigateli -width/-height
+                    # parametrlarini qabul qiladi) — boshqa .bat o'yinlarga
+                    # HECH QANDAY qo'shimcha argument yuborilmaydi, aks
+                    # holda ular bilan konflikt chiqishi mumkin edi.
+                    # "To'liq ekran" rejimida ham hech narsa majburlanmaydi
+                    # — o'yin o'zining oxirgi/avtomatik sozlamasini
+                    # ishlatadi, faqat "640x480" aniq tanlanganda maxsus
+                    # parametr qo'shiladi (.bat ichida "hl.exe ... %*"
+                    # bo'lishi shart, aks holda e'tiborsiz qoldiriladi).
+                    extra_args = []
+                    if 'counter strike 1.6' in name.lower() and self.screen_size_mode == '640x480':
+                        extra_args = ['-width', '640', '-height', '480', '-full']
+                    proc = subprocess.Popen(["cmd.exe", "/c", exe] + extra_args, cwd=cwd)
                 else:
                     try:
                         proc = subprocess.Popen([exe], cwd=cwd)

@@ -6050,6 +6050,85 @@ if IS_WINDOWS:
         except Exception as e:
             print(f"[Console] Alt+Tab'dan yashirishda xato: {e}")
 
+    # ── Ota-jarayonlar zanjiridagi terminal oynasini yashirish/yopish ──
+    # Windows 11'da standart terminal endi "Windows Terminal"
+    # (WindowsTerminal.exe) — bu GetConsoleWindow() qaytaradigan eski
+    # konsol handle'idan BUTUNLAY BOSHQA, alohida oyna. Shuning uchun
+    # yuqoridagi hide_console_from_alttab() uni qamrab olmaydi — mijoz
+    # hali ham Alt+Tab'da uni ko'rib, "X" bosib dasturni to'xtatib
+    # qo'yishi mumkin edi (jiddiy xavfsizlik teshigi). Bu funksiya
+    # BIZNI ishga tushirgan jarayonlar zanjiridagi (cmd.exe, Windows
+    # Terminal — turi qat'iy nazar) barcha ko'rinadigan oynalarni
+    # topib, ularni Alt+Tab'dan yashiradi VA yopadi — faqat shu
+    # zanjirga tegishli oynalarga ta'sir qiladi, boshqa/aloqasiz
+    # terminal oynalariga tegmaydi.
+    TH32CS_SNAPPROCESS = 0x00000002
+
+    class PROCESSENTRY32(ctypes.Structure):
+        _fields_ = [
+            ("dwSize", wintypes.DWORD), ("cntUsage", wintypes.DWORD),
+            ("th32ProcessID", wintypes.DWORD), ("th32DefaultHeapID", ctypes.POINTER(ctypes.c_ulong)),
+            ("th32ModuleID", wintypes.DWORD), ("cntThreads", wintypes.DWORD),
+            ("th32ParentProcessID", wintypes.DWORD), ("pcPriClassBase", ctypes.c_long),
+            ("dwFlags", wintypes.DWORD), ("szExeFile", ctypes.c_char * 260),
+        ]
+
+    kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+    kernel32.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+    kernel32.Process32First.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32)]
+    kernel32.Process32Next.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32)]
+
+    def _get_parent_pid(pid):
+        snapshot = kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+        if not snapshot or snapshot == -1:
+            return None
+        try:
+            entry = PROCESSENTRY32()
+            entry.dwSize = ctypes.sizeof(PROCESSENTRY32)
+            if not kernel32.Process32First(snapshot, ctypes.byref(entry)):
+                return None
+            while True:
+                if entry.th32ProcessID == pid:
+                    return entry.th32ParentProcessID
+                if not kernel32.Process32Next(snapshot, ctypes.byref(entry)):
+                    return None
+        finally:
+            kernel32.CloseHandle(snapshot)
+
+    def hide_ancestor_terminal_windows():
+        try:
+            pid = kernel32.GetCurrentProcessId()
+            ancestors = set()
+            for _ in range(6):  # cheksiz zanjirdan saqlanish uchun chegara
+                parent = _get_parent_pid(pid)
+                if not parent or parent == 0 or parent in ancestors:
+                    break
+                ancestors.add(parent)
+                pid = parent
+            if not ancestors:
+                return
+
+            SW_HIDE_LOCAL = 0
+            found = []
+
+            @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+            def _enum_proc(hwnd, _lparam):
+                wnd_pid = wintypes.DWORD()
+                user32.GetWindowThreadProcessId(hwnd, ctypes.byref(wnd_pid))
+                if wnd_pid.value in ancestors and user32.IsWindowVisible(hwnd):
+                    style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+                    style = (style | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW
+                    user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style)
+                    user32.ShowWindow(hwnd, SW_HIDE_LOCAL)
+                    found.append(wnd_pid.value)
+                return True
+
+            user32.EnumWindows(_enum_proc, 0)
+            if found:
+                print(f"[Console] Ota-jarayon oynalari yashirildi (pid: {found})")
+        except Exception as e:
+            print(f"[Console] Ota-jarayon oynalarini yashirishda xato: {e}")
+
     # ── Sichqoncha sezgirligi (Windows OS darajasida — har qanday
     # sichqoncha bilan ishlaydi, alohida drayver/dastur kerak emas) ──
     SPI_GETMOUSE = 0x0003
@@ -6210,6 +6289,7 @@ else:
     def hide_taskbar(): pass
     def show_taskbar(): pass
     def hide_console_from_alttab(): pass
+    def hide_ancestor_terminal_windows(): pass
     def is_pid_running(pid): return False
     MOUSE_DEFAULT_SPEED = 10
     def get_mouse_speed(): return MOUSE_DEFAULT_SPEED
@@ -7111,6 +7191,13 @@ def main():
             hide_console_from_alttab()
         except Exception as e:
             print(f"[Console] Alt+Tab'dan yashirishda xato: {e}")
+        # Uchinchi qatlam: Windows Terminal kabi GetConsoleWindow()
+        # qamrab olmaydigan ota-jarayon oynalarini alohida topib
+        # yashiradi/yopadi (yuqoridagi izohga qarang).
+        try:
+            hide_ancestor_terminal_windows()
+        except Exception as e:
+            print(f"[Console] Ota-jarayon oynalarini yashirishda xato: {e}")
 
     # PyQt6 ba'zan Qt slot/callback ichidagi Python xatosini konsolga chiqarmasdan
     # yutib yuborishi mumkin — bu esa "sababsiz" shaffof/qotgan oyna kabi
@@ -7177,6 +7264,21 @@ def main():
             background: none;
         }
     """)
+    # Loader: og'ir UI (LauncherPage — o'nlab o'yin kartalari, har biri
+    # o'z animatsiya/soya effekti bilan) qurilishi bir necha soniya
+    # olishi mumkin — shu vaqt davomida hech narsa ko'rinmay, Windows
+    # ish stoli ochiq turib qolmasligi uchun, ENG BIRINCHI ishimiz —
+    # butun ekranni qoplaydigan sodda qora oyna chiqarish (bu deyarli
+    # bir zumda chizib bo'ladi, chunki ichida bola widget'lar yo'q).
+    splash = QWidget()
+    splash.setStyleSheet("background-color: #060911;")
+    splash.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
+    screen = app.primaryScreen()
+    if screen:
+        splash.setGeometry(screen.geometry())
+    splash.showFullScreen()
+    app.processEvents()
+
     if IS_WINDOWS:
         register_global_hotkeys(app)
 
@@ -7190,6 +7292,7 @@ def main():
     # necha soniya Windows ish stolini ko'rib turardi, kiosk oynasi esa
     # keyin paydo bo'lardi.
     _locker = ClientLockerApp("config.json")
+    splash.close()
 
     def _check_update_on_startup():
         try:

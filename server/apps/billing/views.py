@@ -435,6 +435,66 @@ class ComputerViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'])
+    def transfer_session(self, request, pk=None):
+        """Xodim dashboard'dan: hozir faol seansni BOSHQA, bo'sh PC'ga
+        ko'chiradi (mijoz PC almashtirmoqchi bo'lganda — masalan
+        joriy kompyuter muammo qilsa yoki do'stlari yoniga o'tmoqchi
+        bo'lsa). Bir xil Session yozuvining o'zi yangi PC'ga
+        "ko'chiriladi" (yangi seans OCHILMAYDI) — shuning uchun
+        umumiy sarflangan vaqt/summa hisob-kitobi uzilmaydi."""
+        source = self.get_object()
+        target_id = request.data.get('target_pc_id')
+        if not target_id:
+            return Response({'error': "Qaysi PC'ga ko'chirish kerakligi ko'rsatilmagan."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if source.status not in ('ACTIVE', 'WARNING'):
+            return Response({'error': f"{source.name}'da faol seans yo'q."}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            target = Computer.objects.select_for_update().filter(pk=target_id).first()
+            if not target:
+                return Response({'error': "Maqsad PC topilmadi."}, status=status.HTTP_404_NOT_FOUND)
+            if target.pk == source.pk:
+                return Response({'error': "Manba va maqsad PC bir xil bo'lishi mumkin emas."}, status=status.HTTP_400_BAD_REQUEST)
+            if target.status != 'LOCKED':
+                return Response({'error': f"{target.name} band — faqat bo'sh PC'ga ko'chirish mumkin."}, status=status.HTTP_400_BAD_REQUEST)
+
+            source = Computer.objects.select_for_update().get(pk=source.pk)
+            session = Session.objects.select_for_update().filter(computer=source, is_active=True).first()
+            if not session:
+                return Response({'error': "Faol seans topilmadi."}, status=status.HTTP_400_BAD_REQUEST)
+
+            target.status = source.status
+            target.is_open_time = source.is_open_time
+            target.time_remaining = source.time_remaining
+            target.session_start_time = source.session_start_time
+            target.session_end_time = source.session_end_time
+            target.current_tariff = source.current_tariff
+            target.save()
+
+            source.status = 'LOCKED'
+            source.is_open_time = False
+            source.time_remaining = 0
+            source.session_start_time = None
+            source.session_end_time = None
+            source.current_tariff = None
+            source.save()
+
+            session.computer = target
+            session.save(update_fields=['computer'])
+
+            customer_name = session.customer.full_name if session.customer else "Mijoz"
+            _log_action(request, 'SESSION_TRANSFERRED', f"{customer_name}: seans {source.name}'dan {target.name}'ga ko'chirildi")
+
+        notify_pc_status_change({'action': 'SESSION_TRANSFERRED', 'pc': ComputerSerializer(source).data})
+        notify_pc_status_change({'action': 'SESSION_TRANSFERRED', 'pc': ComputerSerializer(target).data})
+        return Response({
+            'success': True,
+            'source': ComputerSerializer(source).data,
+            'target': ComputerSerializer(target).data,
+        })
+
+    @action(detail=True, methods=['post'])
     def customer_start_session(self, request, pk=None):
         """Kiosk qulf ekranidan: mijoz o'zi tizimga kirgach, "Kompyuterni
         ochish" tugmasini bosganda chaqiriladi. Seans Open Time rejimida

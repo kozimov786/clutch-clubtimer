@@ -433,6 +433,7 @@ AUDIT_ACTION_CHOICES = [
     ('REMOTE_SHUTDOWN', 'Kompyuter uzoqdan o\'chirildi'),
     ('FORCE_CLOSE_APP', 'Dastur majburan yopildi'),
     ('WAKE_ON_LAN', "Kompyuter uzoqdan yoqildi (WOL)"),
+    ('SESSION_TRANSFERRED', "Seans boshqa PC'ga ko'chirildi"),
     ('OTHER', 'Boshqa'),
 ]
 

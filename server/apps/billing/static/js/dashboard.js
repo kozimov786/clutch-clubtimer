@@ -521,6 +521,9 @@ function generatePCCardHTML(pc) {
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
               ${t('card.add_time')}
             </button>
+            <button onclick="openTransferModal(${pc.id})" title="${t('card.transfer')}" class="w-9 h-9 shrink-0 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-400 border border-sky-500/40 flex items-center justify-center transition-all">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4"/></svg>
+            </button>
             <button onclick="stopSession(${pc.id})" class="py-2 px-3.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/40 text-xs font-extrabold flex items-center justify-center gap-1 transition-all">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/></svg>
               ${t('card.finish')}
@@ -1136,6 +1139,62 @@ async function confirmAddTime(mins) {
     }
   } catch (err) {
     console.error("Error adding time:", err);
+  }
+}
+
+let transferSourcePcId = null;
+
+function openTransferModal(pcId) {
+  transferSourcePcId = pcId;
+  const pc = computers.find(c => c.id === pcId);
+  document.getElementById('transfer-pc-title').textContent = pc ? pc.name : `PC-${pcId}`;
+
+  const targets = computers.filter(c => c.status === 'LOCKED');
+  const select = document.getElementById('transfer-target-select');
+  select.innerHTML = '';
+  if (targets.length === 0) {
+    select.innerHTML = `<option value="">${t('transfer_modal.no_targets')}</option>`;
+    select.disabled = true;
+  } else {
+    select.disabled = false;
+    targets.forEach(pc => {
+      const opt = document.createElement('option');
+      opt.value = pc.id;
+      opt.textContent = `${pc.name} (${pc.zone})`;
+      select.appendChild(opt);
+    });
+  }
+  document.getElementById('transfer-modal').classList.remove('hidden');
+}
+
+function closeTransferModal() {
+  document.getElementById('transfer-modal').classList.add('hidden');
+  transferSourcePcId = null;
+}
+
+async function confirmTransfer() {
+  if (!transferSourcePcId) return;
+  const targetId = document.getElementById('transfer-target-select').value;
+  if (!targetId) return;
+
+  try {
+    const res = await fetch(`/api/computers/${transferSourcePcId}/transfer_session/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target_pc_id: targetId })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      playSound('start');
+      closeTransferModal();
+      fetchComputers();
+      fetchSessions();
+    } else {
+      alert(data.error || t('alert.transfer_err'));
+    }
+  } catch (err) {
+    console.error("Error transferring session:", err);
+    alert(t('alert.transfer_err'));
   }
 }
 

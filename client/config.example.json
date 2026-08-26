@@ -7,40 +7,76 @@
   "admin_exit_password_hash": "822a8e0aad6a68a99ee9db27651f1f6115414b7a772984b3f6609246ffbe3ef5",
   "fallback_games": [
     {
-      "name": "Counter-Strike 2",
+      "name": "Steam",
       "category": "FPS",
-      "cover_path": "client/assets/games/cs2.jpg",
-      "executable_path": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Counter-Strike Global Offensive\\game\\bin\\win64\\cs2.exe"
+      "cover_path": "D:\\SteamLibrary\\steamapps\\Steam_icon_logo.svg.webp",
+      "executable_path": "C:\\Program Files (x86)\\Steam\\steam.exe"
     },
     {
-      "name": "Valorant",
+      "name": "Counter Strike 1.6 Gigabyte",
       "category": "FPS",
-      "cover_path": "client/assets/games/valorant.jpg",
-      "executable_path": "C:\\Riot Games\\VALORANT\\live\\VALORANT.exe"
+      "cover_path": "D:\\games\\COUNTER STRIKE\\Counter Strike 1.6 Gigabyte\\i.webp",
+      "executable_path": "D:\\games\\COUNTER STRIKE\\Counter Strike 1.6 Gigabyte\\Counter Strike 1.6 Gigabyte.bat"
     },
     {
-      "name": "Grand Theft Auto V",
-      "category": "Action",
-      "cover_path": "client/assets/games/gtav.jpg",
-      "executable_path": "C:\\Program Files\\Epic Games\\GTA5\\GTA5.exe"
+      "name": "Left 4 Dead 2",
+      "category": "FPS",
+      "cover_path": "D:\\games\\GAMES\\Left 4 Dead 2\\left4dead2\\resource\\game.ico",
+      "executable_path": "D:\\games\\GAMES\\Left 4 Dead 2\\RUN_L4D2.exe"
     },
     {
-      "name": "EA SPORTS FC 24",
-      "category": "Sports",
-      "cover_path": "client/assets/games/fifa26.jpg",
-      "executable_path": "C:\\Program Files\\EA Games\\EA SPORTS FC 24\\FC24.exe"
+      "name": "Call of Duty",
+      "category": "FPS",
+      "cover_path": "D:\\games\\GAMES\\call of duty\\i.webp",
+      "executable_path": "D:\\games\\GAMES\\call of duty\\BlackOps.exe"
     },
     {
-      "name": "Dota 2",
+      "name": "Prince of Persia",
+      "category": "FPS",
+      "cover_path": "D:\\games\\GAMES\\Prince of Persia\\localization\\images\\default\\i (1).webp",
+      "executable_path": "D:\\games\\GAMES\\Prince of Persia\\Prince of Persia.exe"
+    },
+    {
+      "name": "Pro Evolution Soccer",
+      "category": "FPS",
+      "cover_path": "D:\\games\\GAMES\\Pro Evolution Soccer\\i (1).webp",
+      "executable_path": "D:\\games\\GAMES\\Pro Evolution Soccer\\game.exe"
+    },
+    {
+      "name": "Counter Strike 1.6 online",
+      "category": "FPS",
+      "cover_path": "D:\\games\\COUNTER STRIKE\\Counter Strike 1.6 Gigabyte\\i.webp",
+      "executable_path": "D:\\games\\ONLINE\\Counter Strike 1.6 GigaByte\\Counter Strike 1.6 v26.bat"
+    },
+    {
+      "name": "Iccup Launcher",
       "category": "Strategy",
-      "cover_path": "client/assets/games/dota2.jpg",
-      "executable_path": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\dota 2 beta\\game\\bin\\win64\\dota2.exe"
+      "cover_path": "D:\\games\\ONLINE\\ICCup Launcher\\themes\\i.webp",
+      "executable_path": "D:\\games\\ONLINE\\ICCup Launcher\\Launcher.exe"
     },
     {
-      "name": "Cyberpunk 2077",
-      "category": "Action",
-      "cover_path": "client/assets/games/cyberpunk2077.jpg",
-      "executable_path": "C:\\Program Files\\Cyberpunk 2077\\bin\\x64\\Cyberpunk2077.exe"
+      "name": "Generals Zero Hour",
+      "category": "Strategy",
+      "cover_path": "D:\\games\\STRATEGY\\Contra 007\\Contra 007\\Generals ZeroHour\\i (1).webp",
+      "executable_path": "D:\\games\\STRATEGY\\Contra 007\\Contra 007\\Generals ZeroHour\\generals.exe"
+    },
+    {
+      "name": "Warcraft 3",
+      "category": "Strategy",
+      "cover_path": "D:\\games\\STRATEGY\\War3TFT_124e_Rus\\i.webp",
+      "executable_path": "D:\\games\\STRATEGY\\War3TFT_124e_Rus\\Frozen Throne.exe"
+    },
+    {
+      "name": "Warcraft 3 Frozen Throne",
+      "category": "Strategy",
+      "cover_path": "D:\\games\\STRATEGY\\War3TFT_124e_Rus\\i.webp",
+      "executable_path": "D:\\games\\STRATEGY\\WARCRAFT III - FROZEN THRONE 1.26 RU\\Frozen Throne.exe"
+    },
+    {
+      "name": "Nvidia App",
+      "category": "Settings",
+      "cover_path": "C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\CEF\\UpdateFrameworkPlugins\\i (1).webp",
+      "executable_path": "C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\CEF\\NVIDIA App.exe"
     }
   ]
 }

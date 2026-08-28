@@ -1,6 +1,6 @@
 {
-  "server_url": "http://localhost:8000",
-  "websocket_url": "ws://localhost:8000/ws/pc-status/",
+  "server_url": "http://192.168.88.100:8001",
+  "websocket_url": "ws://192.168.88.100:8001/ws/pc-status/",
   "pc_name": "PC-01",
   "heartbeat_interval_seconds": 5,
   "api_key": "AKiv9qEeJqBlO8Xa4HJfJ_ZmMig6c5srmY7Nr1c4oOw",
@@ -9,43 +9,49 @@
     {
       "name": "Steam",
       "category": "FPS",
-      "cover_path": "D:\\SteamLibrary\\steamapps\\Steam_icon_logo.svg.webp",
+      "cover_path": "D:\\posters\\Steam-2.png",
       "executable_path": "C:\\Program Files (x86)\\Steam\\steam.exe"
+    },
+    {
+      "name": "Faceit Anticheat",
+      "category": "FPS",
+      "cover_path": "D:\\posters\\FaceIT AC.png",
+      "executable_path": "C:\\Program Files\\FACEIT AC\\faceitclient.exe"
     },
     {
       "name": "Counter Strike 1.6 Gigabyte",
       "category": "FPS",
-      "cover_path": "D:\\games\\COUNTER STRIKE\\Counter Strike 1.6 Gigabyte\\i.webp",
+      "cover_path": "D:\\posters\\CS v1.6 Gigabyte.png",
       "executable_path": "D:\\games\\COUNTER STRIKE\\Counter Strike 1.6 Gigabyte\\Counter Strike 1.6 Gigabyte.bat"
     },
     {
       "name": "Left 4 Dead 2",
       "category": "FPS",
-      "cover_path": "D:\\games\\GAMES\\Left 4 Dead 2\\left4dead2\\resource\\game.ico",
+      "cover_path": "D:\\posters\\Left 4 Dead 2.png",
       "executable_path": "D:\\games\\GAMES\\Left 4 Dead 2\\RUN_L4D2.exe"
     },
     {
       "name": "Call of Duty",
       "category": "FPS",
-      "cover_path": "D:\\games\\GAMES\\call of duty\\i.webp",
+      "cover_path": "D:\\posters\\Call of Duty - Black Ops 2.png",
       "executable_path": "D:\\games\\GAMES\\call of duty\\BlackOps.exe"
     },
     {
       "name": "Prince of Persia",
       "category": "FPS",
-      "cover_path": "D:\\games\\GAMES\\Prince of Persia\\localization\\images\\default\\i (1).webp",
+      "cover_path": "D:\\posters\\Call of Duty - Black Ops 2.png",
       "executable_path": "D:\\games\\GAMES\\Prince of Persia\\Prince of Persia.exe"
     },
     {
       "name": "Pro Evolution Soccer",
       "category": "FPS",
-      "cover_path": "D:\\games\\GAMES\\Pro Evolution Soccer\\i (1).webp",
+      "cover_path": "D:\\posters\\Call of Duty - Black Ops 2.png",
       "executable_path": "D:\\games\\GAMES\\Pro Evolution Soccer\\game.exe"
     },
     {
       "name": "Counter Strike 1.6 online",
       "category": "FPS",
-      "cover_path": "D:\\games\\COUNTER STRIKE\\Counter Strike 1.6 Gigabyte\\i.webp",
+      "cover_path": "D:\\posters\\CS v1.6 Gigabyte.png",
       "executable_path": "D:\\games\\ONLINE\\Counter Strike 1.6 GigaByte\\Counter Strike 1.6 v26.bat"
     },
     {
